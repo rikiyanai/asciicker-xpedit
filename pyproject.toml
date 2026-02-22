@@ -17,3 +17,6 @@ dependencies = [
 pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+  "e2e: browser end-to-end tests",
+]

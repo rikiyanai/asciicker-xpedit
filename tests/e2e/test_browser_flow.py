@@ -1,0 +1,145 @@
+from __future__ import annotations
+
+import json
+import socket
+import threading
+import time
+from datetime import datetime, UTC
+from pathlib import Path
+
+import pytest
+from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+from werkzeug.serving import make_server
+
+from pipeline_v2.app import create_app
+
+
+class _ServerThread(threading.Thread):
+    def __init__(self, host: str, port: int):
+        super().__init__(daemon=True)
+        self.host = host
+        self.port = port
+        self.app = create_app()
+        self.server = make_server(host, port, self.app)
+        self.port = self.server.server_port
+
+    def run(self) -> None:
+        self.server.serve_forever()
+
+    def stop(self) -> None:
+        self.server.shutdown()
+
+
+def _free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return int(s.getsockname()[1])
+
+
+@pytest.fixture
+def web_server() -> str:
+    port = _free_port()
+    th = _ServerThread("127.0.0.1", port)
+    th.start()
+    time.sleep(0.25)
+    base = f"http://127.0.0.1:{th.port}"
+    try:
+        yield base
+    finally:
+        th.stop()
+
+
+@pytest.mark.e2e
+def test_browser_golden_flow_records_video_and_populates_workbench(web_server: str):
+    fixture = Path(__file__).resolve().parents[1] / "fixtures" / "known_good" / "cat_sheet.png"
+    assert fixture.exists(), fixture
+
+    ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    art = Path("output/e2e_artifacts") / f"run-{ts}"
+    videos = Path("output/e2e_videos") / f"run-{ts}"
+    art.mkdir(parents=True, exist_ok=True)
+    videos.mkdir(parents=True, exist_ok=True)
+
+    summary: dict[str, object] = {
+        "base_url": web_server,
+        "fixture": str(fixture),
+        "artifacts_dir": str(art.resolve()),
+        "videos_dir": str(videos.resolve()),
+        "status": "started",
+        "steps": [],
+    }
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(record_video_dir=str(videos), record_video_size={"width": 1280, "height": 720})
+        page = context.new_page()
+        video = page.video
+
+        def shot(name: str) -> None:
+            page.screenshot(path=str(art / f"{name}.png"), full_page=True)
+
+        try:
+            page.goto(web_server + "/", wait_until="networkidle", timeout=30000)
+            summary["steps"].append("open_wizard")
+            shot("01_open_wizard")
+
+            page.set_input_files("#file", str(fixture))
+            page.click("#btnUpload")
+            page.wait_for_function("() => document.getElementById('btnRun').disabled === false", timeout=15000)
+            summary["steps"].append("upload_ok")
+            shot("02_upload_ok")
+
+            page.click("#btnAnalyze")
+            page.wait_for_function("() => document.getElementById('analyzeOut').textContent.includes('suggested_angles')", timeout=15000)
+            summary["steps"].append("analyze_ok")
+            shot("03_analyze_ok")
+
+            page.click("#btnRun")
+            page.wait_for_function("() => document.getElementById('runStatus').textContent.includes('Run complete')", timeout=120000)
+            summary["steps"].append("run_ok")
+            shot("04_run_ok")
+
+            page.click("#btnOpenWorkbench")
+            page.wait_for_url("**/workbench?job_id=**", timeout=30000)
+            summary["steps"].append("workbench_opened")
+            shot("05_workbench_opened")
+
+            page.wait_for_function(
+                "() => document.getElementById('wbStatus').textContent.includes('Session active')",
+                timeout=30000,
+            )
+            cell_count = page.locator("#grid .cell").count()
+            summary["cell_count"] = cell_count
+            shot("06_workbench_populated")
+            if cell_count <= 0:
+                raise AssertionError("Workbench grid has zero cells")
+
+            page.click("#btnExport")
+            page.wait_for_function(
+                "() => document.getElementById('exportOut').textContent.includes('xp_path')",
+                timeout=30000,
+            )
+            summary["steps"].append("export_ok")
+            shot("07_export_ok")
+
+            export_json = page.locator("#exportOut").inner_text()
+            export_data = json.loads(export_json)
+            summary["export_xp_path"] = export_data.get("xp_path")
+            summary["status"] = "passed"
+
+        except PWTimeout as e:
+            summary["status"] = "failed"
+            summary["timeout_error"] = str(e)
+            shot("99_timeout")
+            raise
+        except Exception as e:
+            summary["status"] = "failed"
+            summary["error"] = str(e)
+            shot("99_error")
+            raise
+        finally:
+            context.close()
+            browser.close()
+            if video is not None:
+                summary["video_path"] = str(Path(video.path()).resolve())
+            (art / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")

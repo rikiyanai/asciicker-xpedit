@@ -18,6 +18,16 @@
     drawCurrent: null,
     anchorBox: null,
     extractedBoxes: [],
+    sourceMode: "select",
+    sourceSelection: new Set(),
+    sourceDrag: null,
+    sourceRowDrag: null,
+    sourceContextTarget: null,
+    sourceCutsV: [],
+    sourceCutsH: [],
+    sourceSelectedCut: null,
+    sourceNextId: 1,
+    rapidManualAdd: false,
     cells: [],
     gridCols: 0,
     gridRows: 0,
@@ -112,6 +122,19 @@
     }));
   }
 
+  function cloneBox(b) {
+    if (!b) return null;
+    return { ...b };
+  }
+
+  function cloneBoxes(list) {
+    return (list || []).map((b) => ({ ...b }));
+  }
+
+  function cloneCuts(list) {
+    return (list || []).map((c) => ({ ...c }));
+  }
+
   function snapshot() {
     return {
       cells: deepCloneCells(state.cells),
@@ -127,6 +150,13 @@
       frameGroups: JSON.parse(JSON.stringify(state.frameGroups)),
       anchorBox: state.anchorBox ? { ...state.anchorBox } : null,
       extractedBoxes: state.extractedBoxes.map((b) => ({ ...b })),
+      sourceMode: state.sourceMode,
+      sourceSelection: [...state.sourceSelection],
+      sourceCutsV: cloneCuts(state.sourceCutsV),
+      sourceCutsH: cloneCuts(state.sourceCutsH),
+      sourceSelectedCut: state.sourceSelectedCut ? { ...state.sourceSelectedCut } : null,
+      sourceNextId: Number(state.sourceNextId || 1),
+      rapidManualAdd: !!state.rapidManualAdd,
     };
   }
 
@@ -144,8 +174,25 @@
     state.frameGroups = JSON.parse(JSON.stringify(snap.frameGroups || []));
     state.anchorBox = snap.anchorBox ? { ...snap.anchorBox } : null;
     state.extractedBoxes = (snap.extractedBoxes || []).map((b) => ({ ...b }));
+    state.sourceMode = String(snap.sourceMode || "select");
+    state.sourceSelection = new Set((snap.sourceSelection || []).map((x) => Number(x)));
+    state.sourceCutsV = cloneCuts(snap.sourceCutsV || []);
+    state.sourceCutsH = cloneCuts(snap.sourceCutsH || []);
+    state.sourceSelectedCut = snap.sourceSelectedCut ? { ...snap.sourceSelectedCut } : null;
+    state.sourceNextId = Math.max(1, Number(snap.sourceNextId || 1));
+    state.rapidManualAdd = !!snap.rapidManualAdd;
+    state.drawMode = state.sourceMode === "draw_box";
+    state.drawCurrent = null;
+    state.drawStart = null;
+    state.drawing = false;
+    state.sourceDrag = null;
+    state.sourceRowDrag = null;
+    state.sourceContextTarget = null;
+    const rapid = $("rapidManualAdd");
+    if (rapid) rapid.checked = !!state.rapidManualAdd;
     syncLayersFromSessionCells();
     recomputeFrameGeometry();
+    updateSourceToolUI();
     renderAll();
   }
 
@@ -380,6 +427,26 @@
     return [...state.selectedCols].sort((a, b) => a - b);
   }
 
+  function angleNameForIndex(i) {
+    const idx = Math.max(0, Number(i || 0));
+    if (state.angles === 8) {
+      const names = ["South", "SouthWest", "West", "NorthWest", "North", "NorthEast", "East", "SouthEast"];
+      return names[idx] || `Angle ${idx}`;
+    }
+    if (state.angles === 4) {
+      const names = ["South", "West", "North", "East"];
+      return names[idx] || `Angle ${idx}`;
+    }
+    if (state.angles === 1) return "South";
+    return `Angle ${idx}`;
+  }
+
+  function semanticFrameLabel(row, col) {
+    const info = frameColInfo(col);
+    const angleName = angleNameForIndex(row);
+    return `A${row} ${angleName} F${info.frame}${state.projs > 1 ? ` P${info.proj}` : ""}`;
+  }
+
   function makeFrameCanvas(row, col, selected, rowSelected, groupSelected) {
     const frame = document.createElement("div");
     frame.className = "frame-cell";
@@ -414,7 +481,8 @@
 
     const label = document.createElement("div");
     label.className = "frame-label";
-    label.textContent = `r${row} c${col}`;
+    label.textContent = semanticFrameLabel(row, col);
+    frame.title = `Angle ${row} (${angleNameForIndex(row)}), Frame ${frameColInfo(col).frame}${state.projs > 1 ? `, Proj ${frameColInfo(col).proj}` : ""}`;
     frame.appendChild(canvas);
     frame.appendChild(label);
     return frame;
@@ -471,6 +539,9 @@
       cell_h: state.cellHChars,
       render_resolution: Number($("wbRenderRes").value || 12),
       cell_count: state.cells.length,
+      source_boxes: state.extractedBoxes.length,
+      source_cuts_v: state.sourceCutsV.length,
+      source_mode: state.sourceMode,
     };
     $("sessionOut").textContent = JSON.stringify(summary, null, 2);
   }
@@ -478,30 +549,95 @@
   function renderSourceCanvas() {
     const canvas = $("sourceCanvas");
     const ctx = canvas.getContext("2d");
+    state.extractedBoxes = (state.extractedBoxes || []).map((b) =>
+      (b && b.id !== undefined)
+        ? { source: b.source || "auto", ...b }
+        : { id: nextSourceId(), source: "auto", ...b }
+    );
+    const drawChecker = (w, h, size = 8) => {
+      for (let y = 0; y < h; y += size) {
+        for (let x = 0; x < w; x += size) {
+          const even = ((Math.floor(x / size) + Math.floor(y / size)) % 2) === 0;
+          ctx.fillStyle = even ? "rgb(18,24,34)" : "rgb(10,14,20)";
+          ctx.fillRect(x, y, size, size);
+        }
+      }
+    };
+    const drawBoxOutline = (b, color, width = 1, dash = []) => {
+      if (!b) return;
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      if (dash.length) ctx.setLineDash(dash);
+      ctx.strokeRect(b.x + 0.5, b.y + 0.5, Math.max(1, b.w - 1), Math.max(1, b.h - 1));
+      ctx.restore();
+    };
+    const drawHandles = (b, color) => {
+      if (!b) return;
+      const pts = [
+        [b.x, b.y],
+        [boxRight(b), b.y],
+        [b.x, boxBottom(b)],
+        [boxRight(b), boxBottom(b)],
+      ];
+      ctx.save();
+      ctx.fillStyle = color;
+      for (const [x, y] of pts) ctx.fillRect(x - 2, y - 2, 5, 5);
+      ctx.restore();
+    };
     if (!state.sourceImage) {
-      ctx.fillStyle = "rgb(8,12,18)";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      drawChecker(canvas.width, canvas.height, 8);
       $("sourceInfo").textContent = "No source image loaded.";
       return;
     }
     canvas.width = state.sourceImage.width;
     canvas.height = state.sourceImage.height;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawChecker(canvas.width, canvas.height, 8);
     ctx.drawImage(state.sourceImage, 0, 0);
 
-    const drawBox = (b, color, width = 1) => {
+    for (const cut of state.sourceCutsV) {
+      const selected = state.sourceSelectedCut && state.sourceSelectedCut.type === "v" && Number(state.sourceSelectedCut.id) === Number(cut.id);
       ctx.save();
-      ctx.strokeStyle = color;
-      ctx.lineWidth = width;
-      ctx.strokeRect(b.x, b.y, b.w, b.h);
+      ctx.strokeStyle = selected ? "rgba(255,95,95,0.95)" : "rgba(168,99,255,0.9)";
+      ctx.lineWidth = selected ? 2 : 1;
+      ctx.setLineDash(selected ? [] : [4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(cut.x + 0.5, 0);
+      ctx.lineTo(cut.x + 0.5, canvas.height);
+      ctx.stroke();
       ctx.restore();
-    };
-    for (const b of state.extractedBoxes) drawBox(b, "rgba(243,182,63,0.95)", 1);
-    if (state.anchorBox) drawBox(state.anchorBox, "rgba(79,209,122,0.95)", 2);
-    if (state.drawCurrent) drawBox(state.drawCurrent, "rgba(78,161,255,0.95)", 1);
+    }
+
+    for (const b of state.extractedBoxes) {
+      const selected = state.sourceSelection.has(Number(b.id));
+      drawBoxOutline(b, selected ? "rgba(99,255,219,0.98)" : "rgba(243,182,63,0.95)", selected ? 2 : 1);
+      if (selected) drawHandles(b, "rgba(99,255,219,0.98)");
+    }
+    if (state.anchorBox) {
+      drawBoxOutline(state.anchorBox, "rgba(79,209,122,0.95)", 2, [5, 3]);
+    }
+    if (state.drawCurrent) {
+      drawBoxOutline(state.drawCurrent, "rgba(78,161,255,0.98)", 2);
+      drawHandles(state.drawCurrent, "rgba(78,161,255,0.98)");
+    }
+    if (state.sourceRowDrag?.rect) {
+      const mode = state.sourceRowDrag.mode;
+      const c = mode === "col_select" ? "rgba(255,123,63,0.85)" : "rgba(255,230,63,0.85)";
+      ctx.save();
+      ctx.strokeStyle = c;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      const r = state.sourceRowDrag.rect;
+      ctx.strokeRect(r.x + 0.5, r.y + 0.5, Math.max(1, r.w - 1), Math.max(1, r.h - 1));
+      ctx.restore();
+    }
 
     const anchorTxt = state.anchorBox ? ` anchor=${state.anchorBox.w}x${state.anchorBox.h}` : "";
-    $("sourceInfo").textContent = `sprites_detected=${state.extractedBoxes.length}${anchorTxt}`;
+    const draftTxt = state.drawCurrent ? ` draft=${state.drawCurrent.w}x${state.drawCurrent.h}` : "";
+    const selTxt = ` selected=${state.sourceSelection.size}`;
+    const cutTxt = ` cutsV=${state.sourceCutsV.length}`;
+    $("sourceInfo").textContent = `sprites_detected=${state.extractedBoxes.length}${anchorTxt}${draftTxt}${selTxt}${cutTxt}`;
   }
 
   function renderPreviewFrame(row, frame) {
@@ -659,6 +795,10 @@
         projs: state.projs,
         row_categories: state.rowCategories,
         frame_groups: state.frameGroups,
+        source_boxes: state.extractedBoxes,
+        source_anchor_box: state.anchorBox,
+        source_draft_box: state.drawCurrent,
+        source_cuts_v: state.sourceCutsV,
       };
       const r = await fetch("/api/workbench/save-session", {
         method: "POST",
@@ -721,6 +861,21 @@
       state.cellWChars = Number(j.cell_w || 1);
       state.cellHChars = Number(j.cell_h || 1);
       state.layerNames = Array.isArray(j.layer_names) && j.layer_names.length ? [...j.layer_names] : [...DEFAULT_LAYER_NAMES];
+      state.anchorBox = j.source_anchor_box ? { ...j.source_anchor_box } : null;
+      state.drawCurrent = j.source_draft_box ? { ...j.source_draft_box } : null;
+      state.extractedBoxes = cloneBoxes(j.source_boxes || []);
+      state.sourceCutsV = cloneCuts(j.source_cuts_v || []);
+      state.sourceCutsH = cloneCuts(j.source_cuts_h || []);
+      state.sourceSelection = new Set();
+      state.sourceSelectedCut = null;
+      state.sourceRowDrag = null;
+      state.sourceDrag = null;
+      state.sourceNextId = Math.max(
+        1,
+        ...state.extractedBoxes.map((b) => Number(b.id || 0) + 1),
+        ...state.sourceCutsV.map((c) => Number(c.id || 0) + 1),
+        ...state.sourceCutsH.map((c) => Number(c.id || 0) + 1),
+      );
       state.activeLayer = 2;
       state.visibleLayers = new Set([2]);
       state.selectedRow = null;
@@ -730,6 +885,7 @@
       state.latestXpPath = "";
       $("openXpToolBtn").disabled = true;
       setXpToolHint("Export an `.xp` to generate XP tool command.");
+      updateSourceToolUI();
       updateUndoRedoButtons();
       $("btnExport").disabled = false;
       syncLayersFromSessionCells();
@@ -780,32 +936,472 @@
     return { x: Math.max(0, Math.min(canvas.width - 1, x)), y: Math.max(0, Math.min(canvas.height - 1, y)) };
   }
 
+  function nextSourceId() {
+    const id = Number(state.sourceNextId || 1);
+    state.sourceNextId = id + 1;
+    return id;
+  }
+
+  function sourceCanvasSize() {
+    const c = $("sourceCanvas");
+    return { w: Math.max(1, c.width || 1), h: Math.max(1, c.height || 1) };
+  }
+
+  function clampBoxToCanvas(box) {
+    if (!box) return null;
+    const { w: cw, h: ch } = sourceCanvasSize();
+    let x = Math.max(0, Math.min(cw - 1, Math.round(Number(box.x || 0))));
+    let y = Math.max(0, Math.min(ch - 1, Math.round(Number(box.y || 0))));
+    let width = Math.max(1, Math.round(Number(box.w || 1)));
+    let height = Math.max(1, Math.round(Number(box.h || 1)));
+    if (x + width > cw) width = Math.max(1, cw - x);
+    if (y + height > ch) height = Math.max(1, ch - y);
+    return { x, y, w: width, h: height };
+  }
+
+  function boxRight(b) {
+    return b.x + b.w - 1;
+  }
+
+  function boxBottom(b) {
+    return b.y + b.h - 1;
+  }
+
+  function boxContainsPt(b, pt) {
+    return pt.x >= b.x && pt.y >= b.y && pt.x <= boxRight(b) && pt.y <= boxBottom(b);
+  }
+
+  function boxesIntersect(a, b) {
+    return !(boxRight(a) < b.x || boxRight(b) < a.x || boxBottom(a) < b.y || boxBottom(b) < a.y);
+  }
+
+  function committedBoxesOverlap(candidate, ignoreId = null) {
+    const c = clampBoxToCanvas(candidate);
+    if (!c) return false;
+    return state.extractedBoxes.some((b) => Number(b.id) !== Number(ignoreId) && boxesIntersect(c, b));
+  }
+
+  function sourceBoxAtPoint(pt) {
+    for (let i = state.extractedBoxes.length - 1; i >= 0; i--) {
+      const b = state.extractedBoxes[i];
+      if (boxContainsPt(b, pt)) return b;
+    }
+    return null;
+  }
+
+  function sourceVBoxAtPoint(pt, tol = 3) {
+    for (let i = state.sourceCutsV.length - 1; i >= 0; i--) {
+      const cut = state.sourceCutsV[i];
+      if (Math.abs(pt.x - Number(cut.x)) <= tol) return cut;
+    }
+    return null;
+  }
+
+  function sourceHandleAtPoint(box, pt) {
+    if (!box) return null;
+    const pad = 4;
+    const left = box.x;
+    const right = boxRight(box);
+    const top = box.y;
+    const bottom = boxBottom(box);
+    const nearL = Math.abs(pt.x - left) <= pad;
+    const nearR = Math.abs(pt.x - right) <= pad;
+    const nearT = Math.abs(pt.y - top) <= pad;
+    const nearB = Math.abs(pt.y - bottom) <= pad;
+    if (nearL && nearT) return "nw";
+    if (nearR && nearT) return "ne";
+    if (nearL && nearB) return "sw";
+    if (nearR && nearB) return "se";
+    if (nearT && pt.x >= left && pt.x <= right) return "n";
+    if (nearB && pt.x >= left && pt.x <= right) return "s";
+    if (nearL && pt.y >= top && pt.y <= bottom) return "w";
+    if (nearR && pt.y >= top && pt.y <= bottom) return "e";
+    if (boxContainsPt(box, pt)) return "move";
+    return null;
+  }
+
+  function setDraftBox(box) {
+    state.drawCurrent = box ? clampBoxToCanvas(box) : null;
+    if (state.drawCurrent) {
+      state.anchorBox = { x: state.drawCurrent.x, y: state.drawCurrent.y, w: state.drawCurrent.w, h: state.drawCurrent.h };
+    }
+  }
+
+  function sourceSelectionPrimaryBox() {
+    if (state.sourceSelection.size !== 1) return null;
+    const id = [...state.sourceSelection][0];
+    return state.extractedBoxes.find((b) => Number(b.id) === Number(id)) || null;
+  }
+
+  function clearSourceSelection() {
+    state.sourceSelection = new Set();
+    state.sourceSelectedCut = null;
+  }
+
+  function setSourceMode(mode) {
+    state.sourceMode = mode;
+    state.drawMode = mode === "draw_box";
+    state.drawing = false;
+    state.drawStart = null;
+    state.sourceDrag = null;
+    state.sourceRowDrag = null;
+    hideSourceContextMenu();
+    updateSourceToolUI();
+    renderSourceCanvas();
+  }
+
+  function updateSourceToolUI() {
+    const mode = state.sourceMode;
+    const map = [
+      ["sourceSelectBtn", "select"],
+      ["drawBoxBtn", "draw_box"],
+      ["rowSelectBtn", "row_select"],
+      ["colSelectBtn", "col_select"],
+      ["cutVBtn", "cut_v"],
+    ];
+    for (const [id, key] of map) {
+      const el = $(id);
+      if (!el) continue;
+      el.classList.toggle("tool-active", mode === key);
+    }
+    const hint = $("sourceModeHint");
+    if (hint) {
+      const txt =
+        mode === "draw_box"
+          ? "Mode: Draw Box. Drag to create a draft (blue) box. Right-click it to add as a sprite."
+          : mode === "row_select"
+          ? "Mode: Drag Row. Drag over orange sprites to select intersecting boxes."
+          : mode === "col_select"
+          ? "Mode: Drag Column. Drag over orange sprites to select intersecting boxes."
+          : mode === "cut_v"
+          ? "Mode: Vertical Cut. Click to insert a vertical cut, drag existing cut to move."
+          : "Mode: Select. Click sprite box to select; drag to move; drag handles to resize.";
+      hint.textContent = txt;
+    }
+    const rapid = $("rapidManualAdd");
+    if (rapid) rapid.checked = !!state.rapidManualAdd;
+  }
+
+  function hideSourceContextMenu() {
+    const menu = $("sourceContextMenu");
+    if (menu) menu.classList.add("hidden");
+    state.sourceContextTarget = null;
+  }
+
+  function showSourceContextMenu(clientX, clientY, target) {
+    const menu = $("sourceContextMenu");
+    if (!menu) return;
+    state.sourceContextTarget = target;
+    const isDraft = target?.type === "draft";
+    const rowReady = state.selectedRow !== null;
+    $("srcCtxAddSprite").disabled = !isDraft;
+    $("srcCtxAddToRow").disabled = !isDraft || !rowReady;
+    $("srcCtxPadAnchor").disabled = !target;
+    $("srcCtxSetAnchor").disabled = !target;
+    $("srcCtxDelete").disabled = !target;
+    menu.style.left = `${clientX}px`;
+    menu.style.top = `${clientY}px`;
+    menu.classList.remove("hidden");
+  }
+
+  function setAnchorFromTarget(target) {
+    if (!target) return;
+    if (target.type === "draft" && state.drawCurrent) {
+      state.anchorBox = { ...state.drawCurrent };
+      status(`Anchor set ${state.anchorBox.w}x${state.anchorBox.h} from draft`, "ok");
+    } else if (target.type === "box") {
+      const box = state.extractedBoxes.find((b) => Number(b.id) === Number(target.id));
+      if (!box) return;
+      state.anchorBox = { x: box.x, y: box.y, w: box.w, h: box.h };
+      status(`Anchor set ${box.w}x${box.h} from sprite`, "ok");
+    }
+  }
+
+  function padRectToAnchor(box) {
+    if (!box || !state.anchorBox) return box ? { ...box } : null;
+    const aw = Math.max(1, Number(state.anchorBox.w || 1));
+    const ah = Math.max(1, Number(state.anchorBox.h || 1));
+    const cx = box.x + (box.w / 2);
+    const cy = box.y + (box.h / 2);
+    const padded = clampBoxToCanvas({
+      x: Math.round(cx - (aw / 2)),
+      y: Math.round(cy - (ah / 2)),
+      w: aw,
+      h: ah,
+    });
+    return padded;
+  }
+
+  function applyPadToContextTarget() {
+    const t = state.sourceContextTarget;
+    if (!t || !state.anchorBox) return;
+    if (t.type === "draft" && state.drawCurrent) {
+      pushHistory();
+      setDraftBox(padRectToAnchor(state.drawCurrent));
+      renderSourceCanvas();
+      saveSessionState("pad-draft-anchor");
+      return;
+    }
+    if (t.type === "box") {
+      const idx = state.extractedBoxes.findIndex((b) => Number(b.id) === Number(t.id));
+      if (idx < 0) return;
+      const next = padRectToAnchor(state.extractedBoxes[idx]);
+      if (committedBoxesOverlap(next, state.extractedBoxes[idx].id)) {
+        status("Padding blocked: overlap with another sprite box", "warn");
+        return;
+      }
+      pushHistory();
+      state.extractedBoxes[idx] = { ...state.extractedBoxes[idx], ...next };
+      renderSourceCanvas();
+      saveSessionState("pad-box-anchor");
+    }
+  }
+
+  function deleteSourceTarget(target) {
+    if (!target) return;
+    pushHistory();
+    if (target.type === "draft") {
+      state.drawCurrent = null;
+      if (state.anchorBox && target.useDraftAnchor) state.anchorBox = null;
+      renderSourceCanvas();
+      saveSessionState("delete-draft");
+      return;
+    }
+    if (target.type === "box") {
+      state.extractedBoxes = state.extractedBoxes.filter((b) => Number(b.id) !== Number(target.id));
+      state.sourceSelection.delete(Number(target.id));
+      renderSourceCanvas();
+      saveSessionState("delete-source-box");
+      return;
+    }
+    if (target.type === "cut_v") {
+      state.sourceCutsV = state.sourceCutsV.filter((c) => Number(c.id) !== Number(target.id));
+      if (state.sourceSelectedCut && state.sourceSelectedCut.type === "v" && Number(state.sourceSelectedCut.id) === Number(target.id)) {
+        state.sourceSelectedCut = null;
+      }
+      renderSourceCanvas();
+      saveSessionState("delete-cut");
+    }
+  }
+
+  function commitDraftToSource(kind = "manual", opts = {}) {
+    if (!state.drawCurrent) {
+      status("No draft box to add", "warn");
+      return null;
+    }
+    const box = clampBoxToCanvas(state.drawCurrent);
+    if (committedBoxesOverlap(box, null)) {
+      status("Cannot add sprite box: overlaps existing sprite box", "warn");
+      return null;
+    }
+    if (!opts.skipHistory) pushHistory();
+    const committed = { id: nextSourceId(), x: box.x, y: box.y, w: box.w, h: box.h, source: kind };
+    state.extractedBoxes = [...state.extractedBoxes, committed];
+    state.sourceSelection = new Set([committed.id]);
+    if (!state.rapidManualAdd) {
+      state.drawCurrent = null;
+    }
+    renderSourceCanvas();
+    saveSessionState("add-source-box");
+    return committed;
+  }
+
+  function applySourceBoxSelectionRect(mode, rect, modifiers) {
+    const hits = state.extractedBoxes.filter((b) => boxesIntersect(b, rect)).map((b) => Number(b.id));
+    let next = new Set(state.sourceSelection);
+    if (modifiers.subtract) {
+      for (const id of hits) next.delete(id);
+    } else if (modifiers.add) {
+      for (const id of hits) next.add(id);
+    } else if (modifiers.toggle) {
+      for (const id of hits) (next.has(id) ? next.delete(id) : next.add(id));
+    } else {
+      next = new Set(hits);
+    }
+    state.sourceSelection = next;
+    state.sourceSelectedCut = null;
+    const noun = mode === "col_select" ? "column" : "row";
+    status(`${noun} select: ${hits.length} hit (${state.sourceSelection.size} selected)`, hits.length ? "ok" : "warn");
+  }
+
+  function resizeBoxFromHandle(box, handle, anchorPt, pt) {
+    let x0 = box.x;
+    let y0 = box.y;
+    let x1 = boxRight(box);
+    let y1 = boxBottom(box);
+    if (handle.includes("w")) x0 = pt.x;
+    if (handle.includes("e")) x1 = pt.x;
+    if (handle.includes("n")) y0 = pt.y;
+    if (handle.includes("s")) y1 = pt.y;
+    if (handle === "move") {
+      const dx = pt.x - anchorPt.x;
+      const dy = pt.y - anchorPt.y;
+      x0 = box.x + dx;
+      y0 = box.y + dy;
+      x1 = boxRight(box) + dx;
+      y1 = boxBottom(box) + dy;
+    }
+    const out = {
+      x: Math.min(x0, x1),
+      y: Math.min(y0, y1),
+      w: Math.abs(x1 - x0) + 1,
+      h: Math.abs(y1 - y0) + 1,
+    };
+    return clampBoxToCanvas(out);
+  }
+
   function onSourceMouseDown(e) {
-    if (!state.drawMode || !state.sourceImage) return;
-    const pt = canvasCoord(e, $("sourceCanvas"));
-    state.drawing = true;
-    state.drawStart = pt;
-    state.drawCurrent = { x: pt.x, y: pt.y, w: 1, h: 1 };
+    if (!state.sourceImage) return;
+    if (e.button !== 0) return;
+    hideSourceContextMenu();
+    const canvas = $("sourceCanvas");
+    const pt = canvasCoord(e, canvas);
+    const mode = state.sourceMode;
+    if (mode === "draw_box") {
+      pushHistory();
+      if (state.rapidManualAdd && state.drawCurrent) {
+        commitDraftToSource("manual");
+      }
+      state.drawing = true;
+      state.drawStart = pt;
+      state.sourceDrag = { type: "draw", start: pt };
+      setDraftBox({ x: pt.x, y: pt.y, w: 1, h: 1 });
+      renderSourceCanvas();
+      return;
+    }
+    if (mode === "row_select" || mode === "col_select") {
+      state.sourceDrag = { type: mode, start: pt, modifiers: { add: e.shiftKey, subtract: e.altKey, toggle: e.ctrlKey || e.metaKey } };
+      state.sourceRowDrag = { mode, rect: { x: pt.x, y: pt.y, w: 1, h: 1 } };
+      renderSourceCanvas();
+      return;
+    }
+    if (mode === "cut_v") {
+      const cut = sourceVBoxAtPoint(pt);
+      pushHistory();
+      if (cut) {
+        state.sourceSelectedCut = { type: "v", id: cut.id };
+        state.sourceDrag = { type: "move_cut_v", id: cut.id };
+      } else {
+        const existingX = state.sourceCutsV.find((c) => Number(c.x) === Number(pt.x));
+        if (!existingX) {
+          const newCut = { id: nextSourceId(), x: pt.x };
+          state.sourceCutsV = [...state.sourceCutsV, newCut].sort((a, b) => a.x - b.x);
+          state.sourceSelectedCut = { type: "v", id: newCut.id };
+          saveSessionState("insert-cut-v");
+        }
+        const selected = sourceVBoxAtPoint(pt, 0) || sourceVBoxAtPoint(pt, 3);
+        if (selected) state.sourceDrag = { type: "move_cut_v", id: selected.id };
+      }
+      renderSourceCanvas();
+      return;
+    }
+    const hit = sourceBoxAtPoint(pt);
+    const draftHandle = state.drawCurrent ? sourceHandleAtPoint(state.drawCurrent, pt) : null;
+    if (draftHandle && state.drawCurrent) {
+      pushHistory();
+      state.sourceSelection = new Set();
+      state.sourceSelectedCut = null;
+      state.sourceDrag = { type: "draft_edit", handle: draftHandle, anchor: pt, original: { ...state.drawCurrent } };
+      renderSourceCanvas();
+      return;
+    }
+    if (hit) {
+      if (e.ctrlKey || e.metaKey) {
+        const id = Number(hit.id);
+        if (state.sourceSelection.has(id)) state.sourceSelection.delete(id);
+        else state.sourceSelection.add(id);
+      } else if (!state.sourceSelection.has(Number(hit.id)) || state.sourceSelection.size !== 1) {
+        state.sourceSelection = new Set([Number(hit.id)]);
+      }
+      state.sourceSelectedCut = null;
+      const primary = sourceSelectionPrimaryBox() || hit;
+      const handle = sourceHandleAtPoint(primary, pt);
+      pushHistory();
+      state.sourceDrag = { type: "box_edit", boxId: Number(primary.id), handle: handle || "move", anchor: pt, original: { ...primary } };
+      renderSourceCanvas();
+      return;
+    }
+    const cutHit = sourceVBoxAtPoint(pt);
+    if (cutHit) {
+      state.sourceSelectedCut = { type: "v", id: cutHit.id };
+      state.sourceSelection = new Set();
+      state.sourceDrag = { type: "move_cut_v", id: Number(cutHit.id) };
+      renderSourceCanvas();
+      return;
+    }
+    clearSourceSelection();
     renderSourceCanvas();
   }
 
   function onSourceMouseMove(e) {
-    if (!state.drawing || !state.drawStart) return;
+    if (!state.sourceImage) return;
     const pt = canvasCoord(e, $("sourceCanvas"));
-    state.drawCurrent = normalizeBox(state.drawStart, pt);
+    if (!state.sourceDrag) return;
+    const d = state.sourceDrag;
+    if (d.type === "draw" && d.start) {
+      setDraftBox(normalizeBox(d.start, pt));
+    } else if ((d.type === "row_select" || d.type === "col_select") && d.start) {
+      state.sourceRowDrag = { mode: d.type, rect: normalizeBox(d.start, pt) };
+    } else if (d.type === "draft_edit") {
+      const next = resizeBoxFromHandle(d.original, d.handle, d.anchor, pt);
+      setDraftBox(next);
+    } else if (d.type === "box_edit") {
+      const idx = state.extractedBoxes.findIndex((b) => Number(b.id) === Number(d.boxId));
+      if (idx >= 0) {
+        const next = resizeBoxFromHandle(d.original, d.handle, d.anchor, pt);
+        if (!committedBoxesOverlap(next, d.boxId)) {
+          state.extractedBoxes[idx] = { ...state.extractedBoxes[idx], ...next };
+        }
+      }
+    } else if (d.type === "move_cut_v") {
+      const idx = state.sourceCutsV.findIndex((c) => Number(c.id) === Number(d.id));
+      if (idx >= 0) {
+        const { w } = sourceCanvasSize();
+        state.sourceCutsV[idx] = { ...state.sourceCutsV[idx], x: Math.max(0, Math.min(w - 1, pt.x)) };
+        state.sourceCutsV.sort((a, b) => a.x - b.x);
+      }
+    }
     renderSourceCanvas();
   }
 
   function onSourceMouseUp(e) {
-    if (!state.drawing || !state.drawStart) return;
+    if (!state.sourceDrag) return;
+    const d = state.sourceDrag;
     const pt = canvasCoord(e, $("sourceCanvas"));
-    pushHistory();
-    state.anchorBox = normalizeBox(state.drawStart, pt);
+    if (d.type === "draw" && d.start) {
+      setDraftBox(normalizeBox(d.start, pt));
+      if (state.rapidManualAdd && state.drawCurrent) {
+        commitDraftToSource("manual", { skipHistory: false });
+      } else {
+        status(`Draft box ${state.drawCurrent?.w || 0}x${state.drawCurrent?.h || 0}`, "ok");
+      }
+    } else if (d.type === "draft_edit") {
+      const next = resizeBoxFromHandle(d.original, d.handle, d.anchor, pt);
+      setDraftBox(next);
+    } else if (d.type === "box_edit") {
+      const idx = state.extractedBoxes.findIndex((b) => Number(b.id) === Number(d.boxId));
+      if (idx >= 0) {
+        const next = resizeBoxFromHandle(d.original, d.handle, d.anchor, pt);
+        if (!committedBoxesOverlap(next, d.boxId)) {
+          state.extractedBoxes[idx] = { ...state.extractedBoxes[idx], ...next };
+          saveSessionState("edit-source-box");
+        } else {
+          state.extractedBoxes[idx] = { ...state.extractedBoxes[idx], ...d.original };
+          status("Move/resize blocked: overlap with another sprite box", "warn");
+        }
+      }
+    } else if (d.type === "row_select" || d.type === "col_select") {
+      const rect = normalizeBox(d.start, pt);
+      state.sourceRowDrag = { mode: d.type, rect };
+      applySourceBoxSelectionRect(d.type, rect, d.modifiers || {});
+      saveSessionState(d.type);
+    } else if (d.type === "move_cut_v") {
+      saveSessionState("move-cut-v");
+    }
     state.drawing = false;
     state.drawStart = null;
-    state.drawCurrent = null;
-    state.drawMode = false;
-    $("drawBoxBtn").textContent = "Draw Box";
+    state.sourceDrag = null;
+    state.sourceRowDrag = null;
     renderSourceCanvas();
   }
 
@@ -923,9 +1519,259 @@
         filtered = scored.slice(0, Math.min(24, scored.length)).map((s) => s.b);
       }
     }
-    state.extractedBoxes = filtered;
+    pushHistory();
+    const manual = state.extractedBoxes.filter((b) => String(b.source || "") === "manual");
+    const merged = [...manual];
+    for (const b of filtered) {
+      const candidate = clampBoxToCanvas(b);
+      if (!candidate) continue;
+      if (merged.some((m) => boxesIntersect(m, candidate))) continue;
+      merged.push({ id: nextSourceId(), x: candidate.x, y: candidate.y, w: candidate.w, h: candidate.h, source: "auto" });
+    }
+    state.extractedBoxes = merged;
     renderSourceCanvas();
-    status(`Find Sprites: ${filtered.length} matched`, filtered.length > 0 ? "ok" : "warn");
+    status(`Find Sprites: ${filtered.length} matched (${merged.length} total boxes)`, filtered.length > 0 ? "ok" : "warn");
+  }
+
+  function buildRawSourceCanvas() {
+    if (!state.sourceImage) return null;
+    const c = document.createElement("canvas");
+    c.width = state.sourceImage.width;
+    c.height = state.sourceImage.height;
+    const ctx = c.getContext("2d");
+    ctx.drawImage(state.sourceImage, 0, 0);
+    return c;
+  }
+
+  function estimateBgRgbFromImageData(data, w, h) {
+    const samples = [
+      [0, 0],
+      [Math.max(0, w - 1), 0],
+      [0, Math.max(0, h - 1)],
+      [Math.max(0, w - 1), Math.max(0, h - 1)],
+    ];
+    let r = 0, g = 0, b = 0;
+    for (const [x, y] of samples) {
+      const i = (y * w + x) * 4;
+      r += data[i + 0];
+      g += data[i + 1];
+      b += data[i + 2];
+    }
+    return [Math.round(r / samples.length), Math.round(g / samples.length), Math.round(b / samples.length)];
+  }
+
+  function sourceCellFromPatch(rgbaData, imgW, imgH, patchBox, bgRgb, threshold) {
+    const px0 = Math.max(0, Math.min(imgW - 1, patchBox.x));
+    const py0 = Math.max(0, Math.min(imgH - 1, patchBox.y));
+    const px1 = Math.max(px0 + 1, Math.min(imgW, patchBox.x + patchBox.w));
+    const py1 = Math.max(py0 + 1, Math.min(imgH, patchBox.y + patchBox.h));
+    const split = Math.max(py0 + 1, Math.floor((py0 + py1) / 2));
+    const regionStats = (yStart, yEnd) => {
+      let sig = 0;
+      let total = 0;
+      let rs = 0, gs = 0, bs = 0;
+      for (let y = yStart; y < yEnd; y++) {
+        for (let x = px0; x < px1; x++) {
+          const i = (y * imgW + x) * 4;
+          total += 1;
+          const a = rgbaData[i + 3];
+          if (a < 16) continue;
+          const dr = Math.abs(rgbaData[i + 0] - bgRgb[0]);
+          const dg = Math.abs(rgbaData[i + 1] - bgRgb[1]);
+          const db = Math.abs(rgbaData[i + 2] - bgRgb[2]);
+          if (dr + dg + db <= threshold) continue;
+          sig += 1;
+          rs += rgbaData[i + 0];
+          gs += rgbaData[i + 1];
+          bs += rgbaData[i + 2];
+        }
+      }
+      if (sig <= 0 || total <= 0) return null;
+      const occ = sig / total;
+      if (occ < 0.04) return null;
+      return {
+        occ,
+        rgb: [
+          Math.max(28, Math.min(220, Math.round(rs / sig))),
+          Math.max(28, Math.min(220, Math.round(gs / sig))),
+          Math.max(28, Math.min(220, Math.round(bs / sig))),
+        ],
+      };
+    };
+    const top = regionStats(py0, Math.max(py0 + 1, split));
+    const bot = regionStats(Math.max(py0 + 1, split), py1);
+    if (!top && !bot) return { glyph: 0, fg: [0, 0, 0], bg: [...MAGENTA] };
+    if (top && !bot) return { glyph: 223, fg: top.rgb, bg: [...MAGENTA] };
+    if (!top && bot) return { glyph: 220, fg: bot.rgb, bg: [...MAGENTA] };
+    const diff = Math.abs(top.rgb[0] - bot.rgb[0]) + Math.abs(top.rgb[1] - bot.rgb[1]) + Math.abs(top.rgb[2] - bot.rgb[2]);
+    if (diff < 20) {
+      return {
+        glyph: 219,
+        fg: [
+          Math.round((top.rgb[0] + bot.rgb[0]) / 2),
+          Math.round((top.rgb[1] + bot.rgb[1]) / 2),
+          Math.round((top.rgb[2] + bot.rgb[2]) / 2),
+        ],
+        bg: [0, 0, 0],
+      };
+    }
+    return { glyph: 223, fg: top.rgb, bg: bot.rgb };
+  }
+
+  function frameCellsFromSourceBox(box) {
+    const raw = buildRawSourceCanvas();
+    if (!raw) return null;
+    const ctx = raw.getContext("2d");
+    const img = ctx.getImageData(0, 0, raw.width, raw.height);
+    const data = img.data;
+    const bg = estimateBgRgbFromImageData(data, raw.width, raw.height);
+    const threshold = Math.max(0, Math.min(255, Number($("threshold").value || 48)));
+    const out = [];
+    const fw = Math.max(1, state.frameWChars);
+    const fh = Math.max(1, state.frameHChars);
+    for (let cy = 0; cy < fh; cy++) {
+      const row = [];
+      for (let cx = 0; cx < fw; cx++) {
+        const x0 = box.x + Math.floor((cx * box.w) / fw);
+        const x1 = box.x + Math.floor(((cx + 1) * box.w) / fw);
+        const y0 = box.y + Math.floor((cy * box.h) / fh);
+        const y1 = box.y + Math.floor(((cy + 1) * box.h) / fh);
+        row.push(
+          sourceCellFromPatch(
+            data,
+            raw.width,
+            raw.height,
+            { x: x0, y: y0, w: Math.max(1, x1 - x0), h: Math.max(1, y1 - y0) },
+            bg,
+            threshold
+          )
+        );
+      }
+      out.push(row);
+    }
+    return out;
+  }
+
+  function frameIsEmpty(row, col) {
+    for (let y = 0; y < state.frameHChars; y++) {
+      for (let x = 0; x < state.frameWChars; x++) {
+        const gx = col * state.frameWChars + x;
+        const gy = row * state.frameHChars + y;
+        if (gx >= state.gridCols || gy >= state.gridRows) continue;
+        const c = cellAt(gx, gy);
+        if (Number(c.glyph || 0) > 32) return false;
+      }
+    }
+    return true;
+  }
+
+  function nextAppendColForRow(row) {
+    const totalCols = Math.max(1, state.anims.reduce((a, b) => a + b, 0) * Math.max(1, state.projs));
+    if (state.selectedRow === row && state.selectedCols.size > 0) {
+      const next = Math.max(...state.selectedCols) + 1;
+      if (next < totalCols) return next;
+    }
+    for (let c = 0; c < totalCols; c++) {
+      if (frameIsEmpty(row, c)) return c;
+    }
+    return -1;
+  }
+
+  function addSourceBoxToSelectedRowSequence(box) {
+    if (!editableLayerActive()) {
+      status("Visual layer (2) must be active to insert source sprite into grid", "warn");
+      return false;
+    }
+    if (state.selectedRow === null) {
+      status("Select a target grid row first, then use Add to selected row sequence", "warn");
+      return false;
+    }
+    if (!state.sourceImage) {
+      status("Source image is not loaded in the workbench", "err");
+      return false;
+    }
+    const col = nextAppendColForRow(state.selectedRow);
+    if (col < 0) {
+      status("No free frame slot found on selected row", "warn");
+      return false;
+    }
+    const cells = frameCellsFromSourceBox(box);
+    if (!cells) {
+      status("Failed to rasterize source box", "err");
+      return false;
+    }
+    pushHistory();
+    clearFrame(state.selectedRow, col);
+    for (let y = 0; y < state.frameHChars; y++) {
+      for (let x = 0; x < state.frameWChars; x++) {
+        const gx = col * state.frameWChars + x;
+        const gy = state.selectedRow * state.frameHChars + y;
+        if (gx >= state.gridCols || gy >= state.gridRows) continue;
+        setCell(gx, gy, cells[y][x]);
+      }
+    }
+    state.selectedCols = new Set([col]);
+    renderAll();
+    saveSessionState("source-box-to-row-seq");
+    status(`Inserted source sprite into row ${state.selectedRow}, col ${col}`, "ok");
+    return true;
+  }
+
+  function deleteSelectedSourceObjectsOrDraft() {
+    if (state.sourceSelection.size > 0 || state.sourceSelectedCut || state.drawCurrent) {
+      pushHistory();
+      if (state.sourceSelection.size > 0) {
+        const ids = new Set([...state.sourceSelection].map((x) => Number(x)));
+        state.extractedBoxes = state.extractedBoxes.filter((b) => !ids.has(Number(b.id)));
+        clearSourceSelection();
+        renderSourceCanvas();
+        saveSessionState("delete-source-selection");
+        status("Deleted selected source sprite box(es)", "ok");
+        return true;
+      }
+      if (state.sourceSelectedCut?.type === "v") {
+        const id = Number(state.sourceSelectedCut.id);
+        state.sourceCutsV = state.sourceCutsV.filter((c) => Number(c.id) !== id);
+        state.sourceSelectedCut = null;
+        renderSourceCanvas();
+        saveSessionState("delete-source-cut");
+        status("Deleted vertical cut", "ok");
+        return true;
+      }
+      if (state.drawCurrent) {
+        state.drawCurrent = null;
+        renderSourceCanvas();
+        saveSessionState("delete-source-draft");
+        status("Deleted draft box", "ok");
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function nudgeSelectedSourceBox(dx, dy) {
+    if (state.sourceSelection.size !== 1) return false;
+    const box = sourceSelectionPrimaryBox();
+    if (!box) return false;
+    const next = clampBoxToCanvas({ x: box.x + dx, y: box.y + dy, w: box.w, h: box.h });
+    if (committedBoxesOverlap(next, box.id)) {
+      status("Nudge blocked: overlap with another sprite box", "warn");
+      return true;
+    }
+    pushHistory();
+    state.extractedBoxes = state.extractedBoxes.map((b) => (Number(b.id) === Number(box.id) ? { ...b, ...next } : b));
+    renderSourceCanvas();
+    saveSessionState("nudge-source-box");
+    return true;
+  }
+
+  function nudgeDraftBox(dx, dy) {
+    if (!state.drawCurrent) return false;
+    pushHistory();
+    setDraftBox({ x: state.drawCurrent.x + dx, y: state.drawCurrent.y + dy, w: state.drawCurrent.w, h: state.drawCurrent.h });
+    renderSourceCanvas();
+    saveSessionState("nudge-draft-box");
+    return true;
   }
 
   function clearFrame(row, col) {
@@ -1137,7 +1983,10 @@
       menu.style.top = `${e.clientY}px`;
       menu.classList.remove("hidden");
     });
-    document.addEventListener("click", () => $("gridContextMenu").classList.add("hidden"));
+    document.addEventListener("click", () => {
+      $("gridContextMenu").classList.add("hidden");
+      hideSourceContextMenu();
+    });
   }
 
   async function wbUpload() {
@@ -1238,30 +2087,99 @@
       const img = new Image();
       img.onload = () => {
         state.sourceImage = img;
+        state.anchorBox = null;
+        state.drawCurrent = null;
+        state.extractedBoxes = [];
+        state.sourceCutsV = [];
+        state.sourceCutsH = [];
+        clearSourceSelection();
+        state.sourceNextId = 1;
         renderSourceCanvas();
       };
       img.src = URL.createObjectURL(f);
     });
 
-    $("drawBoxBtn").addEventListener("click", () => {
-      state.drawMode = !state.drawMode;
-      $("drawBoxBtn").textContent = state.drawMode ? "Drawing..." : "Draw Box";
+    $("sourceSelectBtn").addEventListener("click", () => setSourceMode("select"));
+    $("drawBoxBtn").addEventListener("click", () => setSourceMode("draw_box"));
+    $("rowSelectBtn").addEventListener("click", () => setSourceMode("row_select"));
+    $("colSelectBtn").addEventListener("click", () => setSourceMode("col_select"));
+    $("cutVBtn").addEventListener("click", () => setSourceMode("cut_v"));
+    $("rapidManualAdd").addEventListener("change", () => {
+      state.rapidManualAdd = !!$("rapidManualAdd").checked;
+      updateSourceToolUI();
     });
     $("deleteBoxBtn").addEventListener("click", () => {
-      pushHistory();
-      state.anchorBox = null;
-      state.extractedBoxes = [];
-      renderSourceCanvas();
-      saveSessionState("delete-box");
+      if (!deleteSelectedSourceObjectsOrDraft()) {
+        pushHistory();
+        state.anchorBox = null;
+        state.drawCurrent = null;
+        state.extractedBoxes = [];
+        state.sourceCutsV = [];
+        clearSourceSelection();
+        renderSourceCanvas();
+        saveSessionState("clear-source-overlays");
+        status("Cleared source boxes/cuts/anchor", "ok");
+      }
     });
     $("extractBtn").addEventListener("click", () => {
       findSprites();
       saveSessionState("find-sprites");
     });
+    $("sourceCanvas").addEventListener("contextmenu", (e) => {
+      if (!state.sourceImage) return;
+      e.preventDefault();
+      const pt = canvasCoord(e, $("sourceCanvas"));
+      if (state.drawCurrent && boxContainsPt(state.drawCurrent, pt)) {
+        showSourceContextMenu(e.clientX, e.clientY, { type: "draft", useDraftAnchor: true });
+        return;
+      }
+      const box = sourceBoxAtPoint(pt);
+      if (box) {
+        state.sourceSelection = new Set([Number(box.id)]);
+        renderSourceCanvas();
+        showSourceContextMenu(e.clientX, e.clientY, { type: "box", id: Number(box.id) });
+        return;
+      }
+      const cut = sourceVBoxAtPoint(pt);
+      if (cut) {
+        state.sourceSelectedCut = { type: "v", id: Number(cut.id) };
+        renderSourceCanvas();
+        showSourceContextMenu(e.clientX, e.clientY, { type: "cut_v", id: Number(cut.id) });
+      }
+    });
     $("sourceCanvas").addEventListener("mousedown", onSourceMouseDown);
     $("sourceCanvas").addEventListener("mousemove", onSourceMouseMove);
     $("sourceCanvas").addEventListener("mouseup", onSourceMouseUp);
     $("sourceCanvas").addEventListener("mouseleave", onSourceMouseUp);
+    $("srcCtxAddSprite").addEventListener("click", () => {
+      if (state.sourceContextTarget?.type === "draft") commitDraftToSource("manual");
+      hideSourceContextMenu();
+    });
+    $("srcCtxAddToRow").addEventListener("click", () => {
+      let box = null;
+      if (state.sourceContextTarget?.type === "draft") {
+        box = commitDraftToSource("manual") || null;
+        if (!box && state.drawCurrent) box = { ...state.drawCurrent, id: -1 };
+      } else if (state.sourceContextTarget?.type === "box") {
+        box = state.extractedBoxes.find((b) => Number(b.id) === Number(state.sourceContextTarget.id)) || null;
+      }
+      if (box) addSourceBoxToSelectedRowSequence(box);
+      hideSourceContextMenu();
+    });
+    $("srcCtxSetAnchor").addEventListener("click", () => {
+      setAnchorFromTarget(state.sourceContextTarget);
+      hideSourceContextMenu();
+      renderSourceCanvas();
+      saveSessionState("set-anchor");
+    });
+    $("srcCtxPadAnchor").addEventListener("click", () => {
+      applyPadToContextTarget();
+      hideSourceContextMenu();
+    });
+    $("srcCtxDelete").addEventListener("click", () => {
+      deleteSourceTarget(state.sourceContextTarget);
+      hideSourceContextMenu();
+    });
 
     $("deleteCellBtn").addEventListener("click", deleteSelectedFrames);
     $("ctxDelete").addEventListener("click", () => {
@@ -1306,6 +2224,12 @@
     });
 
     window.addEventListener("keydown", (e) => {
+      const t = e.target;
+      const typingTarget =
+        t instanceof HTMLInputElement ||
+        t instanceof HTMLTextAreaElement ||
+        t instanceof HTMLSelectElement;
+      if (typingTarget && !(e.ctrlKey || e.metaKey)) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         undo();
@@ -1313,14 +2237,51 @@
         e.preventDefault();
         redo();
       } else if (e.key === "Delete") {
-        deleteSelectedFrames();
+        if (deleteSelectedSourceObjectsOrDraft()) {
+          e.preventDefault();
+        } else {
+          deleteSelectedFrames();
+        }
       } else if (e.key === "Escape") {
+        hideSourceContextMenu();
         if (state.inspectorOpen) {
           closeInspector();
+        } else if (state.sourceDrag || state.sourceRowDrag) {
+          state.sourceDrag = null;
+          state.sourceRowDrag = null;
+          state.drawing = false;
+          state.drawStart = null;
+          renderSourceCanvas();
         } else {
           state.selectedCols = new Set();
           state.selectedRow = null;
+          clearSourceSelection();
           renderFrameGrid();
+          renderSourceCanvas();
+        }
+      } else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "v") {
+        setSourceMode("select");
+      } else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "b") {
+        setSourceMode("draw_box");
+      } else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "r") {
+        setSourceMode("row_select");
+      } else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "c") {
+        setSourceMode("col_select");
+      } else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "x") {
+        setSourceMode("cut_v");
+      } else if (e.key === "Enter") {
+        if (state.drawCurrent) {
+          e.preventDefault();
+          commitDraftToSource("manual");
+        }
+      } else if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
+        const step = e.shiftKey ? 10 : 1;
+        const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
+        const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
+        if (dx !== 0 || dy !== 0) {
+          if (nudgeSelectedSourceBox(dx, dy) || nudgeDraftBox(dx, dy)) {
+            e.preventDefault();
+          }
         }
       }
     });
@@ -1338,6 +2299,7 @@
         status("Clipboard copy failed", "warn");
       }
     });
+    updateSourceToolUI();
   }
 
   // Audit hooks for deterministic browser checks.

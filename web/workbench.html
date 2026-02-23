@@ -43,16 +43,29 @@
     <div class="panel">
       <h3>Source Panel</h3>
       <div class="row">
+        <button id="sourceSelectBtn">Select</button>
         <button id="drawBoxBtn">Draw Box</button>
+        <button id="rowSelectBtn">Drag Row</button>
+        <button id="colSelectBtn">Drag Column</button>
+        <button id="cutVBtn">Vertical Cut</button>
         <button id="deleteBoxBtn">Delete Box</button>
         <button id="extractBtn">Find Sprites</button>
+        <label class="inline"><input id="rapidManualAdd" type="checkbox"> Rapid Add</label>
         <label>Threshold</label><input id="threshold" type="number" value="48" min="0" max="255">
         <label>Min Size</label><input id="minSize" type="number" value="8" min="1">
       </div>
+      <div id="sourceModeHint" class="small">Mode: Select. Click a sprite box to select, drag to move, drag handles to resize.</div>
       <div class="canvas-wrap">
         <canvas id="sourceCanvas" width="576" height="320"></canvas>
       </div>
       <div id="sourceInfo" class="small"></div>
+      <div id="sourceContextMenu" class="context-menu hidden">
+        <button id="srcCtxAddSprite">Add as 1 sprite</button>
+        <button id="srcCtxAddToRow">Add to selected row sequence</button>
+        <button id="srcCtxSetAnchor">Set as anchor for Find Sprites</button>
+        <button id="srcCtxPadAnchor">Pad this bbox to anchor size</button>
+        <button id="srcCtxDelete">Delete</button>
+      </div>
     </div>
 
     <div class="panel">

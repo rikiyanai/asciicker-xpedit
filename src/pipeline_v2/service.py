@@ -1225,6 +1225,11 @@ def workbench_load_from_job(job_id: str, req_id: str) -> dict[str, Any]:
         "anims": sess.anims,
         "source_projs": int(meta.get("source_projs", 1)),
         "projs": sess.projs,
+        "source_boxes": [],
+        "source_anchor_box": None,
+        "source_draft_box": None,
+        "source_cuts_v": [],
+        "source_cuts_h": [],
         "cells": cells,
     }
 
@@ -1363,6 +1368,31 @@ def workbench_save_session(session_id: str, payload: dict[str, Any], req_id: str
         if not isinstance(frame_groups, list):
             raise ApiError("frame_groups must be list", "invalid_frame_groups", "workbench", req_id, 422)
         sess["frame_groups"] = frame_groups
+    if "source_boxes" in payload:
+        source_boxes = payload.get("source_boxes")
+        if not isinstance(source_boxes, list):
+            raise ApiError("source_boxes must be list", "invalid_source_boxes", "workbench", req_id, 422)
+        sess["source_boxes"] = source_boxes
+    if "source_anchor_box" in payload:
+        source_anchor_box = payload.get("source_anchor_box")
+        if source_anchor_box is not None and not isinstance(source_anchor_box, dict):
+            raise ApiError("source_anchor_box must be object|null", "invalid_source_anchor_box", "workbench", req_id, 422)
+        sess["source_anchor_box"] = source_anchor_box
+    if "source_draft_box" in payload:
+        source_draft_box = payload.get("source_draft_box")
+        if source_draft_box is not None and not isinstance(source_draft_box, dict):
+            raise ApiError("source_draft_box must be object|null", "invalid_source_draft_box", "workbench", req_id, 422)
+        sess["source_draft_box"] = source_draft_box
+    if "source_cuts_v" in payload:
+        source_cuts_v = payload.get("source_cuts_v")
+        if not isinstance(source_cuts_v, list):
+            raise ApiError("source_cuts_v must be list", "invalid_source_cuts_v", "workbench", req_id, 422)
+        sess["source_cuts_v"] = source_cuts_v
+    if "source_cuts_h" in payload:
+        source_cuts_h = payload.get("source_cuts_h")
+        if not isinstance(source_cuts_h, list):
+            raise ApiError("source_cuts_h must be list", "invalid_source_cuts_h", "workbench", req_id, 422)
+        sess["source_cuts_h"] = source_cuts_h
 
     save_json(p, sess)
     return {
@@ -1373,4 +1403,5 @@ def workbench_save_session(session_id: str, payload: dict[str, Any], req_id: str
         "anims": [int(x) for x in sess["anims"]],
         "projs": int(sess["projs"]),
         "cell_count": len(sess["cells"]),
+        "source_boxes": len(sess.get("source_boxes", [])) if isinstance(sess.get("source_boxes"), list) else 0,
     }

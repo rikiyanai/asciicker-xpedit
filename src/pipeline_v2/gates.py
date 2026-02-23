@@ -19,7 +19,7 @@ def gate_g7_geometry(expected_cells: int, actual_cells: int) -> GateResult:
 def gate_g8_nonempty(glyphs: list[int], min_ratio: float = 0.05) -> GateResult:
     if not glyphs:
         return GateResult("G8", THRESHOLD_BREACHED, {"ratio": 0.0, "min_ratio": min_ratio})
-    nonempty = sum(1 for g in glyphs if g != 32)
+    nonempty = sum(1 for g in glyphs if g not in (0, 32))
     ratio = nonempty / len(glyphs)
     ok = ratio >= min_ratio
     return GateResult(

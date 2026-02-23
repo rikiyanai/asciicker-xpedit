@@ -109,10 +109,29 @@ def test_browser_golden_flow_records_video_and_populates_workbench(web_server: s
                 timeout=30000,
             )
             cell_count = page.locator("#grid .cell").count()
+            session_json = json.loads(page.locator("#sessionOut").inner_text())
+            angles = int(session_json.get("angles", 1))
+            anims = [int(x) for x in (session_json.get("anims") or [1])]
+            projs = int(session_json.get("projs", 1))
+            grid_cols = int(session_json.get("grid_cols", 0))
+            grid_rows = int(session_json.get("grid_rows", 0))
+            semantic_frames = max(1, sum(anims))
+            frame_cols_total = max(1, semantic_frames * max(1, projs))
+            frame_char_w = grid_cols / frame_cols_total
+            frame_char_h = grid_rows / max(1, angles)
             summary["cell_count"] = cell_count
+            summary["session_summary"] = session_json
+            summary["frame_char_w"] = frame_char_w
+            summary["frame_char_h"] = frame_char_h
             shot("06_workbench_populated")
             if cell_count <= 0:
                 raise AssertionError("Workbench grid has zero cells")
+            # Strong geometry guard: do not treat ultra-coarse output as success.
+            if frame_char_w < 4 or frame_char_h < 4:
+                raise AssertionError(
+                    f"Workbench frame geometry too coarse: frame_char_w={frame_char_w:.2f}, "
+                    f"frame_char_h={frame_char_h:.2f} (must be >= 4)"
+                )
 
             page.click("#btnExport")
             page.wait_for_function(
@@ -125,6 +144,14 @@ def test_browser_golden_flow_records_video_and_populates_workbench(web_server: s
             export_json = page.locator("#exportOut").inner_text()
             export_data = json.loads(export_json)
             summary["export_xp_path"] = export_data.get("xp_path")
+
+            page.wait_for_function(
+                "() => document.getElementById('xpToolCommandHint').textContent.includes('scripts.asset_gen.xp_tool')",
+                timeout=30000,
+            )
+            summary["xp_tool_hint"] = page.locator("#xpToolCommandHint").inner_text()
+            summary["steps"].append("xp_tool_hint_ok")
+            shot("08_xp_tool_hint")
             summary["status"] = "passed"
 
         except PWTimeout as e:

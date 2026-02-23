@@ -39,6 +39,12 @@
     if (r.ok) {
       $("angles").value = String(j.suggested_angles || 1);
       $("frames").value = (j.suggested_frames || [1]).join(",");
+      if (j.suggested_source_projs) {
+        $("sourceProjs").value = String(j.suggested_source_projs);
+      }
+      if (j.suggested_render_resolution) {
+        $("renderRes").value = String(j.suggested_render_resolution);
+      }
     }
   });
 
@@ -51,7 +57,7 @@
       angles: parseInt($("angles").value || "1", 10),
       frames: $("frames").value,
       source_projs: parseInt($("sourceProjs").value || "1", 10),
-      render_resolution: parseInt($("renderRes").value || "24", 10)
+      render_resolution: parseInt($("renderRes").value || "12", 10)
     };
 
     const ctl = new AbortController();

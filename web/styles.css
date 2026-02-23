@@ -60,13 +60,16 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   overflow: auto;
 }
 .cell {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   background: #0d1118;
+  color: #dcdcdc;
   display: inline-flex;
   justify-content: center;
   align-items: center;
-  font-size: 11px;
+  font-size: 14px;
+  line-height: 1;
+  border: 1px solid #111826;
 }
 
 pre {
@@ -79,3 +82,117 @@ pre {
 }
 
 a { color: #80bdff; }
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.canvas-wrap {
+  border: 1px solid #2a3345;
+  border-radius: 8px;
+  background: #0f1420;
+  overflow: auto;
+  max-height: 420px;
+}
+
+#sourceCanvas {
+  image-rendering: pixelated;
+  display: block;
+}
+
+.frame-grid {
+  display: grid;
+  gap: 4px;
+  background: #0f1420;
+  border: 1px solid #2a3345;
+  border-radius: 8px;
+  padding: 8px;
+  min-height: 180px;
+}
+
+.frame-cell {
+  width: 68px;
+  height: 68px;
+  border: 1px solid #2a3345;
+  background: #070b11;
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+}
+
+.frame-cell.selected {
+  outline: 2px solid #4ea1ff;
+}
+
+.frame-cell.row-selected {
+  box-shadow: inset 0 0 0 2px #6fcf97;
+}
+
+.frame-cell.group-selected {
+  box-shadow: inset 0 0 0 2px #f3b63f;
+}
+
+.frame-label {
+  position: absolute;
+  left: 2px;
+  bottom: 1px;
+  font-size: 10px;
+  color: #98a8b8;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 0 3px;
+  border-radius: 3px;
+}
+
+.hidden { display: none !important; }
+
+#layerVisibility label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+#layerVisibility input[type="checkbox"] {
+  margin: 0;
+  padding: 0;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 9999;
+  background: #111a28;
+  border: 1px solid #2a3345;
+  border-radius: 6px;
+  padding: 6px;
+}
+
+.context-menu button {
+  display: block;
+  width: 100%;
+}
+
+#previewCanvas {
+  border: 1px solid #2a3345;
+  background: #05070a;
+  border-radius: 8px;
+  image-rendering: pixelated;
+}
+
+#cellInspectorCanvas {
+  border: 1px solid #2a3345;
+  background: #05070a;
+  border-radius: 8px;
+  image-rendering: pixelated;
+  width: min(100%, 720px);
+  height: auto;
+  display: block;
+}
+
+@media (max-width: 1100px) {
+  .two-col {
+    grid-template-columns: 1fr;
+  }
+}

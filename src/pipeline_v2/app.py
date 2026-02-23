@@ -13,7 +13,10 @@ from .service import (
     run_pipeline,
     status,
     workbench_load_from_job,
+    workbench_save_session,
     workbench_export_xp,
+    workbench_xp_tool_command,
+    workbench_open_in_xp_tool,
 )
 
 
@@ -70,7 +73,7 @@ def create_app() -> Flask:
                 angles=int(payload.get("angles", 1)),
                 frames=parse_frames_csv(payload.get("frames", "1"), req_id, "run"),
                 source_projs=int(payload.get("source_projs", 1)),
-                render_resolution=int(payload.get("render_resolution", 24)),
+                render_resolution=int(payload.get("render_resolution", 12)),
                 bg_mode=str(payload.get("bg_mode", "key_color")),
                 bg_tolerance=int(payload.get("bg_tolerance", 8)),
             )
@@ -114,6 +117,44 @@ def create_app() -> Flask:
             if not session_id:
                 raise ApiError("session_id is required", "missing_session_id", "workbench", req_id, 400)
             return jsonify(workbench_export_xp(session_id, req_id)), 200
+        except ApiError as e:
+            return _err(e)
+
+    @app.post("/api/workbench/xp-tool-command")
+    def api_wb_xp_tool_command():
+        req_id = str(uuid.uuid4())
+        try:
+            payload = request.get_json(silent=True) or {}
+            xp_path = str(payload.get("xp_path", "")).strip()
+            if not xp_path:
+                raise ApiError("xp_path is required", "missing_xp_path", "workbench", req_id, 400)
+            return jsonify(workbench_xp_tool_command(xp_path, req_id)), 200
+        except ApiError as e:
+            return _err(e)
+
+    @app.post("/api/workbench/open-in-xp-tool")
+    def api_wb_open_in_xp_tool():
+        req_id = str(uuid.uuid4())
+        try:
+            payload = request.get_json(silent=True) or {}
+            xp_path = str(payload.get("xp_path", "")).strip()
+            if not xp_path:
+                raise ApiError("xp_path is required", "missing_xp_path", "workbench", req_id, 400)
+            raw = payload.get("dry_run", False)
+            dry_run = raw if isinstance(raw, bool) else str(raw).lower() in {"1", "true", "yes", "on"}
+            return jsonify(workbench_open_in_xp_tool(xp_path, req_id, dry_run=dry_run)), 200
+        except ApiError as e:
+            return _err(e)
+
+    @app.post("/api/workbench/save-session")
+    def api_wb_save():
+        req_id = str(uuid.uuid4())
+        try:
+            payload = request.get_json(silent=True) or {}
+            session_id = str(payload.get("session_id", "")).strip()
+            if not session_id:
+                raise ApiError("session_id is required", "missing_session_id", "workbench", req_id, 400)
+            return jsonify(workbench_save_session(session_id, payload, req_id)), 200
         except ApiError as e:
             return _err(e)
 

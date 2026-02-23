@@ -14,24 +14,133 @@
     <div class="row">
       <button id="btnLoad">Load From Job</button>
       <button id="btnExport" disabled>Export XP</button>
+      <button id="undoBtn" disabled>Undo</button>
+      <button id="redoBtn" disabled>Redo</button>
       <a href="/">Back to Wizard</a>
     </div>
     <div id="wbStatus" class="small warn">No active session</div>
   </div>
 
   <div class="panel">
-    <h3>Session</h3>
-    <pre id="sessionOut"></pre>
+    <h3>Upload + Convert (Workbench Direct)</h3>
+    <div class="row">
+      <input id="wbFile" type="file" accept=".png">
+      <button id="wbUpload" class="primary">Upload PNG</button>
+      <button id="wbAnalyze" class="primary" disabled>Analyze</button>
+      <button id="wbRun" class="success" disabled>Convert to XP</button>
+    </div>
+    <div class="row">
+      <div><label>Name</label><input id="wbName" value="wb_sprite"></div>
+      <div><label>Angles</label><input id="wbAngles" value="1"></div>
+      <div><label>Frames CSV</label><input id="wbFrames" value="1"></div>
+      <div><label>Source Projs</label><input id="wbSourceProjs" value="1"></div>
+      <div><label>Render Res</label><input id="wbRenderRes" value="12"></div>
+    </div>
+    <pre id="wbRunOut"></pre>
+  </div>
+
+  <div class="two-col">
+    <div class="panel">
+      <h3>Source Panel</h3>
+      <div class="row">
+        <button id="drawBoxBtn">Draw Box</button>
+        <button id="deleteBoxBtn">Delete Box</button>
+        <button id="extractBtn">Find Sprites</button>
+        <label>Threshold</label><input id="threshold" type="number" value="48" min="0" max="255">
+        <label>Min Size</label><input id="minSize" type="number" value="8" min="1">
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="sourceCanvas" width="576" height="320"></canvas>
+      </div>
+      <div id="sourceInfo" class="small"></div>
+    </div>
+
+    <div class="panel">
+      <h3>Grid Panel</h3>
+      <div class="row">
+        <button id="rowUpBtn" disabled>Row Up</button>
+        <button id="rowDownBtn" disabled>Row Down</button>
+        <button id="colLeftBtn" disabled>Col Left</button>
+        <button id="colRightBtn" disabled>Col Right</button>
+        <button id="deleteCellBtn" disabled>Delete Selected</button>
+      </div>
+      <div class="row">
+        <label>Active Layer</label>
+        <select id="layerSelect"></select>
+        <span id="layerHint" class="small">Double-click frame to inspect and zoom.</span>
+      </div>
+      <div id="layerVisibility" class="row small"></div>
+      <div id="gridPanel" class="frame-grid"></div>
+      <div id="gridContextMenu" class="context-menu hidden">
+        <button id="ctxDelete">Delete</button>
+      </div>
+      <h4>Legacy Char Grid (debug)</h4>
+      <div id="grid" class="grid"></div>
+    </div>
   </div>
 
   <div class="panel">
-    <h3>Grid</h3>
-    <div id="grid" class="grid"></div>
+    <h3>Animation + Metadata</h3>
+    <div class="row">
+      <label>Row Category</label>
+      <select id="animCategorySelect">
+        <option value="idle">idle</option>
+        <option value="walk">walk</option>
+        <option value="attack">attack</option>
+        <option value="hurt">hurt</option>
+        <option value="death">death</option>
+        <option value="custom">custom</option>
+      </select>
+      <button id="assignAnimCategoryBtn" disabled>Assign Row Category</button>
+    </div>
+    <div class="row">
+      <label>Frame Group Name</label>
+      <input id="frameGroupName" value="group_1">
+      <button id="assignFrameGroupBtn" disabled>Assign Selected Frames</button>
+    </div>
+    <div class="row">
+      <button id="applyGroupsToAnimsBtn">Apply Frame Groups to Metadata</button>
+    </div>
+    <pre id="metaOut"></pre>
+  </div>
+
+  <div class="two-col">
+    <div class="panel">
+      <h3>XP Preview</h3>
+      <div class="row">
+        <button id="playBtn">Play</button>
+        <button id="stopBtn">Stop</button>
+        <label>FPS</label><input id="fpsInput" type="number" value="8" min="1" max="30">
+        <label>Direction</label><input id="previewAngle" type="number" value="0" min="0">
+      </div>
+      <canvas id="previewCanvas" width="256" height="256"></canvas>
+    </div>
+
+    <div class="panel">
+      <h3>Session</h3>
+      <pre id="sessionOut"></pre>
+    </div>
   </div>
 
   <div class="panel">
     <h3>Export</h3>
+    <div class="small">Export always writes current edited state.</div>
+    <div class="row">
+      <button id="openXpToolBtn" disabled>Launch Desktop XP Tool (Optional)</button>
+      <span id="xpToolCommandHint" class="small">Export an `.xp` for optional desktop inspection.</span>
+    </div>
     <pre id="exportOut"></pre>
+  </div>
+
+  <div id="cellInspectorPanel" class="panel hidden">
+    <h3>Cell Inspector</h3>
+    <div class="row">
+      <button id="inspectorCloseBtn">Close</button>
+      <label>Zoom</label><input id="inspectorZoom" type="range" min="4" max="28" value="10">
+      <span id="inspectorZoomValue" class="small">10x</span>
+    </div>
+    <canvas id="cellInspectorCanvas" width="320" height="320"></canvas>
+    <div id="cellInspectorInfo" class="small"></div>
   </div>
 </div>
 <script src="/workbench.js"></script>

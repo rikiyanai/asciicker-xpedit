@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import struct
 from pathlib import Path
 
@@ -12,22 +13,29 @@ def write_xp(path: str | Path, width: int, height: int, layers: list[list[tuple[
     """
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    with p.open("wb") as f:
+    with gzip.open(p, "wb") as f:
         f.write(struct.pack("<i", -1))
         f.write(struct.pack("<I", len(layers)))
         for layer in layers:
             if len(layer) != width * height:
                 raise ValueError("layer cell count mismatch")
-            f.write(struct.pack("<I", width))
-            f.write(struct.pack("<I", height))
-            for glyph, fg, bg in layer:
-                f.write(struct.pack("<I", int(glyph)))
-                f.write(bytes([fg[0], fg[1], fg[2], bg[0], bg[1], bg[2]]))
+            f.write(struct.pack("<i", width))
+            f.write(struct.pack("<i", height))
+            # REXPaint/xp_core contract: column-major stream order.
+            for x in range(width):
+                for y in range(height):
+                    glyph, fg, bg = layer[y * width + x]
+                    f.write(struct.pack("<I", int(glyph)))
+                    f.write(bytes([fg[0], fg[1], fg[2], bg[0], bg[1], bg[2]]))
 
 
 def read_xp(path: str | Path) -> dict:
     p = Path(path)
-    data = p.read_bytes()
+    raw = p.read_bytes()
+    if raw.startswith(b"\x1f\x8b"):
+        data = gzip.decompress(raw)
+    else:
+        data = raw
     offset = 0
 
     def u32() -> int:
@@ -50,19 +58,20 @@ def read_xp(path: str | Path) -> dict:
     width = None
     height = None
     for _ in range(layer_count):
-        w = u32()
-        h = u32()
+        w = i32()
+        h = i32()
         if width is None:
             width, height = w, h
         if w != width or h != height:
             raise ValueError("non-uniform layer dimensions")
-        cells = []
-        for _i in range(w * h):
-            glyph = u32()
-            fg = tuple(data[offset:offset + 3])
-            bg = tuple(data[offset + 3:offset + 6])
-            offset += 6
-            cells.append((glyph, fg, bg))
+        cells = [None] * (w * h)
+        for x in range(w):
+            for y in range(h):
+                glyph = u32()
+                fg = tuple(data[offset:offset + 3])
+                bg = tuple(data[offset + 3:offset + 6])
+                offset += 6
+                cells[y * w + x] = (glyph, fg, bg)
         layers.append(cells)
 
     return {

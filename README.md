@@ -78,3 +78,8 @@ PYTHONPATH=src python3 -m pytest
 
 - The XP codec implemented here writes/reads classic REXPaint-style layers.
 - This MVP uses deterministic grayscale glyph mapping; it is not final art-quality conversion.
+
+## Requirements Checklist
+
+- Canonical checklist: `docs/REQUIREMENTS_CHECKLIST.md`
+- Imported real-sheet fixtures: `data/imported/smalltestpngs/`

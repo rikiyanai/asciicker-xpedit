@@ -45,3 +45,22 @@ def test_wizard_to_workbench_to_export(client):
     export_data = export_resp.get_json()
     assert Path(export_data["xp_path"]).exists()
     assert export_data["checksum"]
+
+    cmd_resp = client.post(
+        "/api/workbench/xp-tool-command",
+        data=json.dumps({"xp_path": export_data["xp_path"]}),
+        content_type="application/json",
+    )
+    assert cmd_resp.status_code == 200
+    cmd_data = cmd_resp.get_json()
+    assert "scripts.asset_gen.xp_tool" in cmd_data["command"]
+
+    open_resp = client.post(
+        "/api/workbench/open-in-xp-tool",
+        data=json.dumps({"xp_path": export_data["xp_path"], "dry_run": True}),
+        content_type="application/json",
+    )
+    assert open_resp.status_code == 200
+    open_data = open_resp.get_json()
+    assert open_data["dry_run"] is True
+    assert open_data["launched"] is False

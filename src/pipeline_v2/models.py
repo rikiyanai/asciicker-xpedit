@@ -28,7 +28,7 @@ class RunConfig:
     angles: int
     frames: list[int]
     source_projs: int = 1
-    render_resolution: int = 24
+    render_resolution: int = 12
     bg_mode: str = "key_color"
     bg_tolerance: int = 8
 

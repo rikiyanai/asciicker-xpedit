@@ -203,6 +203,7 @@ Status: `IMPLEMENTED`
 
 - [ ] Manual source boxes can be appended to source sprite list only (default).
 - [ ] Manual source boxes can be appended to selected row sequence (secondary action).
+- [ ] Selected source sprites (e.g. row-selected set) can be dragged and dropped onto a grid frame cell for batch insertion.
 - [ ] Source-side selections integrate cleanly with grid-sequencing workflow.
 - [ ] UI makes destination/target row clear before sequence append action.
 

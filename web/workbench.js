@@ -28,6 +28,7 @@
     sourceSelectedCut: null,
     sourceNextId: 1,
     rapidManualAdd: false,
+    sourceDragHoverFrame: null,
     cells: [],
     gridCols: 0,
     gridRows: 0,
@@ -1257,6 +1258,22 @@
     const canvas = $("sourceCanvas");
     const pt = canvasCoord(e, canvas);
     const mode = state.sourceMode;
+    if ((mode === "row_select" || mode === "col_select") && state.sourceSelection.size > 0) {
+      const hit = sourceBoxAtPoint(pt);
+      if (hit && state.sourceSelection.has(Number(hit.id))) {
+        state.sourceDrag = {
+          type: "drag_source_selection_to_grid",
+          startClientX: e.clientX,
+          startClientY: e.clientY,
+          lastClientX: e.clientX,
+          lastClientY: e.clientY,
+          moved: false,
+        };
+        state.sourceDragHoverFrame = null;
+        status("Drag selected source sprites to a grid frame cell", "ok");
+        return;
+      }
+    }
     if (mode === "draw_box") {
       pushHistory();
       if (state.rapidManualAdd && state.drawCurrent) {
@@ -1360,6 +1377,17 @@
         state.sourceCutsV[idx] = { ...state.sourceCutsV[idx], x: Math.max(0, Math.min(w - 1, pt.x)) };
         state.sourceCutsV.sort((a, b) => a.x - b.x);
       }
+    } else if (d.type === "drag_source_selection_to_grid") {
+      d.lastClientX = e.clientX;
+      d.lastClientY = e.clientY;
+      if (Math.abs(e.clientX - d.startClientX) > 3 || Math.abs(e.clientY - d.startClientY) > 3) d.moved = true;
+      state.sourceDragHoverFrame = gridFrameFromClientPoint(e.clientX, e.clientY);
+      if (state.sourceDragHoverFrame) {
+        status(
+          `Drop target: Angle ${state.sourceDragHoverFrame.row} (${angleNameForIndex(state.sourceDragHoverFrame.row)}), Frame ${frameColInfo(state.sourceDragHoverFrame.col).frame}`,
+          "ok"
+        );
+      }
     }
     renderSourceCanvas();
   }
@@ -1397,10 +1425,16 @@
       saveSessionState(d.type);
     } else if (d.type === "move_cut_v") {
       saveSessionState("move-cut-v");
+    } else if (d.type === "drag_source_selection_to_grid") {
+      const didDrop = d.moved ? dropSelectedSourceBoxesAtClientPoint(e.clientX, e.clientY) : false;
+      if (!didDrop && !d.moved) {
+        status(`${state.sourceSelection.size} source sprite box(es) selected`, state.sourceSelection.size ? "ok" : "warn");
+      }
     }
     state.drawing = false;
     state.drawStart = null;
     state.sourceDrag = null;
+    state.sourceDragHoverFrame = null;
     state.sourceRowDrag = null;
     renderSourceCanvas();
   }
@@ -1665,8 +1699,48 @@
     return true;
   }
 
+  function totalGridFrameCols() {
+    return Math.max(1, state.anims.reduce((a, b) => a + b, 0) * Math.max(1, state.projs));
+  }
+
+  function writeSourceCellsToFrame(row, col, cells) {
+    clearFrame(row, col);
+    for (let y = 0; y < state.frameHChars; y++) {
+      for (let x = 0; x < state.frameWChars; x++) {
+        const gx = col * state.frameWChars + x;
+        const gy = row * state.frameHChars + y;
+        if (gx >= state.gridCols || gy >= state.gridRows) continue;
+        setCell(gx, gy, cells[y][x]);
+      }
+    }
+  }
+
+  function groupSourceBoxesByRows(boxes) {
+    const sorted = [...boxes].sort((a, b) => (a.y - b.y) || (a.x - b.x));
+    const groups = [];
+    for (const box of sorted) {
+      if (!groups.length) {
+        groups.push({ minY: box.y, maxY: boxBottom(box), boxes: [box] });
+        continue;
+      }
+      const g = groups[groups.length - 1];
+      const tol = Math.max(4, Math.round(Math.min(box.h, (g.maxY - g.minY + 1)) * 0.35));
+      if (box.y <= (g.maxY + tol)) {
+        g.boxes.push(box);
+        g.minY = Math.min(g.minY, box.y);
+        g.maxY = Math.max(g.maxY, boxBottom(box));
+      } else {
+        groups.push({ minY: box.y, maxY: boxBottom(box), boxes: [box] });
+      }
+    }
+    for (const g of groups) {
+      g.boxes.sort((a, b) => (a.x - b.x) || (a.y - b.y));
+    }
+    return groups;
+  }
+
   function nextAppendColForRow(row) {
-    const totalCols = Math.max(1, state.anims.reduce((a, b) => a + b, 0) * Math.max(1, state.projs));
+    const totalCols = totalGridFrameCols();
     if (state.selectedRow === row && state.selectedCols.size > 0) {
       const next = Math.max(...state.selectedCols) + 1;
       if (next < totalCols) return next;
@@ -1675,6 +1749,85 @@
       if (frameIsEmpty(row, c)) return c;
     }
     return -1;
+  }
+
+  function insertSourceBoxesIntoGridAt(boxes, targetRow, startCol) {
+    if (!editableLayerActive()) {
+      status("Visual layer (2) must be active to insert source sprites into grid", "warn");
+      return false;
+    }
+    if (!state.sourceImage) {
+      status("Source image is not loaded in the workbench", "err");
+      return false;
+    }
+    const totalCols = totalGridFrameCols();
+    if (targetRow < 0 || targetRow >= state.angles || startCol < 0 || startCol >= totalCols) {
+      status("Drop target is outside grid bounds", "warn");
+      return false;
+    }
+    const rowGroups = groupSourceBoxesByRows(boxes);
+    if (!rowGroups.length) {
+      status("No source sprite boxes selected for drop", "warn");
+      return false;
+    }
+
+    pushHistory();
+    let inserted = 0;
+    let rowsInserted = 0;
+    let firstRow = null;
+    let firstRowCols = [];
+    for (let rOff = 0; rOff < rowGroups.length; rOff++) {
+      const row = targetRow + rOff;
+      if (row < 0 || row >= state.angles) break;
+      const group = rowGroups[rOff];
+      const usable = group.boxes.filter((_b, i) => (startCol + i) < totalCols);
+      if (!usable.length) continue;
+      rowsInserted += 1;
+      const colsUsed = [];
+      for (let i = 0; i < usable.length; i++) {
+        const col = startCol + i;
+        const cells = frameCellsFromSourceBox(usable[i]);
+        if (!cells) continue;
+        writeSourceCellsToFrame(row, col, cells);
+        inserted += 1;
+        colsUsed.push(col);
+      }
+      if (firstRow === null && colsUsed.length) {
+        firstRow = row;
+        firstRowCols = colsUsed;
+      }
+    }
+    if (firstRow !== null && firstRowCols.length) {
+      state.selectedRow = firstRow;
+      state.selectedCols = new Set(firstRowCols);
+    }
+    renderAll();
+    saveSessionState("drop-source-selection-to-grid");
+    status(`Dropped ${inserted} source sprite box(es) into ${rowsInserted} grid row(s)`, inserted > 0 ? "ok" : "warn");
+    return inserted > 0;
+  }
+
+  function gridFrameFromClientPoint(clientX, clientY) {
+    const el = document.elementFromPoint(clientX, clientY);
+    if (!(el instanceof Element)) return null;
+    const frame = el.closest(".frame-cell");
+    if (!frame) return null;
+    const row = Number(frame.dataset.row);
+    const col = Number(frame.dataset.col);
+    if (!Number.isFinite(row) || !Number.isFinite(col)) return null;
+    return { row, col };
+  }
+
+  function dropSelectedSourceBoxesAtClientPoint(clientX, clientY) {
+    const ids = new Set([...state.sourceSelection].map((x) => Number(x)));
+    const boxes = state.extractedBoxes.filter((b) => ids.has(Number(b.id)));
+    if (!boxes.length) return false;
+    const tgt = gridFrameFromClientPoint(clientX, clientY);
+    if (!tgt) {
+      status("Drop selected source sprites onto a grid frame cell", "warn");
+      return false;
+    }
+    return insertSourceBoxesIntoGridAt(boxes, tgt.row, tgt.col);
   }
 
   function addSourceBoxToSelectedRowSequence(box) {
@@ -1701,15 +1854,7 @@
       return false;
     }
     pushHistory();
-    clearFrame(state.selectedRow, col);
-    for (let y = 0; y < state.frameHChars; y++) {
-      for (let x = 0; x < state.frameWChars; x++) {
-        const gx = col * state.frameWChars + x;
-        const gy = state.selectedRow * state.frameHChars + y;
-        if (gx >= state.gridCols || gy >= state.gridRows) continue;
-        setCell(gx, gy, cells[y][x]);
-      }
-    }
+    writeSourceCellsToFrame(state.selectedRow, col, cells);
     state.selectedCols = new Set([col]);
     renderAll();
     saveSessionState("source-box-to-row-seq");
@@ -2150,7 +2295,7 @@
     $("sourceCanvas").addEventListener("mousedown", onSourceMouseDown);
     $("sourceCanvas").addEventListener("mousemove", onSourceMouseMove);
     $("sourceCanvas").addEventListener("mouseup", onSourceMouseUp);
-    $("sourceCanvas").addEventListener("mouseleave", onSourceMouseUp);
+    window.addEventListener("mouseup", onSourceMouseUp);
     $("srcCtxAddSprite").addEventListener("click", () => {
       if (state.sourceContextTarget?.type === "draft") commitDraftToSource("manual");
       hideSourceContextMenu();

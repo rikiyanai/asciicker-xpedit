@@ -7,6 +7,30 @@
   const DEFAULT_LAYER_NAMES = ["Metadata", "Layer 1", "Visual", "Layer 3"];
   const VERIFY_CMD_TEMPLATE_STORAGE_KEY = "wb_verify_command_template_v1";
   const TERM_STREAM_REGION_STORAGE_KEY = "wb_termpp_stream_region_v1";
+  const INSPECTOR_SWATCHES = [
+    [0, 0, 0],
+    [255, 255, 255],
+    [255, 0, 255],
+    [255, 0, 0],
+    [0, 255, 0],
+    [0, 0, 255],
+    [255, 255, 0],
+    [0, 255, 255],
+    [128, 128, 128],
+    [255, 128, 0],
+    [128, 0, 255],
+    [128, 64, 0],
+  ];
+  const WEBBUILD_DEFAULT_OVERRIDE_NAMES = (() => {
+    const out = ["player-nude.xp"];
+    const groups = ["player", "attack", "plydie", "wolfie", "wolack"];
+    for (const group of groups) {
+      for (let i = 0; i < 16; i++) {
+        out.push(`${group}-${i.toString(2).padStart(4, "0")}.xp`);
+      }
+    }
+    return out;
+  })();
 
   const state = {
     jobId: params.get("job_id") || "",
@@ -56,7 +80,18 @@
     inspectorZoom: 10,
     inspectorTool: "inspect",
     inspectorPaintColor: [255, 255, 255],
+    inspectorGlyphCode: 64,
+    inspectorGlyphFgColor: [255, 255, 255],
+    inspectorGlyphBgColor: [255, 0, 255],
     inspectorPainting: false,
+    inspectorStrokeChanged: false,
+    inspectorStrokeHadHistory: false,
+    inspectorStrokeWasDirty: false,
+    inspectorSelecting: false,
+    inspectorSelectAnchor: null,
+    inspectorSelection: null, // local frame chars: {x1,y1,x2,y2}
+    inspectorSelectionClipboard: null, // 2D matrix of cells
+    inspectorLastInspectCell: null, // {glyph,fg,bg}
     inspectorShowGrid: true,
     inspectorShowChecker: false,
     inspectorFrameClipboard: null,
@@ -64,6 +99,10 @@
     future: [],
     previewTimer: null,
     previewFrameIdx: 0,
+    sessionDirty: false,
+    sessionSaveInFlight: false,
+    sessionLastSaveOkAt: 0,
+    sessionLastSaveReason: "",
     termppStream: {
       id: null,
       pollTimer: null,
@@ -78,12 +117,59 @@
       uploadedXpBytes: null,
       uploadedXpName: "",
     },
+    inspectorHover: null, // {cx,cy,half,cell}
+    inspectorLastHoverAnchor: null, // {cx,cy}
   };
 
   function status(text, cls) {
     const el = $("wbStatus");
     el.className = "small " + (cls || "");
     el.textContent = text;
+  }
+
+  function updateSessionDirtyBadge() {
+    const top = $("sessionDirtyBadge");
+    const ins = $("inspectorDirtyBadge");
+    let txt = "Session: idle";
+    let cls = "small";
+    if (!state.sessionId) {
+      txt = "Session: idle";
+    } else if (state.sessionSaveInFlight && state.sessionDirty) {
+      txt = `Session: saving...`;
+      cls = "small warn";
+    } else if (state.sessionDirty) {
+      txt = "Session: edited (unsaved)";
+      cls = "small warn";
+    } else if (state.sessionLastSaveOkAt) {
+      txt = `Session: saved`;
+      cls = "small ok";
+    } else {
+      txt = "Session: loaded";
+      cls = "small";
+    }
+    if (top) {
+      top.className = cls;
+      top.textContent = txt;
+    }
+    if (ins) {
+      ins.className = cls;
+      ins.textContent = state.sessionDirty ? (state.sessionSaveInFlight ? "saving..." : "edited") : "saved";
+    }
+  }
+
+  function markSessionDirty(reason = "") {
+    if (!state.sessionId) return;
+    state.sessionDirty = true;
+    if (reason) state.sessionLastSaveReason = String(reason);
+    updateSessionDirtyBadge();
+  }
+
+  function markSessionSaved(reason = "") {
+    state.sessionDirty = false;
+    state.sessionSaveInFlight = false;
+    state.sessionLastSaveOkAt = Date.now();
+    if (reason) state.sessionLastSaveReason = String(reason);
+    updateSessionDirtyBadge();
   }
 
   function setXpToolHint(text) {
@@ -192,10 +278,28 @@
   }
 
   function updateWebbuildUI() {
+    const sessionReady = !!state.sessionId;
+    const runtimeReady = !!state.webbuild.ready;
     const applyBtn = $("webbuildApplySkinBtn");
-    if (applyBtn) applyBtn.disabled = !(state.sessionId && state.webbuild.ready);
+    if (applyBtn) {
+      applyBtn.disabled = !(sessionReady && runtimeReady);
+      applyBtn.title = sessionReady && runtimeReady ? "Apply current XP skin to the running webbuild" : "Requires an active session and a ready webbuild runtime";
+    }
+    const applyInPlaceBtn = $("webbuildApplyInPlaceBtn");
+    if (applyInPlaceBtn) {
+      applyInPlaceBtn.disabled = !(sessionReady && runtimeReady);
+      applyInPlaceBtn.title = sessionReady && runtimeReady ? "Apply to the current runtime without a forced restart (faster)" : "Disabled: wait for the webbuild runtime to finish loading";
+    }
+    const applyRestartBtn = $("webbuildApplyRestartBtn");
+    if (applyRestartBtn) {
+      applyRestartBtn.disabled = !sessionReady;
+      applyRestartBtn.title = sessionReady ? "Export and apply current XP skin with a deterministic webbuild restart" : "Disabled: load or create a session first";
+    }
     const quickBtn = $("webbuildQuickTestBtn");
-    if (quickBtn) quickBtn.disabled = !(state.sessionId);
+    if (quickBtn) {
+      quickBtn.disabled = !sessionReady;
+      quickBtn.title = sessionReady ? "Deterministic test path (opens/reloads preview as needed, then applies current XP skin)" : "Disabled: load or create a session first";
+    }
   }
 
   function detectWebbuildReady() {
@@ -271,6 +375,57 @@
     return false;
   }
 
+  function webbuildLoginOverlayVisible(win) {
+    if (!win || !win.document || typeof win.document.getElementById !== "function") return false;
+    const overlay = win.document.getElementById("login-overlay");
+    if (!overlay) return false;
+    try {
+      const cs = typeof win.getComputedStyle === "function" ? win.getComputedStyle(overlay) : null;
+      if (cs) {
+        if (cs.display === "none" || cs.visibility === "hidden") return false;
+      }
+    } catch (_e) {}
+    if (overlay.hidden) return false;
+    if (overlay.style && overlay.style.display === "none") return false;
+    return true;
+  }
+
+  function normalizeWebbuildOverrideNames(names) {
+    const out = [];
+    const seen = new Set();
+    const add = (name) => {
+      const s = String(name || "").trim();
+      if (!s || seen.has(s)) return;
+      seen.add(s);
+      out.push(s);
+    };
+    for (const name of WEBBUILD_DEFAULT_OVERRIDE_NAMES) add(name);
+    if (Array.isArray(names)) {
+      for (const name of names) add(name);
+    }
+    return out;
+  }
+
+  async function prepareWebbuildForSkinApply(opts = {}) {
+    const forceRestart = !!opts.force_restart;
+    const restartIfOverlayHidden = !!opts.restart_if_overlay_hidden;
+    if (!(await waitForWebbuildReady())) return { ready: false, restarted: false, overlay_visible: 0 };
+    const initialWin = webbuildFrameWindow();
+    const overlayVisible = webbuildLoginOverlayVisible(initialWin);
+    if (forceRestart || (restartIfOverlayHidden && !overlayVisible)) {
+      reloadWebbuild();
+      if (!(await waitForWebbuildReady())) return { ready: false, restarted: true, overlay_visible: 0 };
+      const restartedWin = webbuildFrameWindow();
+      return {
+        ready: true,
+        restarted: true,
+        restart_reason: forceRestart ? "forced" : "overlay_hidden",
+        overlay_visible: webbuildLoginOverlayVisible(restartedWin) ? 1 : 0,
+      };
+    }
+    return { ready: true, restarted: false, overlay_visible: overlayVisible ? 1 : 0 };
+  }
+
   async function injectXpBytesIntoWebbuild(win, xpBytes, opts = {}) {
     if (!win || !win.Module) throw new Error("webbuild iframe is not ready");
     if (!(xpBytes instanceof Uint8Array) || !xpBytes.length) throw new Error("empty xp payload");
@@ -285,33 +440,42 @@
     if (typeof M.FS_createPath === "function") {
       try { M.FS_createPath("/", "sprites", true, true); } catch (_e) {}
     }
-    const names = Array.isArray(opts.override_names) ? opts.override_names : [];
+    const names = normalizeWebbuildOverrideNames(opts.override_names);
     const playerName = String(opts.reload_player_name || "player");
+    const requireStartGame = !!opts.require_start_game;
     for (const name of names) {
       try { M.FS_unlink(`/sprites/${name}`); } catch (_e) {}
       M.FS_createDataFile("/sprites", name, xpBytes, true, true, true);
     }
-    if (typeof win.Load === "function") win.Load(playerName);
-    if (typeof win.Resize === "function") {
-      try { win.Resize(null); } catch (_e) {}
-    }
-    if (typeof win.ak_canvas !== "undefined" && win.ak_canvas && typeof win.ak_canvas.focus === "function") {
-      try { win.ak_canvas.focus(); } catch (_e) {}
-    }
+    let startedVia = "load";
+    let overlayVisible = false;
     try {
       const loginOverlay = win.document && win.document.getElementById ? win.document.getElementById("login-overlay") : null;
       const playBtn = win.document && win.document.getElementById ? win.document.getElementById("play-btn") : null;
       const playerInput = win.document && win.document.getElementById ? win.document.getElementById("player-name") : null;
       const serverInput = win.document && win.document.getElementById ? win.document.getElementById("server-addr") : null;
-      const overlayVisible = !!(loginOverlay && loginOverlay.style && loginOverlay.style.display !== "none");
+      overlayVisible = webbuildLoginOverlayVisible(win);
       if (overlayVisible && typeof win.StartGame === "function") {
         if (playerInput && !String(playerInput.value || "").trim()) playerInput.value = playerName;
         if (serverInput) serverInput.value = "";
         if (playBtn) playBtn.disabled = false;
         win.StartGame();
+        startedVia = "start_game";
       }
     } catch (_e) {}
-    return { bytes: xpBytes.length, files_written: names.length, player_name: playerName };
+    if (startedVia !== "start_game") {
+      if (requireStartGame) {
+        throw new Error("webbuild did not expose login overlay for StartGame path (preview needs restart)");
+      }
+      if (typeof win.Load === "function") win.Load(playerName);
+      if (typeof win.Resize === "function") {
+        try { win.Resize(null); } catch (_e) {}
+      }
+    }
+    if (typeof win.ak_canvas !== "undefined" && win.ak_canvas && typeof win.ak_canvas.focus === "function") {
+      try { win.ak_canvas.focus(); } catch (_e) {}
+    }
+    return { bytes: xpBytes.length, files_written: names.length, player_name: playerName, started_via: startedVia, overlay_visible: overlayVisible ? 1 : 0 };
   }
 
   async function injectXpIntoWebbuild(win, payload) {
@@ -322,18 +486,22 @@
     });
   }
 
-  async function applyCurrentXpAsWebSkin() {
+  async function applyCurrentXpAsWebSkin(opts = {}) {
     if (!state.sessionId) {
       status("Load a workbench session first", "warn");
       return;
     }
-    if (!(await waitForWebbuildReady())) {
+    const prep = await prepareWebbuildForSkinApply({
+      force_restart: !!opts.force_restart,
+      restart_if_overlay_hidden: opts.restart_if_overlay_hidden !== false,
+    });
+    if (!prep.ready) {
       status("Webbuild not ready yet; wait for load to finish", "warn");
       return;
     }
     try {
       await saveSessionState("pre-web-skin-apply");
-      status("Exporting XP and applying web skin...", "warn");
+      status(prep.restarted ? "Reloaded preview; exporting XP and applying web skin..." : "Exporting XP and applying web skin...", "warn");
       const r = await fetch("/api/workbench/web-skin-payload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -346,14 +514,41 @@
         return;
       }
       const win = webbuildFrameWindow();
-      const inject = await injectXpIntoWebbuild(win, j);
-      $("webbuildOut").textContent = JSON.stringify({ payload: { ...j, xp_b64: `(<${(j.xp_b64 || "").length} base64 chars>)` }, inject }, null, 2);
+      const inject = await injectXpBytesIntoWebbuild(win, b64ToUint8Array(j.xp_b64 || ""), {
+        override_names: j.override_names,
+        reload_player_name: String(j.reload_player_name || "player"),
+        require_start_game: prep.restarted || prep.overlay_visible,
+      });
+      $("webbuildOut").textContent = JSON.stringify({
+        prep,
+        payload: { ...j, override_names: normalizeWebbuildOverrideNames(j.override_names), xp_b64: `(<${(j.xp_b64 || "").length} base64 chars>)` },
+        inject,
+      }, null, 2);
+      state.webbuild.ready = true;
+      updateWebbuildUI();
       status("Applied XP as web skin", "ok");
       setWebbuildState("Webbuild ready (skin applied)", "ok");
     } catch (e) {
       $("webbuildOut").textContent = String(e);
       status("Web skin apply failed", "err");
     }
+  }
+
+  async function testCurrentSkinInDock() {
+    if (!state.sessionId) {
+      status("Load a workbench session first", "warn");
+      return;
+    }
+    const frame = $("webbuildFrame");
+    if (frame && frame.classList.contains("hidden")) {
+      status("Opening flat preview and testing current skin...", "warn");
+    } else {
+      status("Reloading flat preview and testing current skin...", "warn");
+    }
+    await applyCurrentXpAsWebSkin({
+      force_restart: !!(frame && !frame.classList.contains("hidden")),
+      restart_if_overlay_hidden: true,
+    });
   }
 
   async function onWebbuildUploadTestClick() {
@@ -364,31 +559,29 @@
   }
 
   async function applyUploadedXpBytesToWebbuild(fileName, xpBytes) {
-    if (!(await waitForWebbuildReady())) {
+    const prep = await prepareWebbuildForSkinApply({ restart_if_overlay_hidden: true });
+    if (!prep.ready) {
       status("Webbuild not ready; preview failed to load", "err");
       return;
     }
     try {
       const win = webbuildFrameWindow();
-      const override_names = [
-        "player-nude.xp",
-        "player-0000.xp",
-        "attack-0000.xp",
-        "plydie-0000.xp",
-        "wolfie-0000.xp",
-        "wolack-0000.xp",
-      ];
+      const override_names = WEBBUILD_DEFAULT_OVERRIDE_NAMES;
       const inject = await injectXpBytesIntoWebbuild(win, xpBytes, {
         override_names,
         reload_player_name: "player",
+        require_start_game: prep.restarted || prep.overlay_visible,
       });
       state.webbuild.uploadedXpBytes = xpBytes;
       state.webbuild.uploadedXpName = fileName || "upload.xp";
       $("webbuildOut").textContent = JSON.stringify({
         mode: "upload_test_skin",
         file: state.webbuild.uploadedXpName,
+        prep,
         inject,
       }, null, 2);
+      state.webbuild.ready = true;
+      updateWebbuildUI();
       status(`Uploaded test skin applied: ${state.webbuild.uploadedXpName}`, "ok");
       setWebbuildState("Webbuild ready (uploaded skin applied)", "ok");
     } catch (e) {
@@ -825,7 +1018,17 @@
     state.history.push(snapshot());
     if (state.history.length > 50) state.history.shift();
     state.future = [];
+    markSessionDirty("edit");
     updateUndoRedoButtons();
+  }
+
+  function revertNoopHistory(wasDirty) {
+    if (state.history.length) state.history.pop();
+    updateUndoRedoButtons();
+    if (!wasDirty) {
+      state.sessionDirty = false;
+      updateSessionDirtyBadge();
+    }
   }
 
   function updateUndoRedoButtons() {
@@ -948,6 +1151,8 @@
   function updateInspectorToolUI() {
     const map = [
       ["inspectorToolInspectBtn", "inspect"],
+      ["inspectorToolSelectBtn", "select"],
+      ["inspectorToolGlyphBtn", "glyph"],
       ["inspectorToolPaintBtn", "paint"],
       ["inspectorToolEraseBtn", "erase"],
       ["inspectorToolDropperBtn", "dropper"],
@@ -959,13 +1164,27 @@
     }
     const colorInput = $("inspectorPaintColor");
     if (colorInput) colorInput.value = rgbToHex(state.inspectorPaintColor);
+    const glyphCode = $("inspectorGlyphCode");
+    if (glyphCode) glyphCode.value = String(clampInspectorGlyphCode(state.inspectorGlyphCode));
+    const glyphChar = $("inspectorGlyphChar");
+    if (glyphChar) {
+      const g = clampInspectorGlyphCode(state.inspectorGlyphCode);
+      glyphChar.value = g >= 32 && g <= 255 ? String.fromCharCode(g) : "";
+    }
+    const glyphFg = $("inspectorGlyphFgColor");
+    if (glyphFg) glyphFg.value = rgbToHex(state.inspectorGlyphFgColor);
+    const glyphBg = $("inspectorGlyphBgColor");
+    if (glyphBg) glyphBg.value = rgbToHex(state.inspectorGlyphBgColor);
     const hint = $("inspectorToolHint");
     if (!hint) return;
-    const clipState = state.inspectorFrameClipboard ? " Clipboard: frame copied." : "";
-    const base = `Embedded XP frame editor. Visual layer only. Shortcuts: P/E/I tools, Q/R angle nav, A/D frame nav, C copy, V paste, F flip-H, Delete clear.${clipState}`;
+    const clipState = state.inspectorFrameClipboard ? " Frame clipboard: yes." : "";
+    const selClipState = state.inspectorSelectionClipboard ? " Selection clipboard: yes." : "";
+    const base = `Embedded XP frame editor. Visual layer only. Shortcuts: G glyph, S select, P/E half paint/erase, I dropper, Q/R angle nav, A/D frame nav, C/X/V selection copy/cut/paste, F frame flip-H, Delete clear sel/frame.${clipState}${selClipState}`;
     if (state.inspectorTool === "paint") hint.textContent = `${base} Drag to paint half-cells.`;
     else if (state.inspectorTool === "erase") hint.textContent = `${base} Drag to erase half-cells to transparent.`;
     else if (state.inspectorTool === "dropper") hint.textContent = `${base} Click a half-cell to sample color.`;
+    else if (state.inspectorTool === "glyph") hint.textContent = `${base} Click/drag to stamp full XP cells (glyph + FG/BG).`;
+    else if (state.inspectorTool === "select") hint.textContent = `${base} Drag a rectangle selection (cell coordinates).`;
     else hint.textContent = base;
     const showGrid = $("inspectorShowGrid");
     const showChecker = $("inspectorShowChecker");
@@ -973,6 +1192,83 @@
     if (showChecker) showChecker.checked = !!state.inspectorShowChecker;
     const pasteBtn = $("inspectorPasteFrameBtn");
     if (pasteBtn) pasteBtn.disabled = !state.inspectorFrameClipboard;
+    const pasteSelBtn = $("inspectorPasteSelBtn");
+    if (pasteSelBtn) pasteSelBtn.disabled = !state.inspectorSelectionClipboard;
+    const needSel = !normalizeInspectorSelection(state.inspectorSelection);
+    for (const id of ["inspectorCopySelBtn", "inspectorCutSelBtn", "inspectorClearSelBtn", "inspectorFillSelBtn", "inspectorReplaceFgBtn", "inspectorReplaceBgBtn"]) {
+      const el = $(id);
+      if (el) el.disabled = needSel;
+    }
+    for (const id of ["inspectorRotateSelCwBtn", "inspectorRotateSelCcwBtn", "inspectorFlipSelHBtn", "inspectorFlipSelVBtn"]) {
+      const el = $(id);
+      if (el) el.disabled = needSel;
+    }
+    const selAllBtn = $("inspectorSelectAllBtn");
+    if (selAllBtn) selAllBtn.disabled = !state.inspectorOpen;
+    const hasMatchSource = !!state.inspectorLastInspectCell;
+    for (const id of ["inspectorReplaceFgBtn", "inspectorReplaceBgBtn"]) {
+      const el = $(id);
+      if (el) el.disabled = needSel || !hasMatchSource;
+    }
+    const matchInfo = $("inspectorMatchSourceInfo");
+    if (matchInfo) {
+      if (!hasMatchSource) {
+        matchInfo.textContent = "Match source: none (use Inspect or Dropper on a cell)";
+      } else {
+        const s = state.inspectorLastInspectCell;
+        matchInfo.textContent = `Match source: glyph=${clampInspectorGlyphCode(s.glyph)} fg=${rgbToHex(s.fg)} bg=${rgbToHex(s.bg)}`;
+      }
+    }
+    const hoverInfo = $("inspectorHoverReadout");
+    if (hoverInfo) {
+      if (!state.inspectorHover || !state.inspectorHover.cell) hoverInfo.textContent = "Hover: none";
+      else {
+        const h = state.inspectorHover;
+        hoverInfo.textContent = `Hover: x=${h.cx} y=${h.cy} half=${h.half} glyph=${Number(h.cell.glyph || 0)} fg=${rgbToHex(h.cell.fg || [0, 0, 0])} bg=${rgbToHex(h.cell.bg || [0, 0, 0])}`;
+      }
+    }
+    const pasteAnchorInfo = $("inspectorPasteAnchorReadout");
+    if (pasteAnchorInfo) {
+      if (state.inspectorHover) {
+        pasteAnchorInfo.textContent = `Paste anchor: x=${Number(state.inspectorHover.cx || 0)} y=${Number(state.inspectorHover.cy || 0)} (current hover)`;
+      } else if (state.inspectorLastHoverAnchor) {
+        pasteAnchorInfo.textContent = `Paste anchor: x=${Number(state.inspectorLastHoverAnchor.cx || 0)} y=${Number(state.inspectorLastHoverAnchor.cy || 0)} (last hovered cell)`;
+      } else {
+        pasteAnchorInfo.textContent = "Paste anchor: none (hover a cell, then click Paste Sel)";
+      }
+    }
+    const frApply = $("inspectorFindReplaceApplyBtn");
+    const frScope = String($("inspectorFrScope")?.value || "selection");
+    if (frApply) frApply.disabled = (frScope === "selection" && needSel);
+  }
+
+  function renderInspectorPaletteSwatches() {
+    const box = $("inspectorPaletteSwatches");
+    if (!box) return;
+    if (box.childElementCount) return;
+    for (const rgb of INSPECTOR_SWATCHES) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.title = `FG click / BG right-click ${rgbToHex(rgb)}`;
+      btn.style.width = "18px";
+      btn.style.height = "18px";
+      btn.style.padding = "0";
+      btn.style.border = "1px solid #334";
+      btn.style.background = rgbToHex(rgb);
+      btn.dataset.color = rgb.join(",");
+      btn.addEventListener("click", () => {
+        state.inspectorGlyphFgColor = [...rgb];
+        updateInspectorToolUI();
+        renderInspector();
+      });
+      btn.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        state.inspectorGlyphBgColor = [...rgb];
+        updateInspectorToolUI();
+        renderInspector();
+      });
+      box.appendChild(btn);
+    }
   }
 
   function transparentCell(idx) {
@@ -1440,6 +1736,493 @@
     return { row, col, semanticFrames, maxCol };
   }
 
+  function clampInspectorGlyphCode(v) {
+    return Math.max(0, Math.min(255, Number(v || 0) | 0));
+  }
+
+  function normalizeInspectorSelection(sel) {
+    if (!sel) return null;
+    const x1 = Math.max(0, Math.min(state.frameWChars - 1, Number(sel.x1)));
+    const y1 = Math.max(0, Math.min(state.frameHChars - 1, Number(sel.y1)));
+    const x2 = Math.max(0, Math.min(state.frameWChars - 1, Number(sel.x2)));
+    const y2 = Math.max(0, Math.min(state.frameHChars - 1, Number(sel.y2)));
+    return {
+      x1: Math.min(x1, x2),
+      y1: Math.min(y1, y2),
+      x2: Math.max(x1, x2),
+      y2: Math.max(y1, y2),
+    };
+  }
+
+  function inspectorSelectionOrWholeFrame() {
+    return normalizeInspectorSelection(state.inspectorSelection) || {
+      x1: 0,
+      y1: 0,
+      x2: Math.max(0, state.frameWChars - 1),
+      y2: Math.max(0, state.frameHChars - 1),
+    };
+  }
+
+  function inspectorSelectionLabel() {
+    const s = normalizeInspectorSelection(state.inspectorSelection);
+    if (!s) return "none";
+    return `${s.x1},${s.y1}..${s.x2},${s.y2}`;
+  }
+
+  function inspectorCellFromLocal(row, col, cx, cy) {
+    const gx = col * state.frameWChars + cx;
+    const gy = row * state.frameHChars + cy;
+    if (gx < 0 || gy < 0 || gx >= state.gridCols || gy >= state.gridRows) return null;
+    return { gx, gy, cell: cellAt(gx, gy) };
+  }
+
+  function cellEquals(a, b) {
+    if (!a || !b) return false;
+    return (
+      Number(a.glyph || 0) === Number(b.glyph || 0) &&
+      colorsEqual(a.fg || [0, 0, 0], b.fg || [0, 0, 0]) &&
+      colorsEqual(a.bg || [0, 0, 0], b.bg || [0, 0, 0])
+    );
+  }
+
+  function currentInspectorGlyphCell() {
+    return {
+      glyph: clampInspectorGlyphCode(state.inspectorGlyphCode),
+      fg: [...(Array.isArray(state.inspectorGlyphFgColor) ? state.inspectorGlyphFgColor : [255, 255, 255])],
+      bg: [...(Array.isArray(state.inspectorGlyphBgColor) ? state.inspectorGlyphBgColor : [...MAGENTA])],
+    };
+  }
+
+  function setInspectorGlyphUIFromCell(c) {
+    if (!c) return;
+    state.inspectorGlyphCode = clampInspectorGlyphCode(c.glyph);
+    state.inspectorGlyphFgColor = [...(Array.isArray(c.fg) ? c.fg : [255, 255, 255])];
+    state.inspectorGlyphBgColor = [...(Array.isArray(c.bg) ? c.bg : [...MAGENTA])];
+    state.inspectorLastInspectCell = {
+      glyph: state.inspectorGlyphCode,
+      fg: [...state.inspectorGlyphFgColor],
+      bg: [...state.inspectorGlyphBgColor],
+    };
+    const fg = rgbToHex(state.inspectorGlyphFgColor);
+    const bg = rgbToHex(state.inspectorGlyphBgColor);
+    if ($("inspectorFrFindGlyph")) $("inspectorFrFindGlyph").value = String(state.inspectorGlyphCode);
+    if ($("inspectorFrFindFg")) $("inspectorFrFindFg").value = fg;
+    if ($("inspectorFrFindBg")) $("inspectorFrFindBg").value = bg;
+  }
+
+  function inspectorSelectionMatrix(row, col, sel) {
+    const s = normalizeInspectorSelection(sel);
+    if (!s) return null;
+    const out = [];
+    for (let y = s.y1; y <= s.y2; y++) {
+      const line = [];
+      for (let x = s.x1; x <= s.x2; x++) {
+        const rec = inspectorCellFromLocal(row, col, x, y);
+        line.push(rec ? { ...rec.cell } : transparentCell(0));
+      }
+      out.push(line);
+    }
+    return out;
+  }
+
+  function selectionBoundsFromMatrixAtAnchor(anchorX, anchorY, matrix) {
+    const rows = Array.isArray(matrix) ? matrix.length : 0;
+    const cols = rows > 0 && Array.isArray(matrix[0]) ? matrix[0].length : 0;
+    const x1 = Math.max(0, Math.min(state.frameWChars - 1, Number(anchorX || 0)));
+    const y1 = Math.max(0, Math.min(state.frameHChars - 1, Number(anchorY || 0)));
+    const x2 = Math.max(x1, Math.min(state.frameWChars - 1, x1 + Math.max(0, cols - 1)));
+    const y2 = Math.max(y1, Math.min(state.frameHChars - 1, y1 + Math.max(0, rows - 1)));
+    return { x1, y1, x2, y2 };
+  }
+
+  function writeInspectorSelectionMatrix(row, col, sel, matrix) {
+    const s = normalizeInspectorSelection(sel);
+    if (!s || !Array.isArray(matrix)) return 0;
+    let changed = 0;
+    for (let y = 0; y < matrix.length; y++) {
+      const line = Array.isArray(matrix[y]) ? matrix[y] : [];
+      for (let x = 0; x < line.length; x++) {
+        const tx = s.x1 + x;
+        const ty = s.y1 + y;
+        if (tx > s.x2 || ty > s.y2) continue;
+        const rec = inspectorCellFromLocal(row, col, tx, ty);
+        if (!rec) continue;
+        const next = line[x] || transparentCell(0);
+        if (cellEquals(rec.cell, next)) continue;
+        setCell(rec.gx, rec.gy, next);
+        changed += 1;
+      }
+    }
+    return changed;
+  }
+
+  function inspectorCellRectAtEvent(evt) {
+    const hit = inspectorHalfCellAtEvent(evt);
+    if (!hit) return null;
+    return { row: hit.row, col: hit.col, cx: hit.cx, cy: hit.cy };
+  }
+
+  function setInspectorHoverFromHit(hit) {
+    if (!hit) {
+      state.inspectorHover = null;
+      updateInspectorToolUI();
+      return;
+    }
+    const rec = inspectorCellFromLocal(hit.row, hit.col, hit.cx, hit.cy);
+    state.inspectorHover = rec ? { cx: hit.cx, cy: hit.cy, half: hit.half || "top", cell: { ...rec.cell } } : null;
+    if (state.inspectorHover) {
+      state.inspectorLastHoverAnchor = { cx: Number(state.inspectorHover.cx || 0), cy: Number(state.inspectorHover.cy || 0) };
+    }
+    updateInspectorToolUI();
+  }
+
+  function selectionMatrixFlipH(matrix) {
+    return (Array.isArray(matrix) ? matrix : []).map((row) => (Array.isArray(row) ? [...row].reverse().map((c) => ({ ...c })) : []));
+  }
+
+  function selectionMatrixFlipV(matrix) {
+    return [...(Array.isArray(matrix) ? matrix : [])].reverse().map((row) => (Array.isArray(row) ? row.map((c) => ({ ...c })) : []));
+  }
+
+  function selectionMatrixRotate(matrix, clockwise) {
+    const src = Array.isArray(matrix) ? matrix : [];
+    const h = src.length;
+    const w = h > 0 && Array.isArray(src[0]) ? src[0].length : 0;
+    if (!h || !w) return [];
+    const out = [];
+    if (clockwise) {
+      for (let y = 0; y < w; y++) {
+        const row = [];
+        for (let x = 0; x < h; x++) row.push({ ...(src[h - 1 - x]?.[y] || transparentCell(0)) });
+        out.push(row);
+      }
+    } else {
+      for (let y = 0; y < w; y++) {
+        const row = [];
+        for (let x = 0; x < h; x++) row.push({ ...(src[x]?.[w - 1 - y] || transparentCell(0)) });
+        out.push(row);
+      }
+    }
+    return out;
+  }
+
+  function inspectorSelectAll() {
+    if (!state.inspectorOpen) return false;
+    state.inspectorSelection = normalizeInspectorSelection({
+      x1: 0,
+      y1: 0,
+      x2: Math.max(0, state.frameWChars - 1),
+      y2: Math.max(0, state.frameHChars - 1),
+    });
+    updateInspectorToolUI();
+    renderInspector();
+    return true;
+  }
+
+  function transformInspectorSelection(kind) {
+    if (!state.inspectorOpen) return false;
+    commitInspectorStrokeIfNeeded();
+    if (!editableLayerActive()) {
+      status("Visual layer (2) must be active for selection transforms", "warn");
+      return false;
+    }
+    const sel = normalizeInspectorSelection(state.inspectorSelection);
+    if (!sel) {
+      status("No selection to transform", "warn");
+      return false;
+    }
+    const { row, col } = inspectorCurrentFrameCoord();
+    const src = inspectorSelectionMatrix(row, col, sel);
+    let dst = src;
+    if (kind === "flip_h") dst = selectionMatrixFlipH(src);
+    else if (kind === "flip_v") dst = selectionMatrixFlipV(src);
+    else if (kind === "rot_cw") dst = selectionMatrixRotate(src, true);
+    else if (kind === "rot_ccw") dst = selectionMatrixRotate(src, false);
+    else return false;
+    const wasDirty = !!state.sessionDirty;
+    pushHistory();
+    let changed = 0;
+    changed += writeInspectorSelectionMatrix(row, col, sel, Array.isArray(src) ? src.map((r) => r.map(() => transparentCell(0))) : []);
+    const nextSel = selectionBoundsFromMatrixAtAnchor(sel.x1, sel.y1, dst);
+    changed += writeInspectorSelectionMatrix(row, col, nextSel, dst);
+    state.inspectorSelection = normalizeInspectorSelection(nextSel);
+    if (!changed) {
+      revertNoopHistory(wasDirty);
+      status("Selection transform made no changes", "warn");
+      return false;
+    }
+    renderAll();
+    saveSessionState(`inspector-${kind}`);
+    status(`Applied ${kind.replace("_", " ")} to selection`, "ok");
+    return true;
+  }
+
+  function applyInspectorGlyphAtCell(hit) {
+    if (!hit) return false;
+    if (!editableLayerActive()) {
+      status("Visual layer (2) must be active for inspector edits", "warn");
+      return false;
+    }
+    const rec = inspectorCellFromLocal(hit.row, hit.col, hit.cx, hit.cy);
+    if (!rec) return false;
+    const next = currentInspectorGlyphCell();
+    if (cellEquals(rec.cell, next)) return false;
+    setCell(rec.gx, rec.gy, next);
+    return true;
+  }
+
+  function copyInspectorSelection() {
+    if (!state.inspectorOpen) return false;
+    commitInspectorStrokeIfNeeded();
+    const sel = normalizeInspectorSelection(state.inspectorSelection);
+    if (!sel) {
+      status("No frame selection to copy", "warn");
+      return false;
+    }
+    const { row, col } = inspectorCurrentFrameCoord();
+    state.inspectorSelectionClipboard = inspectorSelectionMatrix(row, col, sel);
+    updateInspectorToolUI();
+    status(`Copied selection ${inspectorSelectionLabel()}`, "ok");
+    return true;
+  }
+
+  function pasteInspectorSelection() {
+    if (!state.inspectorOpen) return false;
+    commitInspectorStrokeIfNeeded();
+    if (!editableLayerActive()) {
+      status("Visual layer (2) must be active for inspector paste", "warn");
+      return false;
+    }
+    if (!state.inspectorSelectionClipboard) {
+      status("No copied selection in clipboard", "warn");
+      return false;
+    }
+    const { row, col } = inspectorCurrentFrameCoord();
+    let sel = normalizeInspectorSelection(state.inspectorSelection);
+    if (!sel) {
+      const anchor = state.inspectorHover
+        ? { x: Number(state.inspectorHover.cx || 0), y: Number(state.inspectorHover.cy || 0) }
+        : state.inspectorLastHoverAnchor
+          ? { x: Number(state.inspectorLastHoverAnchor.cx || 0), y: Number(state.inspectorLastHoverAnchor.cy || 0) }
+          : { x: 0, y: 0 };
+      sel = selectionBoundsFromMatrixAtAnchor(anchor.x, anchor.y, state.inspectorSelectionClipboard);
+      state.inspectorSelection = normalizeInspectorSelection(sel);
+    }
+    const wasDirty = !!state.sessionDirty;
+    pushHistory();
+    const changed = writeInspectorSelectionMatrix(row, col, sel, state.inspectorSelectionClipboard);
+    if (!changed) {
+      revertNoopHistory(wasDirty);
+      status("Paste selection made no changes", "warn");
+      return false;
+    }
+    renderAll();
+    saveSessionState("inspector-paste-selection");
+    status(`Pasted selection into ${inspectorSelectionLabel()}`, "ok");
+    return true;
+  }
+
+  function clearInspectorSelectionCells() {
+    if (!state.inspectorOpen) return false;
+    commitInspectorStrokeIfNeeded();
+    if (!editableLayerActive()) {
+      status("Visual layer (2) must be active for clear selection", "warn");
+      return false;
+    }
+    const sel = normalizeInspectorSelection(state.inspectorSelection);
+    if (!sel) {
+      status("No selection to clear", "warn");
+      return false;
+    }
+    const { row, col } = inspectorCurrentFrameCoord();
+    const wasDirty = !!state.sessionDirty;
+    pushHistory();
+    let changed = 0;
+    for (let y = sel.y1; y <= sel.y2; y++) {
+      for (let x = sel.x1; x <= sel.x2; x++) {
+        const rec = inspectorCellFromLocal(row, col, x, y);
+        if (!rec) continue;
+        const next = transparentCell(0);
+        if (cellEquals(rec.cell, next)) continue;
+        setCell(rec.gx, rec.gy, next);
+        changed += 1;
+      }
+    }
+    if (!changed) {
+      revertNoopHistory(wasDirty);
+      status("Selection already empty", "warn");
+      return false;
+    }
+    renderAll();
+    saveSessionState("inspector-clear-selection");
+    status(`Cleared selection ${inspectorSelectionLabel()}`, "ok");
+    return true;
+  }
+
+  function cutInspectorSelection() {
+    if (!copyInspectorSelection()) return false;
+    return clearInspectorSelectionCells();
+  }
+
+  function fillInspectorSelectionWithGlyph() {
+    if (!state.inspectorOpen) return false;
+    commitInspectorStrokeIfNeeded();
+    if (!editableLayerActive()) {
+      status("Visual layer (2) must be active for fill selection", "warn");
+      return false;
+    }
+    const sel = normalizeInspectorSelection(state.inspectorSelection);
+    if (!sel) {
+      status("No selection to fill", "warn");
+      return false;
+    }
+    const fillCell = currentInspectorGlyphCell();
+    const { row, col } = inspectorCurrentFrameCoord();
+    const wasDirty = !!state.sessionDirty;
+    pushHistory();
+    let changed = 0;
+    for (let y = sel.y1; y <= sel.y2; y++) {
+      for (let x = sel.x1; x <= sel.x2; x++) {
+        const rec = inspectorCellFromLocal(row, col, x, y);
+        if (!rec) continue;
+        if (cellEquals(rec.cell, fillCell)) continue;
+        setCell(rec.gx, rec.gy, fillCell);
+        changed += 1;
+      }
+    }
+    if (!changed) {
+      revertNoopHistory(wasDirty);
+      status("Fill selection made no changes", "warn");
+      return false;
+    }
+    renderAll();
+    saveSessionState("inspector-fill-selection");
+    status(`Filled selection ${inspectorSelectionLabel()}`, "ok");
+    return true;
+  }
+
+  function replaceInspectorSelectionColor(channel) {
+    if (!state.inspectorOpen) return false;
+    commitInspectorStrokeIfNeeded();
+    if (!editableLayerActive()) {
+      status("Visual layer (2) must be active for replace color", "warn");
+      return false;
+    }
+    const sel = normalizeInspectorSelection(state.inspectorSelection);
+    if (!sel) {
+      status("No selection for color replace", "warn");
+      return false;
+    }
+    const sample = state.inspectorLastInspectCell;
+    if (!sample) {
+      status("Inspect or dropper a cell first to set match colors", "warn");
+      return false;
+    }
+    const target = channel === "bg" ? sample.bg : sample.fg;
+    const replacement = channel === "bg" ? state.inspectorGlyphBgColor : state.inspectorGlyphFgColor;
+    const { row, col } = inspectorCurrentFrameCoord();
+    const wasDirty = !!state.sessionDirty;
+    pushHistory();
+    let changed = 0;
+    for (let y = sel.y1; y <= sel.y2; y++) {
+      for (let x = sel.x1; x <= sel.x2; x++) {
+        const rec = inspectorCellFromLocal(row, col, x, y);
+        if (!rec) continue;
+        const cur = rec.cell;
+        const next = { ...cur, fg: [...cur.fg], bg: [...cur.bg] };
+        const before = channel === "bg" ? cur.bg : cur.fg;
+        if (!colorsEqual(before, target)) continue;
+        if (channel === "bg") next.bg = [...replacement];
+        else next.fg = [...replacement];
+        if (cellEquals(cur, next)) continue;
+        setCell(rec.gx, rec.gy, next);
+        changed += 1;
+      }
+    }
+    if (!changed) {
+      revertNoopHistory(wasDirty);
+      status(`No ${channel.toUpperCase()} matches in selection`, "warn");
+      return false;
+    }
+    renderAll();
+    saveSessionState(channel === "bg" ? "inspector-replace-bg-selection" : "inspector-replace-fg-selection");
+    status(`Replaced ${channel.toUpperCase()} color in selection`, "ok");
+    return true;
+  }
+
+  function applyInspectorFindReplace() {
+    if (!state.inspectorOpen) return false;
+    commitInspectorStrokeIfNeeded();
+    if (!editableLayerActive()) {
+      status("Visual layer (2) must be active for find/replace", "warn");
+      return false;
+    }
+    const matchGlyph = !!$("inspectorFrMatchGlyphChk")?.checked;
+    const matchFg = !!$("inspectorFrMatchFgChk")?.checked;
+    const matchBg = !!$("inspectorFrMatchBgChk")?.checked;
+    if (!matchGlyph && !matchFg && !matchBg) {
+      status("Find/Replace: enable at least one match criterion", "warn");
+      return false;
+    }
+    const replGlyphOn = !!$("inspectorFrReplaceGlyphChk")?.checked;
+    const replFgOn = !!$("inspectorFrReplaceFgChk")?.checked;
+    const replBgOn = !!$("inspectorFrReplaceBgChk")?.checked;
+    if (!replGlyphOn && !replFgOn && !replBgOn) {
+      status("Find/Replace: enable at least one replacement channel", "warn");
+      return false;
+    }
+    const findGlyph = clampInspectorGlyphCode($("inspectorFrFindGlyph")?.value || 0);
+    const findFg = hexToRgb($("inspectorFrFindFg")?.value || "#ffffff");
+    const findBg = hexToRgb($("inspectorFrFindBg")?.value || "#ff00ff");
+    const replGlyph = clampInspectorGlyphCode($("inspectorFrReplGlyph")?.value || 0);
+    const replFg = hexToRgb($("inspectorFrReplFg")?.value || "#ffffff");
+    const replBg = hexToRgb($("inspectorFrReplBg")?.value || "#ff00ff");
+    const scope = String($("inspectorFrScope")?.value || "selection");
+    const { row, col } = inspectorCurrentFrameCoord();
+    const sel = scope === "frame" ? {
+      x1: 0, y1: 0, x2: Math.max(0, state.frameWChars - 1), y2: Math.max(0, state.frameHChars - 1),
+    } : normalizeInspectorSelection(state.inspectorSelection);
+    if (!sel) {
+      status("Find/Replace scope is selection, but no selection exists", "warn");
+      return false;
+    }
+    const wasDirty = !!state.sessionDirty;
+    pushHistory();
+    let changed = 0;
+    for (let y = sel.y1; y <= sel.y2; y++) {
+      for (let x = sel.x1; x <= sel.x2; x++) {
+        const rec = inspectorCellFromLocal(row, col, x, y);
+        if (!rec) continue;
+        const cur = rec.cell;
+        if (matchGlyph && Number(cur.glyph || 0) !== findGlyph) continue;
+        if (matchFg && !colorsEqual(cur.fg || [0, 0, 0], findFg)) continue;
+        if (matchBg && !colorsEqual(cur.bg || [0, 0, 0], findBg)) continue;
+        const next = {
+          ...cur,
+          glyph: replGlyphOn ? replGlyph : Number(cur.glyph || 0),
+          fg: replFgOn ? [...replFg] : [...(cur.fg || [0, 0, 0])],
+          bg: replBgOn ? [...replBg] : [...(cur.bg || [0, 0, 0])],
+        };
+        if (cellEquals(cur, next)) continue;
+        setCell(rec.gx, rec.gy, next);
+        changed += 1;
+      }
+    }
+    if (!changed) {
+      revertNoopHistory(wasDirty);
+      status("Find/Replace made no changes", "warn");
+      const info = $("inspectorFindReplaceInfo");
+      if (info) info.textContent = "Find & Replace: no matching cells in scope.";
+      return false;
+    }
+    renderAll();
+    saveSessionState("inspector-find-replace");
+    const info = $("inspectorFindReplaceInfo");
+    if (info) info.textContent = `Find & Replace updated ${changed} cell(s) in ${scope === "frame" ? "whole frame" : "selection"}.`;
+    status(`Find/Replace updated ${changed} cell(s)`, "ok");
+    return true;
+  }
+
   function moveInspectorSelection(deltaRow, deltaCol) {
     if (!state.inspectorOpen) return false;
     commitInspectorStrokeIfNeeded();
@@ -1521,6 +2304,8 @@
     state.inspectorOpen = true;
     state.inspectorRow = Math.max(0, row);
     state.inspectorCol = Math.max(0, col);
+    state.inspectorHover = null;
+    state.inspectorLastHoverAnchor = null;
     const panel = $("cellInspectorPanel");
     if (panel) panel.classList.remove("hidden");
     renderInspector();
@@ -1529,8 +2314,13 @@
   function closeInspector() {
     commitInspectorStrokeIfNeeded();
     state.inspectorOpen = false;
+    state.inspectorSelecting = false;
+    state.inspectorSelectAnchor = null;
+    state.inspectorHover = null;
+    state.inspectorLastHoverAnchor = null;
     const panel = $("cellInspectorPanel");
     if (panel) panel.classList.add("hidden");
+    updateInspectorToolUI();
   }
 
   function renderInspector() {
@@ -1589,13 +2379,40 @@
       }
     }
 
+    const sel = normalizeInspectorSelection(state.inspectorSelection);
+    if (sel) {
+      const x = sel.x1 * zoom + 1;
+      const y = sel.y1 * zoom * 2 + 1;
+      const w = (sel.x2 - sel.x1 + 1) * zoom - 2;
+      const h = (sel.y2 - sel.y1 + 1) * zoom * 2 - 2;
+      ctx.save();
+      ctx.strokeStyle = "rgba(255,255,255,0.95)";
+      ctx.setLineDash([6, 4]);
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x, y, Math.max(1, w), Math.max(1, h));
+      ctx.restore();
+    }
+
+    if (!state.inspectorHover && state.inspectorLastHoverAnchor) {
+      const ax = Number(state.inspectorLastHoverAnchor.cx || 0);
+      const ay = Number(state.inspectorLastHoverAnchor.cy || 0);
+      if (ax >= 0 && ay >= 0 && ax < state.frameWChars && ay < state.frameHChars) {
+        ctx.save();
+        ctx.strokeStyle = "rgba(255,214,92,0.9)";
+        ctx.setLineDash([3, 3]);
+        ctx.lineWidth = 2;
+        ctx.strokeRect(ax * zoom + 2, ay * zoom * 2 + 2, Math.max(2, zoom - 4), Math.max(2, zoom * 2 - 4));
+        ctx.restore();
+      }
+    }
+
     const info = frameColInfo(col);
     $("cellInspectorInfo").textContent = [
       `row=${row} col=${col}`,
       `angle=${row} proj=${info.proj} frame=${info.frame}/${Math.max(0, info.semanticFrames - 1)}`,
       `active_layer=${state.activeLayer} visible_layers=[${[...state.visibleLayers].sort((a, b) => a - b).join(",")}]`,
       `frame_chars=${state.frameWChars}x${state.frameHChars * 2}`,
-      `tool=${state.inspectorTool} paint=${rgbToHex(state.inspectorPaintColor)} grid=${state.inspectorShowGrid ? 1 : 0} checker=${state.inspectorShowChecker ? 1 : 0}`,
+      `tool=${state.inspectorTool} sel=${inspectorSelectionLabel()} glyph=${clampInspectorGlyphCode(state.inspectorGlyphCode)} fg=${rgbToHex(state.inspectorGlyphFgColor)} bg=${rgbToHex(state.inspectorGlyphBgColor)} half=${rgbToHex(state.inspectorPaintColor)} grid=${state.inspectorShowGrid ? 1 : 0} checker=${state.inspectorShowChecker ? 1 : 0}`,
     ].join(" | ");
     updateInspectorToolUI();
   }
@@ -1624,17 +2441,21 @@
 
   function applyInspectorToolAt(hit) {
     if (!hit) return false;
-    if (!editableLayerActive()) {
-      status("Visual layer (2) must be active for inspector edits", "warn");
-      return false;
-    }
     const gx = hit.col * state.frameWChars + hit.cx;
     const gy = hit.row * state.frameHChars + hit.cy;
     if (gx < 0 || gy < 0 || gx >= state.gridCols || gy >= state.gridRows) return false;
     const prev = cellAt(gx, gy);
     const halves = decodeCellHalves(prev);
+    if (state.inspectorTool === "inspect") {
+      setInspectorGlyphUIFromCell(prev);
+      updateInspectorToolUI();
+      renderInspector();
+      status(`Inspected cell glyph=${Number(prev.glyph || 0)} fg=${rgbToHex(prev.fg || [0, 0, 0])} bg=${rgbToHex(prev.bg || [0, 0, 0])}`, "ok");
+      return false;
+    }
     if (state.inspectorTool === "dropper") {
       const sampled = hit.half === "top" ? halves.top : halves.bottom;
+      setInspectorGlyphUIFromCell(prev);
       if (!sampled) {
         status("Dropper sampled transparent half-cell", "warn");
         return false;
@@ -1643,6 +2464,10 @@
       updateInspectorToolUI();
       renderInspector();
       status(`Sampled color ${rgbToHex(sampled)}`, "ok");
+      return false;
+    }
+    if (!editableLayerActive()) {
+      status("Visual layer (2) must be active for inspector edits", "warn");
       return false;
     }
     if (state.inspectorTool !== "paint" && state.inspectorTool !== "erase") return false;
@@ -1666,6 +2491,17 @@
   function commitInspectorStrokeIfNeeded() {
     if (!state.inspectorPainting) return;
     state.inspectorPainting = false;
+    if (!state.inspectorStrokeChanged) {
+      if (state.inspectorStrokeHadHistory) revertNoopHistory(!!state.inspectorStrokeWasDirty);
+      state.inspectorStrokeChanged = false;
+      state.inspectorStrokeHadHistory = false;
+      state.inspectorStrokeWasDirty = false;
+      renderInspector();
+      return;
+    }
+    state.inspectorStrokeChanged = false;
+    state.inspectorStrokeHadHistory = false;
+    state.inspectorStrokeWasDirty = false;
     renderAll();
     saveSessionState("inspector-edit");
   }
@@ -1714,6 +2550,8 @@
 
   async function saveSessionState(reason) {
     if (!state.sessionId) return;
+    state.sessionSaveInFlight = true;
+    updateSessionDirtyBadge();
     try {
       const payload = {
         session_id: state.sessionId,
@@ -1735,11 +2573,17 @@
       });
       if (!r.ok) {
         const txt = await r.text();
+        state.sessionSaveInFlight = false;
         status(`Save failed (${reason})`, "err");
         $("exportOut").textContent = txt;
+        updateSessionDirtyBadge();
+      } else {
+        markSessionSaved(reason);
       }
     } catch (e) {
+      state.sessionSaveInFlight = false;
       status(`Save failed (${reason})`, "err");
+      updateSessionDirtyBadge();
     }
   }
 
@@ -1755,6 +2599,7 @@
     const row = state.selectedRow === null ? 0 : state.selectedRow;
     renderPreviewFrame(Math.max(0, Math.min(state.angles - 1, row)), 0);
     renderInspector();
+    updateSessionDirtyBadge();
   }
 
   async function loadFromJob() {
@@ -1811,6 +2656,10 @@
       state.selectedCols = new Set();
       state.history = [];
       state.future = [];
+      state.sessionDirty = false;
+      state.sessionSaveInFlight = false;
+      state.sessionLastSaveOkAt = 0;
+      state.sessionLastSaveReason = "";
       state.latestXpPath = "";
       $("openXpToolBtn").disabled = true;
       setXpToolHint("Export an `.xp` to generate XP tool command.");
@@ -3379,13 +4228,17 @@
   function bindUI() {
     moveWebbuildDockToBottom();
     movePanelsToBottom();
+    renderInspectorPaletteSwatches();
+    updateSessionDirtyBadge();
     $("btnLoad").addEventListener("click", loadFromJob);
     $("btnExport").addEventListener("click", exportXp);
     $("openXpToolBtn").addEventListener("click", openInXpTool);
     $("webbuildOpenBtn").addEventListener("click", openWebbuild);
     $("webbuildReloadBtn").addEventListener("click", reloadWebbuild);
     $("webbuildApplySkinBtn").addEventListener("click", applyCurrentXpAsWebSkin);
-    $("webbuildQuickTestBtn").addEventListener("click", applyCurrentXpAsWebSkin);
+    $("webbuildApplyInPlaceBtn").addEventListener("click", () => applyCurrentXpAsWebSkin({ restart_if_overlay_hidden: false }));
+    $("webbuildApplyRestartBtn").addEventListener("click", () => applyCurrentXpAsWebSkin({ force_restart: true, restart_if_overlay_hidden: true }));
+    $("webbuildQuickTestBtn").addEventListener("click", testCurrentSkinInDock);
     $("webbuildUploadTestBtn").addEventListener("click", onWebbuildUploadTestClick);
     $("webbuildUploadTestInput").addEventListener("change", onWebbuildUploadTestInputChange);
     $("webbuildFrame").addEventListener("load", () => {
@@ -3595,6 +4448,16 @@
       updateInspectorToolUI();
       renderInspector();
     });
+    $("inspectorToolSelectBtn").addEventListener("click", () => {
+      state.inspectorTool = "select";
+      updateInspectorToolUI();
+      renderInspector();
+    });
+    $("inspectorToolGlyphBtn").addEventListener("click", () => {
+      state.inspectorTool = "glyph";
+      updateInspectorToolUI();
+      renderInspector();
+    });
     $("inspectorToolPaintBtn").addEventListener("click", () => {
       state.inspectorTool = "paint";
       updateInspectorToolUI();
@@ -3615,10 +4478,50 @@
       updateInspectorToolUI();
       renderInspector();
     });
+    $("inspectorGlyphCode").addEventListener("input", () => {
+      state.inspectorGlyphCode = clampInspectorGlyphCode($("inspectorGlyphCode").value || 0);
+      updateInspectorToolUI();
+      renderInspector();
+    });
+    $("inspectorGlyphChar").addEventListener("input", () => {
+      const v = String($("inspectorGlyphChar").value || "");
+      if (v) state.inspectorGlyphCode = clampInspectorGlyphCode(v.charCodeAt(0));
+      updateInspectorToolUI();
+      renderInspector();
+    });
+    $("inspectorGlyphFgColor").addEventListener("input", () => {
+      state.inspectorGlyphFgColor = hexToRgb($("inspectorGlyphFgColor").value || "#ffffff");
+      updateInspectorToolUI();
+      renderInspector();
+    });
+    $("inspectorGlyphBgColor").addEventListener("input", () => {
+      state.inspectorGlyphBgColor = hexToRgb($("inspectorGlyphBgColor").value || "#ff00ff");
+      updateInspectorToolUI();
+      renderInspector();
+    });
     $("inspectorCopyFrameBtn").addEventListener("click", copyInspectorFrame);
     $("inspectorPasteFrameBtn").addEventListener("click", pasteInspectorFrame);
     $("inspectorFlipHBtn").addEventListener("click", flipInspectorFrameHorizontal);
     $("inspectorClearFrameBtn").addEventListener("click", clearInspectorFrame);
+    $("inspectorCopySelBtn").addEventListener("click", copyInspectorSelection);
+    $("inspectorPasteSelBtn").addEventListener("click", pasteInspectorSelection);
+    $("inspectorCutSelBtn").addEventListener("click", cutInspectorSelection);
+    $("inspectorClearSelBtn").addEventListener("click", clearInspectorSelectionCells);
+    $("inspectorSelectAllBtn").addEventListener("click", inspectorSelectAll);
+    $("inspectorFillSelBtn").addEventListener("click", fillInspectorSelectionWithGlyph);
+    $("inspectorReplaceFgBtn").addEventListener("click", () => replaceInspectorSelectionColor("fg"));
+    $("inspectorReplaceBgBtn").addEventListener("click", () => replaceInspectorSelectionColor("bg"));
+    $("inspectorRotateSelCwBtn").addEventListener("click", () => transformInspectorSelection("rot_cw"));
+    $("inspectorRotateSelCcwBtn").addEventListener("click", () => transformInspectorSelection("rot_ccw"));
+    $("inspectorFlipSelHBtn").addEventListener("click", () => transformInspectorSelection("flip_h"));
+    $("inspectorFlipSelVBtn").addEventListener("click", () => transformInspectorSelection("flip_v"));
+    $("inspectorBgTransparentBtn").addEventListener("click", () => {
+      state.inspectorGlyphBgColor = [...MAGENTA];
+      updateInspectorToolUI();
+      renderInspector();
+    });
+    $("inspectorFindReplaceApplyBtn").addEventListener("click", applyInspectorFindReplace);
+    $("inspectorFrScope").addEventListener("change", updateInspectorToolUI);
     $("inspectorShowGrid").addEventListener("change", () => {
       state.inspectorShowGrid = !!$("inspectorShowGrid").checked;
       renderInspector();
@@ -3629,13 +4532,35 @@
     });
     $("cellInspectorCanvas").addEventListener("mousedown", (e) => {
       if (!state.inspectorOpen) return;
+      if (state.inspectorTool === "select") {
+        const hitCell = inspectorCellRectAtEvent(e);
+        if (!hitCell) return;
+        state.inspectorSelecting = true;
+        state.inspectorSelectAnchor = { x: hitCell.cx, y: hitCell.cy };
+        state.inspectorSelection = normalizeInspectorSelection({ x1: hitCell.cx, y1: hitCell.cy, x2: hitCell.cx, y2: hitCell.cy });
+        renderInspector();
+        return;
+      }
       const hit = inspectorHalfCellAtEvent(e);
       if (!hit) return;
-      if (state.inspectorTool === "paint" || state.inspectorTool === "erase") {
-        pushHistory();
+      setInspectorHoverFromHit(hit);
+      if (state.inspectorTool === "paint" || state.inspectorTool === "erase" || state.inspectorTool === "glyph") {
         state.inspectorPainting = true;
+        state.inspectorStrokeChanged = false;
+        state.inspectorStrokeHadHistory = false;
+        state.inspectorStrokeWasDirty = !!state.sessionDirty;
       }
-      const changed = applyInspectorToolAt(hit);
+      let changed = false;
+      if (state.inspectorPainting && (state.inspectorTool === "paint" || state.inspectorTool === "erase" || state.inspectorTool === "glyph") && !state.inspectorStrokeHadHistory) {
+        pushHistory();
+        state.inspectorStrokeHadHistory = true;
+      }
+      if (state.inspectorTool === "glyph") {
+        changed = applyInspectorGlyphAtCell(hit);
+      } else {
+        changed = applyInspectorToolAt(hit);
+      }
+      if (changed) state.inspectorStrokeChanged = true;
       if (changed) {
         renderAll();
       }
@@ -3644,15 +4569,43 @@
       }
     });
     $("cellInspectorCanvas").addEventListener("mousemove", (e) => {
+      const hoverHit = inspectorHalfCellAtEvent(e);
+      setInspectorHoverFromHit(hoverHit);
+      if (state.inspectorSelecting) {
+        const hitCell = inspectorCellRectAtEvent(e);
+        if (!hitCell || !state.inspectorSelectAnchor) return;
+        state.inspectorSelection = normalizeInspectorSelection({
+          x1: state.inspectorSelectAnchor.x,
+          y1: state.inspectorSelectAnchor.y,
+          x2: hitCell.cx,
+          y2: hitCell.cy,
+        });
+        renderInspector();
+        return;
+      }
       if (!state.inspectorPainting) return;
-      if (state.inspectorTool !== "paint" && state.inspectorTool !== "erase") return;
-      const hit = inspectorHalfCellAtEvent(e);
+      if (state.inspectorTool !== "paint" && state.inspectorTool !== "erase" && state.inspectorTool !== "glyph") return;
+      const hit = hoverHit;
       if (!hit) return;
-      const changed = applyInspectorToolAt(hit);
+      if (!state.inspectorStrokeHadHistory) {
+        state.inspectorStrokeWasDirty = !!state.sessionDirty;
+        pushHistory();
+        state.inspectorStrokeHadHistory = true;
+      }
+      const changed = state.inspectorTool === "glyph" ? applyInspectorGlyphAtCell(hit) : applyInspectorToolAt(hit);
+      if (changed) state.inspectorStrokeChanged = true;
       if (changed) renderAll();
+    });
+    $("cellInspectorCanvas").addEventListener("mouseleave", () => {
+      setInspectorHoverFromHit(null);
     });
     window.addEventListener("mouseup", () => {
       if (state.inspectorPainting) commitInspectorStrokeIfNeeded();
+      if (state.inspectorSelecting) {
+        state.inspectorSelecting = false;
+        state.inspectorSelectAnchor = null;
+        renderInspector();
+      }
     });
 
     window.addEventListener("keydown", (e) => {
@@ -3662,10 +4615,47 @@
         t instanceof HTMLTextAreaElement ||
         t instanceof HTMLSelectElement;
       if (typingTarget && !(e.ctrlKey || e.metaKey)) return;
+      if (state.inspectorOpen && (e.ctrlKey || e.metaKey) && !e.altKey && !typingTarget) {
+        const k = e.key.toLowerCase();
+        if (k === "c") {
+          if (!copyInspectorSelection()) copyInspectorFrame();
+          e.preventDefault();
+          return;
+        }
+        if (k === "x") {
+          cutInspectorSelection();
+          e.preventDefault();
+          return;
+        }
+        if (k === "v") {
+          if (!pasteInspectorSelection()) pasteInspectorFrame();
+          e.preventDefault();
+          return;
+        }
+        if (k === "a") {
+          inspectorSelectAll();
+          e.preventDefault();
+          return;
+        }
+      }
       if (state.inspectorOpen && !e.ctrlKey && !e.metaKey && !e.altKey) {
         const k = e.key.toLowerCase();
         if (k === "p") {
           state.inspectorTool = "paint";
+          updateInspectorToolUI();
+          renderInspector();
+          e.preventDefault();
+          return;
+        }
+        if (k === "g") {
+          state.inspectorTool = "glyph";
+          updateInspectorToolUI();
+          renderInspector();
+          e.preventDefault();
+          return;
+        }
+        if (k === "s") {
+          state.inspectorTool = "select";
           updateInspectorToolUI();
           renderInspector();
           e.preventDefault();
@@ -3706,12 +4696,17 @@
           return;
         }
         if (k === "c") {
-          copyInspectorFrame();
+          if (!copyInspectorSelection()) copyInspectorFrame();
+          e.preventDefault();
+          return;
+        }
+        if (k === "x") {
+          cutInspectorSelection();
           e.preventDefault();
           return;
         }
         if (k === "v") {
-          pasteInspectorFrame();
+          if (!pasteInspectorSelection()) pasteInspectorFrame();
           e.preventDefault();
           return;
         }
@@ -3720,15 +4715,30 @@
           e.preventDefault();
           return;
         }
+        if (k === "]") {
+          transformInspectorSelection("rot_cw");
+          e.preventDefault();
+          return;
+        }
+        if (k === "[") {
+          transformInspectorSelection("rot_ccw");
+          e.preventDefault();
+          return;
+        }
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+        if (typingTarget) return;
         e.preventDefault();
         undo();
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
+        if (typingTarget) return;
         e.preventDefault();
         redo();
       } else if (e.key === "Delete") {
-        if (deleteSelectedSourceObjectsOrDraft()) {
+        if (state.inspectorOpen) {
+          if (!clearInspectorSelectionCells()) clearInspectorFrame();
+          e.preventDefault();
+        } else if (deleteSelectedSourceObjectsOrDraft()) {
           e.preventDefault();
         } else {
           deleteSelectedFrames();
@@ -3736,6 +4746,14 @@
       } else if (e.key === "Escape") {
         hideSourceContextMenu();
         if (state.inspectorOpen) {
+          if (state.inspectorSelection) {
+            state.inspectorSelection = null;
+            state.inspectorSelecting = false;
+            state.inspectorSelectAnchor = null;
+            renderInspector();
+            e.preventDefault();
+            return;
+          }
           closeInspector();
         } else if (state.sourceDrag || state.sourceRowDrag) {
           state.sourceDrag = null;
@@ -3838,6 +4856,40 @@
       historyDepth: state.history.length,
       futureDepth: state.future.length,
     }),
+    openInspector: (row = 0, col = 0) => {
+      openInspector(Number(row) || 0, Number(col) || 0);
+      return {
+        open: !!state.inspectorOpen,
+        row: state.inspectorRow,
+        col: state.inspectorCol,
+      };
+    },
+    getInspectorState: () => ({
+      open: !!state.inspectorOpen,
+      row: Number(state.inspectorRow || 0),
+      col: Number(state.inspectorCol || 0),
+      tool: String(state.inspectorTool || "inspect"),
+      selection: state.inspectorSelection ? { ...state.inspectorSelection } : null,
+      hover: state.inspectorHover ? {
+        cx: Number(state.inspectorHover.cx || 0),
+        cy: Number(state.inspectorHover.cy || 0),
+        half: String(state.inspectorHover.half || "top"),
+      } : null,
+      lastHoverAnchor: state.inspectorLastHoverAnchor ? {
+        cx: Number(state.inspectorLastHoverAnchor.cx || 0),
+        cy: Number(state.inspectorLastHoverAnchor.cy || 0),
+      } : null,
+      lastInspectCell: state.inspectorLastInspectCell ? {
+        glyph: Number(state.inspectorLastInspectCell.glyph || 0),
+        fg: [...(state.inspectorLastInspectCell.fg || [0, 0, 0])],
+        bg: [...(state.inspectorLastInspectCell.bg || [0, 0, 0])],
+      } : null,
+      glyph: {
+        code: clampInspectorGlyphCode(state.inspectorGlyphCode),
+        fg: [...(state.inspectorGlyphFgColor || [255, 255, 255])],
+        bg: [...(state.inspectorGlyphBgColor || MAGENTA)],
+      },
+    }),
     frameSignature: (row, col) => {
       const vals = [];
       for (let y = 0; y < state.frameHChars; y++) {
@@ -3857,4 +4909,3 @@
   renderSourceCanvas();
   if (state.jobId) loadFromJob();
 })();
-    commitInspectorStrokeIfNeeded();

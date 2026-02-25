@@ -8,7 +8,7 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Workbench</h1>
+  <h1>Workbench <span id="sessionDirtyBadge" class="small" style="margin-left:8px; font-weight:normal;">Session: idle</span></h1>
 
   <div class="panel">
     <div class="row">
@@ -166,11 +166,13 @@
     <h3>Skin Test Dock (Flat Arena)</h3>
     <div class="row">
       <button id="webbuildQuickTestBtn" class="success" disabled>Test This Skin</button>
+      <button id="webbuildApplyInPlaceBtn" disabled title="Requires an active session and a ready webbuild runtime">Apply In Place</button>
+      <button id="webbuildApplyRestartBtn" disabled title="Requires an active session">Apply + Restart</button>
       <button id="webbuildUploadTestBtn">Upload Test Skin</button>
       <input id="webbuildUploadTestInput" type="file" accept=".xp,application/octet-stream" class="hidden">
       <span id="webbuildState" class="small">Webbuild not loaded</span>
     </div>
-    <div id="webbuildHint" class="small">Persistent browser test runtime (flat arena webbuild). First load downloads WASM/data; after that, `Test This Skin` hot-swaps the current Workbench XP into the same running iframe for fast retests. `Upload Test Skin` lets you inject an external `.xp` directly.</div>
+    <div id="webbuildHint" class="small">Persistent browser test runtime (flat arena webbuild). `Apply In Place` is faster but may reuse a bad runtime state; `Apply + Restart` is deterministic; `Test This Skin` uses the deterministic test path. `Upload Test Skin` injects an external `.xp` directly.</div>
     <iframe id="webbuildFrame" title="Asciicker Webbuild" class="hidden" style="width:100%; height:360px; border:1px solid #334; background:#000;"></iframe>
     <details>
       <summary class="small">Advanced Skin Dock Controls</summary>
@@ -252,7 +254,7 @@
   </div>
 
   <div id="cellInspectorPanel" class="panel hidden">
-    <h3>XP Editor (Frame)</h3>
+    <h3>XP Editor (Frame) <span id="inspectorDirtyBadge" class="small" style="font-weight:normal;">saved</span></h3>
     <div class="row">
       <button id="inspectorCloseBtn">Close</button>
       <button id="inspectorPrevAngleBtn" title="Previous angle row">Prev Angle</button>
@@ -265,11 +267,22 @@
     <div class="row">
       <label>Tool</label>
       <button id="inspectorToolInspectBtn">Inspect</button>
+      <button id="inspectorToolSelectBtn">Select</button>
+      <button id="inspectorToolGlyphBtn">Glyph</button>
       <button id="inspectorToolPaintBtn">Paint</button>
       <button id="inspectorToolEraseBtn">Erase</button>
       <button id="inspectorToolDropperBtn">Dropper</button>
-      <label>Color</label>
-      <input id="inspectorPaintColor" type="color" value="#ffffff">
+      <label>Half Color</label>
+      <input id="inspectorPaintColor" type="color" value="#ffffff" title="Half-cell paint color">
+    </div>
+    <div class="row">
+      <label>Glyph</label>
+      <input id="inspectorGlyphCode" type="number" min="0" max="255" value="64" style="width:72px">
+      <input id="inspectorGlyphChar" type="text" value="@" maxlength="1" style="width:42px">
+      <label>FG</label>
+      <input id="inspectorGlyphFgColor" type="color" value="#ffffff">
+      <label>BG</label>
+      <input id="inspectorGlyphBgColor" type="color" value="#ff00ff">
     </div>
     <div class="row">
       <button id="inspectorCopyFrameBtn">Copy Frame</button>
@@ -279,7 +292,61 @@
       <label class="inline"><input id="inspectorShowGrid" type="checkbox" checked> Grid</label>
       <label class="inline"><input id="inspectorShowChecker" type="checkbox"> Checker</label>
     </div>
-    <div id="inspectorToolHint" class="small">Double-click a grid cell to inspect. Use Paint/Erase/Dropper on the zoomed frame (Visual layer only). Shortcuts: P/E/I tools, Q/R angle nav, A/D frame nav.</div>
+    <div class="row">
+      <button id="inspectorCopySelBtn">Copy Sel</button>
+      <button id="inspectorPasteSelBtn">Paste Sel</button>
+      <button id="inspectorCutSelBtn">Cut Sel</button>
+      <button id="inspectorClearSelBtn">Clear Sel</button>
+      <button id="inspectorSelectAllBtn">Select All</button>
+      <button id="inspectorFillSelBtn">Fill Sel</button>
+      <button id="inspectorReplaceFgBtn">Replace FG</button>
+      <button id="inspectorReplaceBgBtn">Replace BG</button>
+    </div>
+    <div class="row">
+      <button id="inspectorRotateSelCwBtn" title="Rotate selected cells clockwise (geometry only; glyph semantics are not remapped)">Rotate Sel CW</button>
+      <button id="inspectorRotateSelCcwBtn" title="Rotate selected cells counter-clockwise (geometry only; glyph semantics are not remapped)">Rotate Sel CCW</button>
+      <button id="inspectorFlipSelHBtn" title="Flip selected cells horizontally (geometry only; glyph semantics are not remapped)">Flip Sel H</button>
+      <button id="inspectorFlipSelVBtn" title="Flip selected cells vertically (geometry only; glyph semantics are not remapped)">Flip Sel V</button>
+      <button id="inspectorBgTransparentBtn">BG = Transparent</button>
+    </div>
+    <div class="row">
+      <span class="small">Palette (click = FG, right-click = BG)</span>
+      <div id="inspectorPaletteSwatches" style="display:flex; gap:4px; flex-wrap:wrap;"></div>
+    </div>
+    <div id="inspectorMatchSourceInfo" class="small">Match source: none (use Inspect or Dropper on a cell)</div>
+    <div id="inspectorHoverReadout" class="small">Hover: none</div>
+    <div id="inspectorPasteAnchorReadout" class="small">Paste anchor: none (hover a cell, then click Paste Sel)</div>
+    <details id="inspectorFindReplaceDetails">
+      <summary class="small">Find &amp; Replace (XP cell)</summary>
+      <div class="row" style="margin-top:8px;">
+        <label class="inline"><input id="inspectorFrMatchGlyphChk" type="checkbox"> Match Glyph</label>
+        <input id="inspectorFrFindGlyph" type="number" min="0" max="255" value="0" style="width:70px">
+        <label class="inline"><input id="inspectorFrMatchFgChk" type="checkbox"> Match FG</label>
+        <input id="inspectorFrFindFg" type="color" value="#ffffff">
+        <label class="inline"><input id="inspectorFrMatchBgChk" type="checkbox"> Match BG</label>
+        <input id="inspectorFrFindBg" type="color" value="#ff00ff">
+      </div>
+      <div class="row">
+        <label class="inline"><input id="inspectorFrReplaceGlyphChk" type="checkbox" checked> Replace Glyph</label>
+        <input id="inspectorFrReplGlyph" type="number" min="0" max="255" value="64" style="width:70px">
+        <label class="inline"><input id="inspectorFrReplaceFgChk" type="checkbox" checked> Replace FG</label>
+        <input id="inspectorFrReplFg" type="color" value="#ffffff">
+        <label class="inline"><input id="inspectorFrReplaceBgChk" type="checkbox"> Replace BG</label>
+        <input id="inspectorFrReplBg" type="color" value="#ff00ff">
+        <label>Scope</label>
+        <select id="inspectorFrScope">
+          <option value="selection">Selection</option>
+          <option value="frame">Whole Frame</option>
+        </select>
+        <button id="inspectorFindReplaceApplyBtn">Apply</button>
+      </div>
+      <div id="inspectorFindReplaceInfo" class="small">Matches all checked criteria. Replaces only checked replacement channels.</div>
+    </details>
+    <details id="inspectorShortcutsDetails">
+      <summary class="small">Shortcuts</summary>
+      <div class="small">Tools: `G` glyph, `S` select, `P` paint, `E` erase, `I` dropper. Nav: `Q/R` angle, `A/D` frame. Selection: `C/X/V`, `Delete`, `Esc`, `Ctrl/Cmd+A`. Transforms: `[`/`]` rotate selection, `F` flips whole frame.</div>
+    </details>
+    <div id="inspectorToolHint" class="small">Double-click a grid cell to inspect. Visual layer only. Tools: Select/Glyph/Paint/Erase/Dropper. Shortcuts: G/S/P/E/I tools, Q/R angle nav, A/D frame nav, C/X/V selection ops, Ctrl/Cmd+A select all.</div>
     <canvas id="cellInspectorCanvas" width="320" height="320"></canvas>
     <div id="cellInspectorInfo" class="small"></div>
   </div>

@@ -279,13 +279,18 @@
       M.FS_createDataFile("/sprites", name, xpBytes, true, true, true);
     }
     const playerName = String($("playerName")?.value || "player").trim() || "player";
-    if (typeof win.Load === "function") win.Load(playerName);
-    if (typeof win.Resize === "function") {
-      try { win.Resize(null); } catch (_e) {}
+    let startInfo = { started: false, reason: "auto_start_disabled" };
+    if ($("autoStartChk")?.checked) {
+      startInfo = autoStartGameIfNeeded();
     }
-    if ($("autoStartChk")?.checked) autoStartGameIfNeeded();
+    if (!startInfo.started) {
+      if (typeof win.Load === "function") win.Load(playerName);
+      if (typeof win.Resize === "function") {
+        try { win.Resize(null); } catch (_e) {}
+      }
+    }
     try { win.ak_canvas?.focus?.(); } catch (_e) {}
-    return { files_written: names.length, bytes: xpBytes.length, player_name: playerName, override_names: names };
+    return { files_written: names.length, bytes: xpBytes.length, player_name: playerName, override_names: names, started_via: startInfo.started ? "start_game" : "load", start_info: startInfo };
   }
 
   async function applyLoadedXp() {

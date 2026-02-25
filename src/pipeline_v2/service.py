@@ -41,6 +41,15 @@ WORKBENCH_STREAM_DIR = ROOT / "output" / "termpp_stream"
 _TERM_STREAM_LOCK = threading.Lock()
 _TERM_STREAMS: dict[str, dict[str, Any]] = {}
 
+
+def _termpp_skin_override_names() -> list[str]:
+    out = ["player-nude.xp"]
+    for prefix in ("player", "attack", "plydie", "wolfie", "wolack"):
+        for i in range(16):
+            out.append(f"{prefix}-{i:04b}.xp")
+    return out
+
+
 def request_id() -> str:
     return str(uuid.uuid4())
 
@@ -210,14 +219,7 @@ def _stage_termpp_skin_sandbox(legacy_root: Path, xp_path: Path, run_id: str, bi
             pass
 
     # Disk-level approximation of editor quick-skin: override the most common player-facing filenames.
-    override_names = [
-        "player-nude.xp",
-        "player-0000.xp",
-        "plydie-0000.xp",
-        "attack-0000.xp",
-        "wolfie-0000.xp",
-        "wolack-0000.xp",
-    ]
+    override_names = _termpp_skin_override_names()
     written: list[str] = []
     for name in override_names:
         dst = sprites_dst / name
@@ -1891,14 +1893,7 @@ def workbench_web_skin_payload(session_id: str, req_id: str) -> dict[str, Any]:
     except Exception as e:
         raise ApiError(f"failed reading exported xp: {e}", "xp_read_failed", "workbench", req_id, 500)
     # Mirrors the disk-based TERM++ sandbox override set; web build skin reload can use same names.
-    override_names = [
-        "player-nude.xp",
-        "player-0000.xp",
-        "plydie-0000.xp",
-        "attack-0000.xp",
-        "wolfie-0000.xp",
-        "wolack-0000.xp",
-    ]
+    override_names = _termpp_skin_override_names()
     return {
         "session_id": session_id,
         "xp_path": str(xp_path),

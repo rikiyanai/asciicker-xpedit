@@ -322,3 +322,19 @@ Status: `IN_PROGRESS`
   - [ ] semantic labels visible in grid
   - [ ] checkerboard background fixed
 - [ ] Undo/redo validated for source-panel mutating actions implemented in this phase.
+
+---
+
+## 20) Frame Jitter Handling (Grid/Preview MVP)
+
+Status: `IMPLEMENTED`
+
+- [ ] User can select one or more grid frames on a row and nudge frame contents to reduce animation jitter.
+- [ ] Batch nudge controls exist in the Workbench UI.
+- [ ] `Alt` + arrow keys nudges selected frame contents for fast cleanup.
+- [ ] Auto-align selected frames exists (configurable alignment + reference).
+- [ ] Auto-align whole selected row exists for faster normalization.
+- [ ] Jitter edits affect exported XP output directly (in-place grid edits).
+
+Notes:
+- Current implementation shifts visual frame contents in-place (destructive edit) and relies on undo/redo for reset.

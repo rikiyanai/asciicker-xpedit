@@ -64,3 +64,94 @@ def test_wizard_to_workbench_to_export(client):
     open_data = open_resp.get_json()
     assert open_data["dry_run"] is True
     assert open_data["launched"] is False
+
+    verify_dry_resp = client.post(
+        "/api/workbench/run-verification",
+        data=json.dumps({
+            "session_id": wb_data["session_id"],
+            "profile": "termpp_custom",
+            "command_template": "echo verifying {xp_path}",
+            "dry_run": True,
+        }),
+        content_type="application/json",
+    )
+    assert verify_dry_resp.status_code == 200
+    verify_dry_data = verify_dry_resp.get_json()
+    assert verify_dry_data["dry_run"] is True
+    assert "verifying " in (verify_dry_data.get("command") or "")
+
+    verify_local_resp = client.post(
+        "/api/workbench/run-verification",
+        data=json.dumps({
+            "session_id": wb_data["session_id"],
+            "profile": "local_xp_sanity",
+            "timeout_sec": 10,
+        }),
+        content_type="application/json",
+    )
+    assert verify_local_resp.status_code == 200
+    verify_local_data = verify_local_resp.get_json()
+    assert verify_local_data["dry_run"] is False
+    assert verify_local_data["profile"] == "local_xp_sanity"
+    assert verify_local_data["passed"] is True
+    assert Path(verify_local_data["report_path"]).exists()
+
+    termpp_cmd_resp = client.post(
+        "/api/workbench/termpp-skin-command",
+        data=json.dumps({
+            "session_id": wb_data["session_id"],
+            "binary_name": "game_term",
+        }),
+        content_type="application/json",
+    )
+    assert termpp_cmd_resp.status_code == 200
+    termpp_cmd_data = termpp_cmd_resp.get_json()
+    assert termpp_cmd_data["binary_name"] == "game_term"
+    assert termpp_cmd_data["planned_runtime_root"]
+    assert termpp_cmd_data["xp_path"].endswith(".xp")
+
+    termpp_dry_resp = client.post(
+        "/api/workbench/open-termpp-skin",
+        data=json.dumps({
+            "session_id": wb_data["session_id"],
+            "binary_name": "game_term",
+            "dry_run": True,
+        }),
+        content_type="application/json",
+    )
+    assert termpp_dry_resp.status_code == 200
+    termpp_dry_data = termpp_dry_resp.get_json()
+    assert termpp_dry_data["dry_run"] is True
+    assert termpp_dry_data["launched"] is False
+    assert "runtime_root" in termpp_dry_data
+
+    stream_dry_resp = client.post(
+        "/api/workbench/termpp-stream/start",
+        data=json.dumps({
+            "session_id": wb_data["session_id"],
+            "x": 0,
+            "y": 0,
+            "w": 320,
+            "h": 240,
+            "fps": 2,
+            "dry_run": True,
+        }),
+        content_type="application/json",
+    )
+    assert stream_dry_resp.status_code == 200
+    stream_dry_data = stream_dry_resp.get_json()
+    assert stream_dry_data["dry_run"] is True
+    assert stream_dry_data["region"]["w"] == 320
+    assert stream_dry_data["region"]["h"] == 240
+
+    web_skin_resp = client.post(
+        "/api/workbench/web-skin-payload",
+        data=json.dumps({"session_id": wb_data["session_id"]}),
+        content_type="application/json",
+    )
+    assert web_skin_resp.status_code == 200
+    web_skin_data = web_skin_resp.get_json()
+    assert web_skin_data["xp_path"].endswith(".xp")
+    assert web_skin_data["xp_size_bytes"] > 0
+    assert len(web_skin_data["xp_b64"]) > 0
+    assert "player-0000.xp" in web_skin_data["override_names"]

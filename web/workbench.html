@@ -114,6 +114,33 @@
     <div class="row">
       <button id="applyGroupsToAnimsBtn">Apply Frame Groups to Metadata</button>
     </div>
+    <h4>Frame Jitter</h4>
+    <div class="row">
+      <label>Align</label>
+      <select id="jitterAlignMode">
+        <option value="bottom_center">Bottom Center</option>
+        <option value="bottom_left">Bottom Left</option>
+        <option value="top_left">Top Left</option>
+        <option value="center">Center</option>
+      </select>
+      <label>Reference</label>
+      <select id="jitterRefMode">
+        <option value="first_selected">First Selected</option>
+        <option value="median">Median (Selected)</option>
+      </select>
+      <button id="autoAlignSelectedBtn" disabled>Auto Align Selected</button>
+      <button id="autoAlignRowBtn" disabled>Auto Align Row</button>
+    </div>
+    <div class="row">
+      <label>Step</label>
+      <input id="jitterStep" type="number" value="1" min="1" max="16">
+      <button id="jitterLeftBtn" disabled>&larr;</button>
+      <button id="jitterRightBtn" disabled>&rarr;</button>
+      <button id="jitterUpBtn" disabled>&uarr;</button>
+      <button id="jitterDownBtn" disabled>&darr;</button>
+      <span class="small">Keys: `W/A/S/D` or `Option` + arrows to nudge selected frames</span>
+    </div>
+    <div id="jitterInfo" class="small">Select one or more grid frames on a row to align/nudge jitter.</div>
     <pre id="metaOut"></pre>
   </div>
 
@@ -135,6 +162,85 @@
     </div>
   </div>
 
+  <div class="panel" id="webbuildDockPanel">
+    <h3>Skin Test Dock (Flat Arena)</h3>
+    <div class="row">
+      <button id="webbuildQuickTestBtn" class="success" disabled>Test This Skin</button>
+      <button id="webbuildUploadTestBtn">Upload Test Skin</button>
+      <input id="webbuildUploadTestInput" type="file" accept=".xp,application/octet-stream" class="hidden">
+      <span id="webbuildState" class="small">Webbuild not loaded</span>
+    </div>
+    <div id="webbuildHint" class="small">Persistent browser test runtime (flat arena webbuild). First load downloads WASM/data; after that, `Test This Skin` hot-swaps the current Workbench XP into the same running iframe for fast retests. `Upload Test Skin` lets you inject an external `.xp` directly.</div>
+    <iframe id="webbuildFrame" title="Asciicker Webbuild" class="hidden" style="width:100%; height:360px; border:1px solid #334; background:#000;"></iframe>
+    <details>
+      <summary class="small">Advanced Skin Dock Controls</summary>
+      <div class="row" style="margin-top:8px;">
+        <button id="webbuildOpenBtn">Open Preview</button>
+        <button id="webbuildReloadBtn">Reload Preview</button>
+        <button id="webbuildApplySkinBtn" disabled>Apply Current XP (Advanced)</button>
+      </div>
+    </details>
+    <details>
+      <summary class="small">Advanced debug output</summary>
+      <pre id="webbuildOut"></pre>
+    </details>
+  </div>
+
+  <div class="panel hidden" id="termppNativePanel">
+    <h3>TERM++ Skin (Real Game Instance)</h3>
+    <div class="row">
+      <label>Binary</label>
+      <select id="termppBinary">
+        <option value="game_term">game_term (TERM++)</option>
+        <option value="game">game (GL game)</option>
+      </select>
+      <button id="termppSkinCmdBtn" disabled>Preview TERM++ Skin Launch</button>
+      <button id="termppSkinLaunchBtn" class="success" disabled>Launch TERM++ SKIN</button>
+    </div>
+    <div id="termppSkinHint" class="small">Launches a real Asciicker game instance using a sandboxed runtime rooted from the legacy repo. Workbench exports current XP, stages it into sandbox `sprites/` skin filenames, and launches TERM++ without modifying original legacy assets.</div>
+    <div class="row">
+      <label>Embed Region</label>
+      <input id="termppStreamX" type="number" value="0" min="0" style="width:70px" title="X">
+      <input id="termppStreamY" type="number" value="0" min="0" style="width:70px" title="Y">
+      <input id="termppStreamW" type="number" value="960" min="16" style="width:84px" title="Width">
+      <input id="termppStreamH" type="number" value="640" min="16" style="width:84px" title="Height">
+      <label>FPS</label>
+      <input id="termppStreamFps" type="number" value="4" min="1" max="30" style="width:64px">
+      <button id="termppStreamPreviewBtn" disabled>Preview Embed</button>
+      <button id="termppStreamStartBtn" disabled>Start Embed Stream</button>
+      <button id="termppStreamStopBtn" disabled>Stop Stream</button>
+    </div>
+    <div id="termppStreamHint" class="small">View-only native window embed via macOS screen capture. Enter the TERM++ window screen region (x,y,w,h), then start the stream. Screen Recording permission may be required.</div>
+    <div class="canvas-wrap" style="min-height:180px">
+      <img id="termppStreamImg" alt="TERM++ embed stream" style="display:none; width:100%; max-width:960px; background:#000; image-rendering:auto; border:1px solid #334;">
+    </div>
+    <div id="termppStreamInfo" class="small"></div>
+    <pre id="termppSkinOut"></pre>
+  </div>
+
+  <div class="panel" id="verificationPanel">
+    <h3>Verification (Term++ / QA)</h3>
+    <div class="row">
+      <label>Profile</label>
+      <select id="verifyProfile">
+        <option value="local_xp_sanity">Local XP Sanity (Built-in)</option>
+        <option value="termpp_custom">Custom Term++ Command</option>
+        <option value="legacy_verify_e2e">Legacy verify_e2e.py (Experimental)</option>
+      </select>
+      <label>Timeout</label>
+      <input id="verifyTimeout" type="number" value="20" min="1" max="300">
+      <button id="verifyRunBtn" class="primary" disabled>Run Verification</button>
+      <button id="verifyDryRunBtn" disabled>Dry Run</button>
+    </div>
+    <div class="row">
+      <label>Command Template</label>
+      <input id="verifyCommandTemplate" style="min-width:480px" placeholder='Use {xp_path}; example: cd {legacy_repo_root} && <term++ command> "{xp_path}"'>
+    </div>
+    <div id="verifyHint" class="small">Exports current session XP, then runs the selected verifier. Use Custom Term++ Command for your real engine test command (insert `{xp_path}` where the exported file path should go).</div>
+    <pre id="verifySummaryOut"></pre>
+    <pre id="verifyLogOut"></pre>
+  </div>
+
   <div class="panel">
     <h3>Export</h3>
     <div class="small">Export always writes current edited state.</div>
@@ -146,12 +252,34 @@
   </div>
 
   <div id="cellInspectorPanel" class="panel hidden">
-    <h3>Cell Inspector</h3>
+    <h3>XP Editor (Frame)</h3>
     <div class="row">
       <button id="inspectorCloseBtn">Close</button>
+      <button id="inspectorPrevAngleBtn" title="Previous angle row">Prev Angle</button>
+      <button id="inspectorNextAngleBtn" title="Next angle row">Next Angle</button>
+      <button id="inspectorPrevFrameBtn" title="Previous frame column">Prev Frame</button>
+      <button id="inspectorNextFrameBtn" title="Next frame column">Next Frame</button>
       <label>Zoom</label><input id="inspectorZoom" type="range" min="4" max="28" value="10">
       <span id="inspectorZoomValue" class="small">10x</span>
     </div>
+    <div class="row">
+      <label>Tool</label>
+      <button id="inspectorToolInspectBtn">Inspect</button>
+      <button id="inspectorToolPaintBtn">Paint</button>
+      <button id="inspectorToolEraseBtn">Erase</button>
+      <button id="inspectorToolDropperBtn">Dropper</button>
+      <label>Color</label>
+      <input id="inspectorPaintColor" type="color" value="#ffffff">
+    </div>
+    <div class="row">
+      <button id="inspectorCopyFrameBtn">Copy Frame</button>
+      <button id="inspectorPasteFrameBtn">Paste Frame</button>
+      <button id="inspectorFlipHBtn">Flip H</button>
+      <button id="inspectorClearFrameBtn">Clear Frame</button>
+      <label class="inline"><input id="inspectorShowGrid" type="checkbox" checked> Grid</label>
+      <label class="inline"><input id="inspectorShowChecker" type="checkbox"> Checker</label>
+    </div>
+    <div id="inspectorToolHint" class="small">Double-click a grid cell to inspect. Use Paint/Erase/Dropper on the zoomed frame (Visual layer only). Shortcuts: P/E/I tools, Q/R angle nav, A/D frame nav.</div>
     <canvas id="cellInspectorCanvas" width="320" height="320"></canvas>
     <div id="cellInspectorInfo" class="small"></div>
   </div>

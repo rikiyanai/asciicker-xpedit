@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import math
 import os
 import shlex
+import shutil
 import statistics
 import subprocess
+import threading
+import time
 import uuid
 from dataclasses import asdict
 from pathlib import Path
@@ -31,6 +35,11 @@ from .storage import save_json, load_json
 from .xp_codec import write_xp, read_xp
 
 MAGENTA_BG = (255, 0, 255)
+WORKBENCH_VERIFY_DIR = ROOT / "output" / "workbench_verify"
+WORKBENCH_TERMPP_DIR = ROOT / "output" / "termpp_skin_runs"
+WORKBENCH_STREAM_DIR = ROOT / "output" / "termpp_stream"
+_TERM_STREAM_LOCK = threading.Lock()
+_TERM_STREAMS: dict[str, dict[str, Any]] = {}
 
 def request_id() -> str:
     return str(uuid.uuid4())
@@ -50,6 +59,285 @@ def _xp_tool_command_parts(xp_path: Path) -> tuple[list[str], Path]:
     repo_root = _resolve_xp_tool_repo_root()
     argv = ["python3", "-m", "scripts.asset_gen.xp_tool", str(xp_path.resolve())]
     return argv, repo_root
+
+
+def _resolve_legacy_repo_root() -> Path:
+    return _resolve_xp_tool_repo_root()
+
+
+def _resolve_termpp_binary(legacy_root: Path, binary_name: str = "game_term") -> Path:
+    b = str(binary_name or "game_term").strip() or "game_term"
+    if "/" in b or "\\" in b:
+        raise ValueError("binary_name must be a bare filename")
+    p = legacy_root / ".run" / b
+    if not p.exists():
+        raise FileNotFoundError(f"TERM++ binary not found: {p}")
+    return p.resolve()
+
+
+def _stream_capture_command(region: dict[str, int], out_path: Path) -> list[str]:
+    x = int(region["x"])
+    y = int(region["y"])
+    w = int(region["w"])
+    h = int(region["h"])
+    return ["/usr/sbin/screencapture", "-x", f"-R{x},{y},{w},{h}", str(out_path)]
+
+
+def _termpp_stream_worker(stream_id: str) -> None:
+    while True:
+        with _TERM_STREAM_LOCK:
+            rec = _TERM_STREAMS.get(stream_id)
+            if not rec:
+                return
+            stop_evt = rec["stop_event"]
+            region = dict(rec["region"])
+            fps = max(1, int(rec.get("fps", 4)))
+            frame_path = Path(rec["frame_path"])
+            tmp_path = frame_path.with_suffix(".tmp.png")
+        if stop_evt.is_set():
+            break
+        t0 = time.time()
+        try:
+            cmd = _stream_capture_command(region, tmp_path)
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            if proc.returncode == 0 and tmp_path.exists():
+                tmp_path.replace(frame_path)
+                with _TERM_STREAM_LOCK:
+                    rec2 = _TERM_STREAMS.get(stream_id)
+                    if rec2:
+                        rec2["frame_count"] = int(rec2.get("frame_count", 0)) + 1
+                        rec2["last_frame_ts"] = time.time()
+                        rec2["last_error"] = None
+            else:
+                err = (proc.stderr or proc.stdout or f"screencapture failed rc={proc.returncode}").strip()
+                with _TERM_STREAM_LOCK:
+                    rec2 = _TERM_STREAMS.get(stream_id)
+                    if rec2:
+                        rec2["last_error"] = err
+        except Exception as e:
+            with _TERM_STREAM_LOCK:
+                rec2 = _TERM_STREAMS.get(stream_id)
+                if rec2:
+                    rec2["last_error"] = str(e)
+        finally:
+            try:
+                if tmp_path.exists():
+                    tmp_path.unlink()
+            except Exception:
+                pass
+        elapsed = time.time() - t0
+        sleep_s = max(0.01, (1.0 / max(1, fps)) - elapsed)
+        stop_evt.wait(sleep_s)
+    with _TERM_STREAM_LOCK:
+        rec = _TERM_STREAMS.get(stream_id)
+        if rec:
+            rec["running"] = False
+            rec["stopped_at"] = time.time()
+
+
+def _termpp_stream_record_view(rec: dict[str, Any]) -> dict[str, Any]:
+    frame_path = Path(rec["frame_path"])
+    return {
+        "stream_id": str(rec["stream_id"]),
+        "session_id": str(rec.get("session_id") or ""),
+        "running": bool(rec.get("running", False)),
+        "fps": int(rec.get("fps", 4)),
+        "region": {
+            "x": int(rec["region"]["x"]),
+            "y": int(rec["region"]["y"]),
+            "w": int(rec["region"]["w"]),
+            "h": int(rec["region"]["h"]),
+        },
+        "frame_count": int(rec.get("frame_count", 0)),
+        "last_frame_ts": rec.get("last_frame_ts"),
+        "last_error": rec.get("last_error"),
+        "frame_path": str(frame_path.resolve()),
+        "has_frame": frame_path.exists(),
+        "created_at": rec.get("created_at"),
+        "stopped_at": rec.get("stopped_at"),
+    }
+
+
+def _list_top_level_entries(root: Path) -> list[Path]:
+    out: list[Path] = []
+    for p in root.iterdir():
+        if p.name in {".git", ".run", "sprites"}:
+            continue
+        out.append(p)
+    return out
+
+
+def _stage_termpp_skin_sandbox(legacy_root: Path, xp_path: Path, run_id: str, binary_name: str) -> dict[str, Any]:
+    termpp_bin = _resolve_termpp_binary(legacy_root, binary_name=binary_name)
+    runtime_root = WORKBENCH_TERMPP_DIR / run_id
+    if runtime_root.exists():
+        shutil.rmtree(runtime_root)
+    runtime_root.mkdir(parents=True, exist_ok=True)
+
+    # Symlink most of the legacy repo to avoid copying large assets while keeping original files untouched.
+    linked_entries: list[str] = []
+    for src in _list_top_level_entries(legacy_root):
+        dst = runtime_root / src.name
+        try:
+            os.symlink(src, dst)
+            linked_entries.append(src.name)
+        except FileExistsError:
+            pass
+
+    # Copy runtime binary so base_path resolves to the sandbox (not the original .run path).
+    run_dir = runtime_root / ".run"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    staged_bin = run_dir / termpp_bin.name
+    shutil.copy2(termpp_bin, staged_bin)
+    try:
+        staged_bin.chmod(termpp_bin.stat().st_mode)
+    except Exception:
+        pass
+
+    # Create sprites overlay dir with symlinked contents, then overwrite target skin files as real files.
+    legacy_sprites = legacy_root / "sprites"
+    if not legacy_sprites.exists():
+        raise FileNotFoundError(f"Legacy sprites dir missing: {legacy_sprites}")
+    sprites_dst = runtime_root / "sprites"
+    sprites_dst.mkdir(parents=True, exist_ok=True)
+    sprite_entries_linked = 0
+    for src in legacy_sprites.iterdir():
+        dst = sprites_dst / src.name
+        try:
+            os.symlink(src, dst)
+            sprite_entries_linked += 1
+        except FileExistsError:
+            pass
+
+    # Disk-level approximation of editor quick-skin: override the most common player-facing filenames.
+    override_names = [
+        "player-nude.xp",
+        "player-0000.xp",
+        "plydie-0000.xp",
+        "attack-0000.xp",
+        "wolfie-0000.xp",
+        "wolack-0000.xp",
+    ]
+    written: list[str] = []
+    for name in override_names:
+        dst = sprites_dst / name
+        if dst.exists() or dst.is_symlink():
+            try:
+                dst.unlink()
+            except IsADirectoryError:
+                continue
+        shutil.copy2(xp_path, dst)
+        written.append(name)
+
+    return {
+        "legacy_root": str(legacy_root.resolve()),
+        "runtime_root": str(runtime_root.resolve()),
+        "runtime_binary": str(staged_bin.resolve()),
+        "linked_top_level_entries": linked_entries,
+        "linked_sprite_entries_count": int(sprite_entries_linked),
+        "skin_override_files": written,
+    }
+
+
+def _workbench_verify_local_xp_sanity(xp_path: Path, session: dict[str, Any]) -> dict[str, Any]:
+    parsed = read_xp(xp_path)
+    width = int(parsed["width"])
+    height = int(parsed["height"])
+    layers = int(parsed["layers"])
+    cells = parsed["cells"]
+    visual_idx = 2 if layers >= 3 else 0
+    visual = cells[visual_idx]
+    populated = sum(1 for glyph, _fg, _bg in visual if int(glyph) not in (0, 32))
+    expected_cols = int(session["grid_cols"])
+    expected_rows = int(session["grid_rows"])
+    expected_angles = int(session["angles"])
+    expected_anims = [int(x) for x in session["anims"]]
+    checks = [
+        {"name": "xp_exists", "ok": xp_path.exists(), "detail": str(xp_path.resolve())},
+        {"name": "layer_count>=3", "ok": layers >= 3, "detail": f"layers={layers}"},
+        {"name": "geometry_matches_session", "ok": width == expected_cols and height == expected_rows, "detail": f"xp={width}x{height} session={expected_cols}x{expected_rows}"},
+        {"name": "visual_nonempty", "ok": populated > 0, "detail": f"populated={populated}"},
+    ]
+    # Metadata check from top row of metadata layer is intentionally light-weight here:
+    # session is the authoritative workbench state at export time.
+    checks.append({"name": "session_angles_valid", "ok": expected_angles >= 1, "detail": f"angles={expected_angles}"})
+    checks.append({"name": "session_anims_valid", "ok": len(expected_anims) >= 1 and all(x >= 1 for x in expected_anims), "detail": f"anims={expected_anims}"})
+    passed = all(bool(c["ok"]) for c in checks)
+    lines = ["[VERIFY] Local XP sanity verifier", f"[VERIFY] xp={xp_path}", f"[VERIFY] layers={layers} width={width} height={height} populated={populated}"]
+    for c in checks:
+        tag = "PASS" if c["ok"] else "FAIL"
+        lines.append(f"[{tag}] {c['name']}: {c['detail']}")
+    lines.append(f"[VERIFY] Overall: {'PASS' if passed else 'FAIL'}")
+    return {
+        "profile": "local_xp_sanity",
+        "passed": passed,
+        "exit_code": 0 if passed else 1,
+        "command": None,
+        "cwd": str(ROOT.resolve()),
+        "stdout": "\n".join(lines),
+        "stderr": "",
+        "checks": checks,
+        "stats": {
+            "layers": layers,
+            "width": width,
+            "height": height,
+            "visual_populated_cells": populated,
+            "angles": expected_angles,
+            "anims": expected_anims,
+        },
+    }
+
+
+def _workbench_verify_custom_shell(xp_path: Path, profile: str, command_template: str, timeout_sec: int, req_id: str) -> dict[str, Any]:
+    template = str(command_template or "").strip()
+    if not template:
+        raise ApiError("command_template is required for custom verification", "missing_command_template", "workbench", req_id, 422)
+    legacy_root = _resolve_legacy_repo_root()
+    try:
+        command = template.format(
+            xp_path=str(xp_path.resolve()),
+            legacy_repo_root=str(legacy_root),
+            pipeline_repo_root=str(ROOT.resolve()),
+        )
+    except KeyError as e:
+        raise ApiError(f"invalid command_template placeholder: {e}", "invalid_command_template", "workbench", req_id, 422)
+    env = os.environ.copy()
+    env.setdefault("PIPELINE_V2_ROOT", str(ROOT.resolve()))
+    env.setdefault("ASCIICKER_LEGACY_ROOT", str(legacy_root))
+    started = time.time()
+    try:
+        proc = subprocess.run(
+            command,
+            cwd=str(ROOT.resolve()),
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=max(1, int(timeout_sec)),
+            env=env,
+        )
+        timed_out = False
+        code = int(proc.returncode)
+        stdout = proc.stdout or ""
+        stderr = proc.stderr or ""
+    except subprocess.TimeoutExpired as e:
+        timed_out = True
+        code = 124
+        stdout = e.stdout or ""
+        stderr = (e.stderr or "") + f"\n[workbench] verification timed out after {int(timeout_sec)}s"
+    duration_ms = int((time.time() - started) * 1000)
+    return {
+        "profile": profile,
+        "passed": (not timed_out and code == 0),
+        "exit_code": code,
+        "timed_out": timed_out,
+        "command": command,
+        "cwd": str(ROOT.resolve()),
+        "stdout": stdout,
+        "stderr": stderr,
+        "duration_ms": duration_ms,
+        "checks": [],
+        "stats": {},
+    }
 
 
 def _suggest_run_geometry(
@@ -1303,6 +1591,322 @@ def workbench_open_in_xp_tool(xp_path: str, req_id: str, dry_run: bool = False) 
         "launched": True,
         "dry_run": False,
         "pid": int(proc.pid),
+    }
+
+
+def workbench_run_verification(
+    session_id: str,
+    req_id: str,
+    profile: str = "local_xp_sanity",
+    command_template: str = "",
+    timeout_sec: int = 20,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    p = _session_path(session_id)
+    if not p.exists():
+        raise ApiError("session not found", "session_not_found", "workbench", req_id, 404)
+    sess = load_json(p)
+    export = workbench_export_xp(session_id, req_id)
+    xp_path = Path(export["xp_path"]).expanduser().resolve()
+    profile_key = str(profile or "local_xp_sanity").strip() or "local_xp_sanity"
+    timeout_sec = max(1, min(300, int(timeout_sec or 20)))
+
+    legacy_root = _resolve_legacy_repo_root()
+    suggested_templates = {
+        "termpp_custom": "cd {legacy_repo_root} && <PASTE_TERMPP_VERIFY_COMMAND_USING_{xp_path}>",
+        "legacy_verify_e2e": "cd {legacy_repo_root} && PYTHONPATH={legacy_repo_root} python3 scripts/verify_e2e.py --xp-path \"{xp_path}\"",
+    }
+
+    if dry_run:
+        if profile_key == "local_xp_sanity":
+            command_preview = None
+            cwd = str(ROOT.resolve())
+        else:
+            tpl = command_template or suggested_templates.get(profile_key, command_template)
+            if not tpl:
+                tpl = suggested_templates["termpp_custom"]
+            try:
+                command_preview = str(tpl).format(
+                    xp_path=str(xp_path),
+                    legacy_repo_root=str(legacy_root),
+                    pipeline_repo_root=str(ROOT.resolve()),
+                )
+            except Exception:
+                command_preview = str(tpl)
+            cwd = str(ROOT.resolve())
+        return {
+            "session_id": session_id,
+            "xp_path": str(xp_path),
+            "checksum": export["checksum"],
+            "profile": profile_key,
+            "dry_run": True,
+            "timeout_sec": timeout_sec,
+            "command": command_preview,
+            "cwd": cwd,
+            "legacy_repo_root": str(legacy_root),
+            "suggested_templates": suggested_templates,
+        }
+
+    if profile_key == "local_xp_sanity":
+        result = _workbench_verify_local_xp_sanity(xp_path, sess)
+        result["duration_ms"] = int(result.get("duration_ms") or 0)
+        result["timed_out"] = False
+    elif profile_key in {"termpp_custom", "legacy_verify_e2e"}:
+        tpl = command_template or suggested_templates.get(profile_key, "")
+        result = _workbench_verify_custom_shell(xp_path, profile_key, tpl, timeout_sec, req_id)
+    else:
+        raise ApiError(f"unknown verification profile: {profile_key}", "invalid_verification_profile", "workbench", req_id, 422)
+
+    WORKBENCH_VERIFY_DIR.mkdir(parents=True, exist_ok=True)
+    ts = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    report_path = WORKBENCH_VERIFY_DIR / f"{session_id}-{profile_key}-{ts}.json"
+    report = {
+        "session_id": session_id,
+        "request_id": req_id,
+        "profile": profile_key,
+        "xp_path": str(xp_path),
+        "checksum": export["checksum"],
+        "legacy_repo_root": str(legacy_root),
+        "dry_run": False,
+        **result,
+    }
+    save_json(report_path, report)
+    report["report_path"] = str(report_path.resolve())
+    report["suggested_templates"] = suggested_templates
+    return report
+
+
+def workbench_termpp_skin_command(session_id: str, req_id: str, binary_name: str = "game_term") -> dict[str, Any]:
+    p = _session_path(session_id)
+    if not p.exists():
+        raise ApiError("session not found", "session_not_found", "workbench", req_id, 404)
+    export = workbench_export_xp(session_id, req_id)
+    xp_path = Path(export["xp_path"]).expanduser().resolve()
+    legacy_root = _resolve_legacy_repo_root()
+    try:
+        termpp_bin = _resolve_termpp_binary(legacy_root, binary_name=binary_name)
+    except Exception as e:
+        raise ApiError(str(e), "termpp_binary_missing", "workbench", req_id, 500)
+    run_id = f"{session_id}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}"
+    runtime_root = WORKBENCH_TERMPP_DIR / run_id
+    cmd = [str((runtime_root / ".run" / termpp_bin.name).resolve())]
+    return {
+        "session_id": session_id,
+        "xp_path": str(xp_path),
+        "checksum": export["checksum"],
+        "legacy_root": str(legacy_root),
+        "binary_name": termpp_bin.name,
+        "planned_runtime_root": str(runtime_root.resolve()),
+        "planned_command": " ".join(shlex.quote(x) for x in cmd),
+        "notes": [
+            "Sandbox runtime will be created under pipeline-v2/output/termpp_skin_runs",
+            "Original legacy sprites are not modified",
+            "Current exported XP will be staged into common player skin filenames inside sandbox sprites/",
+        ],
+    }
+
+
+def workbench_open_termpp_skin(session_id: str, req_id: str, binary_name: str = "game_term", dry_run: bool = False) -> dict[str, Any]:
+    p = _session_path(session_id)
+    if not p.exists():
+        raise ApiError("session not found", "session_not_found", "workbench", req_id, 404)
+    export = workbench_export_xp(session_id, req_id)
+    xp_path = Path(export["xp_path"]).expanduser().resolve()
+    legacy_root = _resolve_legacy_repo_root()
+    try:
+        termpp_bin = _resolve_termpp_binary(legacy_root, binary_name=binary_name)
+    except Exception as e:
+        raise ApiError(str(e), "termpp_binary_missing", "workbench", req_id, 500)
+
+    run_id = f"{session_id}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}"
+    planned_runtime_root = WORKBENCH_TERMPP_DIR / run_id
+    if dry_run:
+        planned_cmd = [str((planned_runtime_root / ".run" / termpp_bin.name).resolve())]
+        return {
+            "session_id": session_id,
+            "xp_path": str(xp_path),
+            "checksum": export["checksum"],
+            "legacy_root": str(legacy_root),
+            "binary_name": termpp_bin.name,
+            "runtime_root": str(planned_runtime_root.resolve()),
+            "command": " ".join(shlex.quote(x) for x in planned_cmd),
+            "dry_run": True,
+            "launched": False,
+            "notes": [
+                "Dry run only; sandbox not created",
+                "Launch creates isolated runtime and stages XP skin into sandbox sprites/",
+            ],
+        }
+
+    try:
+        stage = _stage_termpp_skin_sandbox(legacy_root, xp_path, run_id, termpp_bin.name)
+        argv = [stage["runtime_binary"]]
+        proc = subprocess.Popen(
+            argv,
+            cwd=stage["runtime_root"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except ApiError:
+        raise
+    except Exception as e:
+        raise ApiError(f"failed to launch TERM++ skin runtime: {e}", "termpp_skin_launch_failed", "workbench", req_id, 500)
+
+    return {
+        "session_id": session_id,
+        "xp_path": str(xp_path),
+        "checksum": export["checksum"],
+        "binary_name": termpp_bin.name,
+        "dry_run": False,
+        "launched": True,
+        "pid": int(proc.pid),
+        **stage,
+        "command": shlex.quote(stage["runtime_binary"]),
+    }
+
+
+def workbench_termpp_stream_start(
+    session_id: str,
+    req_id: str,
+    region_x: int,
+    region_y: int,
+    region_w: int,
+    region_h: int,
+    fps: int = 4,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    p = _session_path(session_id)
+    if not p.exists():
+        raise ApiError("session not found", "session_not_found", "workbench", req_id, 404)
+    if os.uname().sysname != "Darwin":
+        raise ApiError("TERM++ embed stream currently supports macOS screencapture only", "termpp_stream_unsupported_os", "workbench", req_id, 422)
+
+    x = int(region_x)
+    y = int(region_y)
+    w = int(region_w)
+    h = int(region_h)
+    fps = max(1, min(30, int(fps or 4)))
+    if w < 16 or h < 16:
+        raise ApiError("stream region must be at least 16x16", "invalid_stream_region", "workbench", req_id, 422)
+    if x < 0 or y < 0:
+        raise ApiError("stream region x/y must be >= 0", "invalid_stream_region", "workbench", req_id, 422)
+
+    WORKBENCH_STREAM_DIR.mkdir(parents=True, exist_ok=True)
+    stream_id = str(uuid.uuid4())
+    stream_dir = WORKBENCH_STREAM_DIR / stream_id
+    stream_dir.mkdir(parents=True, exist_ok=True)
+    frame_path = stream_dir / "latest.png"
+    region = {"x": x, "y": y, "w": w, "h": h}
+
+    if dry_run:
+        return {
+            "stream_id": stream_id,
+            "session_id": session_id,
+            "dry_run": True,
+            "fps": fps,
+            "region": region,
+            "command_preview": _stream_capture_command(region, frame_path),
+            "frame_path": str(frame_path.resolve()),
+            "notes": [
+                "Grant Screen Recording permission to the terminal/Codex app if prompted",
+                "This is a view-only embed stream (no input forwarding yet)",
+            ],
+        }
+
+    stop_evt = threading.Event()
+    rec = {
+        "stream_id": stream_id,
+        "session_id": session_id,
+        "fps": fps,
+        "region": region,
+        "frame_path": str(frame_path),
+        "created_at": time.time(),
+        "last_frame_ts": None,
+        "last_error": None,
+        "frame_count": 0,
+        "running": True,
+        "stop_event": stop_evt,
+        "thread": None,
+    }
+    th = threading.Thread(target=_termpp_stream_worker, args=(stream_id,), name=f"termpp-stream-{stream_id[:8]}", daemon=True)
+    rec["thread"] = th
+    with _TERM_STREAM_LOCK:
+        _TERM_STREAMS[stream_id] = rec
+    th.start()
+    out = _termpp_stream_record_view(rec)
+    out["dry_run"] = False
+    return out
+
+
+def workbench_termpp_stream_stop(stream_id: str, req_id: str) -> dict[str, Any]:
+    sid = str(stream_id or "").strip()
+    if not sid:
+        raise ApiError("stream_id is required", "missing_stream_id", "workbench", req_id, 400)
+    with _TERM_STREAM_LOCK:
+        rec = _TERM_STREAMS.get(sid)
+        if not rec:
+            raise ApiError("stream not found", "stream_not_found", "workbench", req_id, 404)
+        rec["stop_event"].set()
+        rec["running"] = False
+        out = _termpp_stream_record_view(rec)
+    out["stopped"] = True
+    return out
+
+
+def workbench_termpp_stream_status(stream_id: str, req_id: str) -> dict[str, Any]:
+    sid = str(stream_id or "").strip()
+    if not sid:
+        raise ApiError("stream_id is required", "missing_stream_id", "workbench", req_id, 400)
+    with _TERM_STREAM_LOCK:
+        rec = _TERM_STREAMS.get(sid)
+        if not rec:
+            raise ApiError("stream not found", "stream_not_found", "workbench", req_id, 404)
+        return _termpp_stream_record_view(rec)
+
+
+def workbench_termpp_stream_frame_path(stream_id: str, req_id: str) -> Path:
+    sid = str(stream_id or "").strip()
+    if not sid:
+        raise ApiError("stream_id is required", "missing_stream_id", "workbench", req_id, 400)
+    with _TERM_STREAM_LOCK:
+        rec = _TERM_STREAMS.get(sid)
+        if not rec:
+            raise ApiError("stream not found", "stream_not_found", "workbench", req_id, 404)
+        p = Path(rec["frame_path"]).expanduser().resolve()
+    if not p.exists():
+        raise ApiError("stream frame not ready", "stream_frame_not_ready", "workbench", req_id, 404)
+    return p
+
+
+def workbench_web_skin_payload(session_id: str, req_id: str) -> dict[str, Any]:
+    p = _session_path(session_id)
+    if not p.exists():
+        raise ApiError("session not found", "session_not_found", "workbench", req_id, 404)
+    export = workbench_export_xp(session_id, req_id)
+    xp_path = Path(export["xp_path"]).expanduser().resolve()
+    try:
+        raw = xp_path.read_bytes()
+    except Exception as e:
+        raise ApiError(f"failed reading exported xp: {e}", "xp_read_failed", "workbench", req_id, 500)
+    # Mirrors the disk-based TERM++ sandbox override set; web build skin reload can use same names.
+    override_names = [
+        "player-nude.xp",
+        "player-0000.xp",
+        "plydie-0000.xp",
+        "attack-0000.xp",
+        "wolfie-0000.xp",
+        "wolack-0000.xp",
+    ]
+    return {
+        "session_id": session_id,
+        "xp_path": str(xp_path),
+        "checksum": export["checksum"],
+        "xp_size_bytes": len(raw),
+        "xp_b64": base64.b64encode(raw).decode("ascii"),
+        "override_names": override_names,
+        "reload_player_name": "player",
     }
 
 

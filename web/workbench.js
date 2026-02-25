@@ -5,6 +5,8 @@
   const $ = (id) => document.getElementById(id);
   const params = new URLSearchParams(window.location.search);
   const DEFAULT_LAYER_NAMES = ["Metadata", "Layer 1", "Visual", "Layer 3"];
+  const VERIFY_CMD_TEMPLATE_STORAGE_KEY = "wb_verify_command_template_v1";
+  const TERM_STREAM_REGION_STORAGE_KEY = "wb_termpp_stream_region_v1";
 
   const state = {
     jobId: params.get("job_id") || "",
@@ -52,10 +54,30 @@
     inspectorRow: 0,
     inspectorCol: 0,
     inspectorZoom: 10,
+    inspectorTool: "inspect",
+    inspectorPaintColor: [255, 255, 255],
+    inspectorPainting: false,
+    inspectorShowGrid: true,
+    inspectorShowChecker: false,
+    inspectorFrameClipboard: null,
     history: [],
     future: [],
     previewTimer: null,
     previewFrameIdx: 0,
+    termppStream: {
+      id: null,
+      pollTimer: null,
+      imgTimer: null,
+      running: false,
+    },
+    webbuild: {
+      src: "/termpp-web-flat/index.html?solo=1&player=player",
+      loaded: false,
+      ready: false,
+      readyPoll: null,
+      uploadedXpBytes: null,
+      uploadedXpName: "",
+    },
   };
 
   function status(text, cls) {
@@ -68,6 +90,605 @@
     const el = $("xpToolCommandHint");
     if (!el) return;
     el.textContent = text;
+  }
+
+  function verifyProfileRequiresCommand(profile) {
+    return profile === "termpp_custom" || profile === "legacy_verify_e2e";
+  }
+
+  function defaultVerifyTemplate(profile) {
+    if (profile === "legacy_verify_e2e") {
+      return 'cd {legacy_repo_root} && PYTHONPATH={legacy_repo_root} python3 scripts/verify_e2e.py --xp-path "{xp_path}"';
+    }
+    if (profile === "termpp_custom") {
+      return 'cd {legacy_repo_root} && <PASTE_TERMPP_VERIFY_COMMAND> "{xp_path}"';
+    }
+    return "";
+  }
+
+  function updateVerifyUI() {
+    const profileEl = $("verifyProfile");
+    const cmdEl = $("verifyCommandTemplate");
+    const runBtn = $("verifyRunBtn");
+    const dryBtn = $("verifyDryRunBtn");
+    const hint = $("verifyHint");
+    if (!profileEl || !cmdEl || !runBtn || !dryBtn) return;
+    const profile = String(profileEl.value || "local_xp_sanity");
+    const needsCmd = verifyProfileRequiresCommand(profile);
+    cmdEl.disabled = !needsCmd;
+    if (!needsCmd) {
+      cmdEl.placeholder = "Built-in verifier does not require a command template";
+    } else if (profile === "legacy_verify_e2e") {
+      cmdEl.placeholder = 'Legacy script (experimental): cd {legacy_repo_root} && ... "{xp_path}"';
+      if (!cmdEl.value.trim()) cmdEl.value = defaultVerifyTemplate(profile);
+    } else {
+      cmdEl.placeholder = 'Custom Term++ command using {xp_path} (and optionally {legacy_repo_root}, {pipeline_repo_root})';
+    }
+    const sessionReady = !!state.sessionId;
+    runBtn.disabled = !sessionReady;
+    dryBtn.disabled = !sessionReady;
+    if (hint) {
+      if (profile === "local_xp_sanity") {
+        hint.textContent = "Built-in verifier: exports current session XP and checks XP structure/geometry/non-empty visual cells. Use this for quick regressions.";
+      } else if (profile === "legacy_verify_e2e") {
+        hint.textContent = "Experimental legacy verifier wrapper. It may fail depending on legacy repo environment. Use Dry Run first to inspect the exact command.";
+      } else {
+        hint.textContent = "Custom Term++ verifier: exports current session XP, then runs your command template. Include {xp_path} where the exported XP file path should be inserted.";
+      }
+    }
+  }
+
+  function updateTermppSkinUI() {
+    const sessionReady = !!state.sessionId;
+    const cmdBtn = $("termppSkinCmdBtn");
+    const launchBtn = $("termppSkinLaunchBtn");
+    if (cmdBtn) cmdBtn.disabled = !sessionReady;
+    if (launchBtn) launchBtn.disabled = !sessionReady;
+    if ($("termppStreamPreviewBtn")) $("termppStreamPreviewBtn").disabled = !sessionReady;
+    if ($("termppStreamStartBtn")) $("termppStreamStartBtn").disabled = !sessionReady;
+    if ($("termppStreamStopBtn")) $("termppStreamStopBtn").disabled = !state.termppStream.id;
+  }
+
+  function setWebbuildState(text, cls) {
+    const el = $("webbuildState");
+    if (!el) return;
+    el.className = "small " + (cls || "");
+    el.textContent = text;
+  }
+
+  function webbuildFrameWindow() {
+    const frame = $("webbuildFrame");
+    return frame && frame.contentWindow ? frame.contentWindow : null;
+  }
+
+  function readWebbuildLoadingDetail(win) {
+    if (!win) return "";
+    try {
+      const statusEl = win.document && win.document.getElementById ? win.document.getElementById("status") : null;
+      const progressEl = win.document && win.document.getElementById ? win.document.getElementById("progress") : null;
+      const statusText = statusEl && statusEl.textContent ? String(statusEl.textContent).trim() : "";
+      const pHidden = !!(progressEl && progressEl.hidden);
+      const pVal = progressEl && Number.isFinite(Number(progressEl.value)) ? Number(progressEl.value) : null;
+      const pMax = progressEl && Number.isFinite(Number(progressEl.max)) ? Number(progressEl.max) : null;
+      let prog = "";
+      if (!pHidden && pVal != null && pMax != null && pMax > 0) {
+        prog = ` ${Math.round((pVal / pMax) * 100)}%`;
+      }
+      const moduleStatus = win.Module && win.Module.setStatus && win.Module.setStatus.last && win.Module.setStatus.last.text
+        ? String(win.Module.setStatus.last.text).trim()
+        : "";
+      const text = statusText || moduleStatus;
+      return text ? `${text}${prog}`.trim() : "";
+    } catch (_e) {
+      return "";
+    }
+  }
+
+  function stopWebbuildReadyPoll() {
+    if (state.webbuild.readyPoll) {
+      clearInterval(state.webbuild.readyPoll);
+      state.webbuild.readyPoll = null;
+    }
+  }
+
+  function updateWebbuildUI() {
+    const applyBtn = $("webbuildApplySkinBtn");
+    if (applyBtn) applyBtn.disabled = !(state.sessionId && state.webbuild.ready);
+    const quickBtn = $("webbuildQuickTestBtn");
+    if (quickBtn) quickBtn.disabled = !(state.sessionId);
+  }
+
+  function detectWebbuildReady() {
+    const win = webbuildFrameWindow();
+    if (!win) return false;
+    try {
+      const hasModule = !!win.Module;
+      const calledRun = !!(win.Module && win.Module.calledRun);
+      const hasLoad = typeof win.Load === "function";
+      const hasFSOps = !!(win.Module && typeof win.Module.FS_createDataFile === "function" && typeof win.Module.FS_unlink === "function");
+      const ready = hasModule && calledRun && hasLoad && hasFSOps;
+      state.webbuild.ready = ready;
+      updateWebbuildUI();
+      if (ready) {
+        setWebbuildState("Webbuild ready", "ok");
+        stopWebbuildReadyPoll();
+      } else {
+        const detail = readWebbuildLoadingDetail(win);
+        setWebbuildState(detail ? `Webbuild loading... ${detail}` : "Webbuild loading... (first load may take 5-30s)", "warn");
+      }
+      return ready;
+    } catch (e) {
+      state.webbuild.ready = false;
+      updateWebbuildUI();
+      setWebbuildState(`Webbuild access error (${e})`, "err");
+      return false;
+    }
+  }
+
+  function openWebbuild() {
+    const frame = $("webbuildFrame");
+    if (!frame) return;
+    frame.classList.remove("hidden");
+    state.webbuild.loaded = true;
+    state.webbuild.ready = false;
+    updateWebbuildUI();
+    setWebbuildState("Opening flat arena preview... (first load downloads ~24MB)", "warn");
+    stopWebbuildReadyPoll();
+    frame.src = state.webbuild.src;
+    state.webbuild.readyPoll = setInterval(detectWebbuildReady, 500);
+  }
+
+  function reloadWebbuild() {
+    const frame = $("webbuildFrame");
+    if (!frame) return;
+    if (frame.classList.contains("hidden")) frame.classList.remove("hidden");
+    state.webbuild.ready = false;
+    updateWebbuildUI();
+    setWebbuildState("Reloading webbuild...", "warn");
+    stopWebbuildReadyPoll();
+    try {
+      frame.contentWindow?.location.reload();
+    } catch (_e) {
+      frame.src = state.webbuild.src;
+    }
+    state.webbuild.readyPoll = setInterval(detectWebbuildReady, 500);
+  }
+
+  function b64ToUint8Array(b64) {
+    const bin = atob(String(b64 || ""));
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  async function waitForWebbuildReady(timeoutMs = 25000) {
+    if (!state.webbuild.loaded) openWebbuild();
+    const t0 = Date.now();
+    while (Date.now() - t0 < timeoutMs) {
+      if (detectWebbuildReady()) return true;
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    return false;
+  }
+
+  async function injectXpBytesIntoWebbuild(win, xpBytes, opts = {}) {
+    if (!win || !win.Module) throw new Error("webbuild iframe is not ready");
+    if (!(xpBytes instanceof Uint8Array) || !xpBytes.length) throw new Error("empty xp payload");
+    const M = win.Module;
+    if (win.__termppFlatMap && typeof win.__termppFlatMap.apply === "function") {
+      try {
+        await win.__termppFlatMap.apply(true);
+      } catch (_e) {
+        // Fall through: skin injection can still proceed on non-flat bundles.
+      }
+    }
+    if (typeof M.FS_createPath === "function") {
+      try { M.FS_createPath("/", "sprites", true, true); } catch (_e) {}
+    }
+    const names = Array.isArray(opts.override_names) ? opts.override_names : [];
+    const playerName = String(opts.reload_player_name || "player");
+    for (const name of names) {
+      try { M.FS_unlink(`/sprites/${name}`); } catch (_e) {}
+      M.FS_createDataFile("/sprites", name, xpBytes, true, true, true);
+    }
+    if (typeof win.Load === "function") win.Load(playerName);
+    if (typeof win.Resize === "function") {
+      try { win.Resize(null); } catch (_e) {}
+    }
+    if (typeof win.ak_canvas !== "undefined" && win.ak_canvas && typeof win.ak_canvas.focus === "function") {
+      try { win.ak_canvas.focus(); } catch (_e) {}
+    }
+    try {
+      const loginOverlay = win.document && win.document.getElementById ? win.document.getElementById("login-overlay") : null;
+      const playBtn = win.document && win.document.getElementById ? win.document.getElementById("play-btn") : null;
+      const playerInput = win.document && win.document.getElementById ? win.document.getElementById("player-name") : null;
+      const serverInput = win.document && win.document.getElementById ? win.document.getElementById("server-addr") : null;
+      const overlayVisible = !!(loginOverlay && loginOverlay.style && loginOverlay.style.display !== "none");
+      if (overlayVisible && typeof win.StartGame === "function") {
+        if (playerInput && !String(playerInput.value || "").trim()) playerInput.value = playerName;
+        if (serverInput) serverInput.value = "";
+        if (playBtn) playBtn.disabled = false;
+        win.StartGame();
+      }
+    } catch (_e) {}
+    return { bytes: xpBytes.length, files_written: names.length, player_name: playerName };
+  }
+
+  async function injectXpIntoWebbuild(win, payload) {
+    const xpBytes = b64ToUint8Array(payload.xp_b64 || "");
+    return await injectXpBytesIntoWebbuild(win, xpBytes, {
+      override_names: Array.isArray(payload.override_names) ? payload.override_names : [],
+      reload_player_name: String(payload.reload_player_name || "player"),
+    });
+  }
+
+  async function applyCurrentXpAsWebSkin() {
+    if (!state.sessionId) {
+      status("Load a workbench session first", "warn");
+      return;
+    }
+    if (!(await waitForWebbuildReady())) {
+      status("Webbuild not ready yet; wait for load to finish", "warn");
+      return;
+    }
+    try {
+      await saveSessionState("pre-web-skin-apply");
+      status("Exporting XP and applying web skin...", "warn");
+      const r = await fetch("/api/workbench/web-skin-payload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: state.sessionId }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        $("webbuildOut").textContent = JSON.stringify(j, null, 2);
+        status("Web skin payload failed", "err");
+        return;
+      }
+      const win = webbuildFrameWindow();
+      const inject = await injectXpIntoWebbuild(win, j);
+      $("webbuildOut").textContent = JSON.stringify({ payload: { ...j, xp_b64: `(<${(j.xp_b64 || "").length} base64 chars>)` }, inject }, null, 2);
+      status("Applied XP as web skin", "ok");
+      setWebbuildState("Webbuild ready (skin applied)", "ok");
+    } catch (e) {
+      $("webbuildOut").textContent = String(e);
+      status("Web skin apply failed", "err");
+    }
+  }
+
+  async function onWebbuildUploadTestClick() {
+    const input = $("webbuildUploadTestInput");
+    if (!input) return;
+    input.value = "";
+    input.click();
+  }
+
+  async function applyUploadedXpBytesToWebbuild(fileName, xpBytes) {
+    if (!(await waitForWebbuildReady())) {
+      status("Webbuild not ready; preview failed to load", "err");
+      return;
+    }
+    try {
+      const win = webbuildFrameWindow();
+      const override_names = [
+        "player-nude.xp",
+        "player-0000.xp",
+        "attack-0000.xp",
+        "plydie-0000.xp",
+        "wolfie-0000.xp",
+        "wolack-0000.xp",
+      ];
+      const inject = await injectXpBytesIntoWebbuild(win, xpBytes, {
+        override_names,
+        reload_player_name: "player",
+      });
+      state.webbuild.uploadedXpBytes = xpBytes;
+      state.webbuild.uploadedXpName = fileName || "upload.xp";
+      $("webbuildOut").textContent = JSON.stringify({
+        mode: "upload_test_skin",
+        file: state.webbuild.uploadedXpName,
+        inject,
+      }, null, 2);
+      status(`Uploaded test skin applied: ${state.webbuild.uploadedXpName}`, "ok");
+      setWebbuildState("Webbuild ready (uploaded skin applied)", "ok");
+    } catch (e) {
+      $("webbuildOut").textContent = String(e);
+      status("Upload test skin failed", "err");
+    }
+  }
+
+  async function onWebbuildUploadTestInputChange(e) {
+    const file = e && e.target && e.target.files && e.target.files[0] ? e.target.files[0] : null;
+    if (!file) return;
+    try {
+      const ab = await file.arrayBuffer();
+      await applyUploadedXpBytesToWebbuild(file.name || "upload.xp", new Uint8Array(ab));
+    } catch (err) {
+      $("webbuildOut").textContent = String(err);
+      status("Upload test skin failed to read file", "err");
+    }
+  }
+
+  function moveWebbuildDockToBottom() {
+    const dock = $("webbuildDockPanel");
+    const inspector = $("cellInspectorPanel");
+    if (!dock || !inspector || !inspector.parentElement || dock.parentElement !== inspector.parentElement) return;
+    inspector.parentElement.insertBefore(dock, inspector);
+  }
+
+  function movePanelsToBottom() {
+    const root = $("cellInspectorPanel")?.parentElement;
+    if (!root) return;
+    const ids = ["termppNativePanel", "verificationPanel"];
+    for (const id of ids) {
+      const el = $(id);
+      if (el && el.parentElement === root) root.appendChild(el);
+    }
+  }
+
+  function termppStreamRegionPayload() {
+    return {
+      x: Math.max(0, Number($("termppStreamX")?.value || 0)),
+      y: Math.max(0, Number($("termppStreamY")?.value || 0)),
+      w: Math.max(16, Number($("termppStreamW")?.value || 960)),
+      h: Math.max(16, Number($("termppStreamH")?.value || 640)),
+      fps: Math.max(1, Math.min(30, Number($("termppStreamFps")?.value || 4))),
+    };
+  }
+
+  function persistTermppStreamRegion() {
+    try {
+      localStorage.setItem(TERM_STREAM_REGION_STORAGE_KEY, JSON.stringify(termppStreamRegionPayload()));
+    } catch (_e) {}
+  }
+
+  function loadPersistedTermppStreamRegion() {
+    try {
+      const raw = localStorage.getItem(TERM_STREAM_REGION_STORAGE_KEY);
+      if (!raw) return;
+      const j = JSON.parse(raw);
+      if (Number.isFinite(Number(j.x))) $("termppStreamX").value = String(Math.max(0, Number(j.x)));
+      if (Number.isFinite(Number(j.y))) $("termppStreamY").value = String(Math.max(0, Number(j.y)));
+      if (Number.isFinite(Number(j.w))) $("termppStreamW").value = String(Math.max(16, Number(j.w)));
+      if (Number.isFinite(Number(j.h))) $("termppStreamH").value = String(Math.max(16, Number(j.h)));
+      if (Number.isFinite(Number(j.fps))) $("termppStreamFps").value = String(Math.max(1, Math.min(30, Number(j.fps))));
+    } catch (_e) {}
+  }
+
+  function stopTermppStreamPolling() {
+    if (state.termppStream.pollTimer) {
+      clearInterval(state.termppStream.pollTimer);
+      state.termppStream.pollTimer = null;
+    }
+    if (state.termppStream.imgTimer) {
+      clearInterval(state.termppStream.imgTimer);
+      state.termppStream.imgTimer = null;
+    }
+  }
+
+  function refreshTermppStreamImage() {
+    if (!state.termppStream.id) return;
+    const img = $("termppStreamImg");
+    if (!img) return;
+    img.style.display = "block";
+    img.src = `/api/workbench/termpp-stream/frame/${encodeURIComponent(state.termppStream.id)}?t=${Date.now()}`;
+  }
+
+  async function pollTermppStreamStatus() {
+    if (!state.termppStream.id) return;
+    try {
+      const r = await fetch(`/api/workbench/termpp-stream/status/${encodeURIComponent(state.termppStream.id)}`);
+      const j = await r.json();
+      if (!r.ok) {
+        $("termppStreamInfo").textContent = `stream status error: ${j.error || "request failed"}`;
+        return;
+      }
+      state.termppStream.running = !!j.running;
+      const last = j.last_frame_ts ? new Date(j.last_frame_ts * 1000).toLocaleTimeString() : "n/a";
+      $("termppStreamInfo").textContent = `stream=${j.stream_id} running=${j.running ? 1 : 0} frames=${j.frame_count} last=${last}${j.last_error ? ` error=${j.last_error}` : ""}`;
+      if (j.region) {
+        $("termppStreamX").value = String(j.region.x);
+        $("termppStreamY").value = String(j.region.y);
+        $("termppStreamW").value = String(j.region.w);
+        $("termppStreamH").value = String(j.region.h);
+      }
+      if (j.has_frame) refreshTermppStreamImage();
+      if (!j.running) updateTermppSkinUI();
+    } catch (e) {
+      $("termppStreamInfo").textContent = `stream poll error: ${e}`;
+    }
+  }
+
+  function attachTermppStreamToUi(streamId) {
+    stopTermppStreamPolling();
+    state.termppStream.id = streamId || null;
+    state.termppStream.running = !!streamId;
+    if (!streamId) {
+      $("termppStreamInfo").textContent = "";
+      const img = $("termppStreamImg");
+      if (img) {
+        img.style.display = "none";
+        img.removeAttribute("src");
+      }
+      updateTermppSkinUI();
+      return;
+    }
+    refreshTermppStreamImage();
+    state.termppStream.pollTimer = setInterval(pollTermppStreamStatus, 1000);
+    state.termppStream.imgTimer = setInterval(refreshTermppStreamImage, 350);
+    pollTermppStreamStatus();
+    updateTermppSkinUI();
+  }
+
+  async function previewTermppEmbedStream() {
+    if (!state.sessionId) {
+      status("Load a workbench session first", "warn");
+      return;
+    }
+    persistTermppStreamRegion();
+    const region = termppStreamRegionPayload();
+    try {
+      const r = await fetch("/api/workbench/termpp-stream/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: state.sessionId, dry_run: true, ...region }),
+      });
+      const j = await r.json();
+      $("termppSkinOut").textContent = JSON.stringify(j, null, 2);
+      status(r.ok ? "TERM++ embed preview ready" : "TERM++ embed preview failed", r.ok ? "ok" : "err");
+    } catch (e) {
+      $("termppSkinOut").textContent = String(e);
+      status("TERM++ embed preview failed: fetch error", "err");
+    }
+  }
+
+  async function startTermppEmbedStream() {
+    if (!state.sessionId) {
+      status("Load a workbench session first", "warn");
+      return;
+    }
+    persistTermppStreamRegion();
+    const region = termppStreamRegionPayload();
+    try {
+      status("Starting TERM++ embed stream...", "warn");
+      const r = await fetch("/api/workbench/termpp-stream/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: state.sessionId, dry_run: false, ...region }),
+      });
+      const j = await r.json();
+      $("termppSkinOut").textContent = JSON.stringify(j, null, 2);
+      if (!r.ok) {
+        status("TERM++ embed stream failed to start", "err");
+        return;
+      }
+      attachTermppStreamToUi(j.stream_id);
+      status("TERM++ embed stream started", "ok");
+    } catch (e) {
+      $("termppSkinOut").textContent = String(e);
+      status("TERM++ embed stream failed: fetch error", "err");
+    }
+  }
+
+  async function stopTermppEmbedStream() {
+    if (!state.termppStream.id) return;
+    try {
+      const r = await fetch("/api/workbench/termpp-stream/stop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stream_id: state.termppStream.id }),
+      });
+      const j = await r.json();
+      $("termppSkinOut").textContent = JSON.stringify(j, null, 2);
+      attachTermppStreamToUi(null);
+      status(r.ok ? "TERM++ embed stream stopped" : "TERM++ embed stream stop failed", r.ok ? "ok" : "err");
+    } catch (e) {
+      $("termppSkinOut").textContent = String(e);
+      attachTermppStreamToUi(null);
+      status("TERM++ embed stream stop failed: fetch error", "err");
+    }
+  }
+
+  async function termppSkinCommandPreview() {
+    if (!state.sessionId) {
+      status("Load a workbench session first", "warn");
+      return;
+    }
+    try {
+      await saveSessionState("pre-termpp-skin-preview");
+      status("Preparing TERM++ skin launch preview...", "warn");
+      const r = await fetch("/api/workbench/termpp-skin-command", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: state.sessionId,
+          binary_name: String($("termppBinary")?.value || "game_term"),
+        }),
+      });
+      const j = await r.json();
+      $("termppSkinOut").textContent = JSON.stringify(j, null, 2);
+      status(r.ok ? "TERM++ skin preview ready" : "TERM++ skin preview failed", r.ok ? "ok" : "err");
+    } catch (e) {
+      $("termppSkinOut").textContent = String(e);
+      status("TERM++ skin preview failed: fetch error", "err");
+    }
+  }
+
+  async function launchTermppSkin() {
+    if (!state.sessionId) {
+      status("Load a workbench session first", "warn");
+      return;
+    }
+    try {
+      await saveSessionState("pre-termpp-skin-launch");
+      status("Launching TERM++ SKIN runtime...", "warn");
+      const r = await fetch("/api/workbench/open-termpp-skin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: state.sessionId,
+          binary_name: String($("termppBinary")?.value || "game_term"),
+          dry_run: false,
+        }),
+      });
+      const j = await r.json();
+      $("termppSkinOut").textContent = JSON.stringify(j, null, 2);
+      status(r.ok ? "TERM++ SKIN launch requested" : "TERM++ SKIN launch failed", r.ok ? "ok" : "err");
+    } catch (e) {
+      $("termppSkinOut").textContent = String(e);
+      status("TERM++ SKIN launch failed: fetch error", "err");
+    }
+  }
+
+  async function runWorkbenchVerification(dryRun) {
+    if (!state.sessionId) {
+      status("Load a workbench session first", "warn");
+      return;
+    }
+    const profile = String($("verifyProfile")?.value || "local_xp_sanity");
+    const commandTemplate = String($("verifyCommandTemplate")?.value || "");
+    const timeoutSec = Math.max(1, Math.min(300, Number($("verifyTimeout")?.value || 20)));
+    if (verifyProfileRequiresCommand(profile) && !commandTemplate.trim()) {
+      status("Verification command template is required for this profile", "warn");
+      return;
+    }
+    try {
+      await saveSessionState(dryRun ? "pre-verify-dry-run" : "pre-verify");
+      status(dryRun ? "Preparing verification dry run..." : "Running verification...", "warn");
+      const payload = {
+        session_id: state.sessionId,
+        profile,
+        command_template: commandTemplate,
+        timeout_sec: timeoutSec,
+        dry_run: !!dryRun,
+      };
+      const r = await fetch("/api/workbench/run-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const j = await r.json();
+      $("verifySummaryOut").textContent = JSON.stringify(j, null, 2);
+      const logs = [];
+      if (j.stdout) logs.push(String(j.stdout));
+      if (j.stderr) logs.push(`[stderr]\n${String(j.stderr)}`);
+      $("verifyLogOut").textContent = logs.join("\n\n");
+      if (!r.ok) {
+        status("Verification request failed", "err");
+        return;
+      }
+      if (dryRun) {
+        status("Verification dry run ready", "ok");
+        return;
+      }
+      status(
+        j.passed ? "Verification passed" : "Verification failed",
+        j.passed ? "ok" : "err"
+      );
+    } catch (e) {
+      $("verifyLogOut").textContent = String(e);
+      status("Verification failed: fetch error", "err");
+    }
   }
 
   async function refreshXpToolCommand(xpPath) {
@@ -193,8 +814,11 @@
     if (rapid) rapid.checked = !!state.rapidManualAdd;
     syncLayersFromSessionCells();
     recomputeFrameGeometry();
-    updateSourceToolUI();
-    renderAll();
+      updateSourceToolUI();
+      updateVerifyUI();
+      updateTermppSkinUI();
+      updateWebbuildUI();
+      renderAll();
   }
 
   function pushHistory() {
@@ -258,6 +882,97 @@
 
   function isMagenta(rgb) {
     return rgb[0] === 255 && rgb[1] === 0 && rgb[2] === 255;
+  }
+
+  function colorsEqual(a, b) {
+    if (!a && !b) return true;
+    if (!a || !b) return false;
+    return Number(a[0]) === Number(b[0]) && Number(a[1]) === Number(b[1]) && Number(a[2]) === Number(b[2]);
+  }
+
+  function rgbToHex(rgb) {
+    const r = Math.max(0, Math.min(255, Number(rgb?.[0] || 0)));
+    const g = Math.max(0, Math.min(255, Number(rgb?.[1] || 0)));
+    const b = Math.max(0, Math.min(255, Number(rgb?.[2] || 0)));
+    return `#${[r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+  }
+
+  function hexToRgb(hex) {
+    const s = String(hex || "").trim();
+    const m = /^#?([0-9a-fA-F]{6})$/.exec(s);
+    if (!m) return [255, 255, 255];
+    const n = m[1];
+    return [parseInt(n.slice(0, 2), 16), parseInt(n.slice(2, 4), 16), parseInt(n.slice(4, 6), 16)];
+  }
+
+  function decodeCellHalves(c) {
+    const glyph = Number(c?.glyph || 0);
+    const fg = Array.isArray(c?.fg) ? [...c.fg] : [0, 0, 0];
+    const bg = Array.isArray(c?.bg) ? [...c.bg] : [...MAGENTA];
+    const bgColor = isMagenta(bg) ? null : bg;
+    if (glyph === 219) return { top: fg, bottom: fg };
+    if (glyph === 223) return { top: fg, bottom: bgColor };
+    if (glyph === 220) return { top: bgColor, bottom: fg };
+    if (glyph === 0 || glyph === 32) return { top: bgColor, bottom: bgColor };
+    return { top: fg, bottom: fg };
+  }
+
+  function encodeCellHalves(top, bottom, prevCell) {
+    const prev = prevCell || { glyph: 0, fg: [255, 255, 255], bg: [...MAGENTA] };
+    const fgPrev = Array.isArray(prev.fg) ? [...prev.fg] : [255, 255, 255];
+    const out = { glyph: 0, fg: fgPrev, bg: [...MAGENTA] };
+    if (!top && !bottom) return out;
+    if (colorsEqual(top, bottom) && top) {
+      out.glyph = 219;
+      out.fg = [...top];
+      return out;
+    }
+    if (top && !bottom) {
+      out.glyph = 223;
+      out.fg = [...top];
+      out.bg = [...MAGENTA];
+      return out;
+    }
+    if (!top && bottom) {
+      out.glyph = 220;
+      out.fg = [...bottom];
+      out.bg = [...MAGENTA];
+      return out;
+    }
+    out.glyph = 223;
+    out.fg = [...top];
+    out.bg = [...bottom];
+    return out;
+  }
+
+  function updateInspectorToolUI() {
+    const map = [
+      ["inspectorToolInspectBtn", "inspect"],
+      ["inspectorToolPaintBtn", "paint"],
+      ["inspectorToolEraseBtn", "erase"],
+      ["inspectorToolDropperBtn", "dropper"],
+    ];
+    for (const [id, key] of map) {
+      const el = $(id);
+      if (!el) continue;
+      el.classList.toggle("tool-active", state.inspectorTool === key);
+    }
+    const colorInput = $("inspectorPaintColor");
+    if (colorInput) colorInput.value = rgbToHex(state.inspectorPaintColor);
+    const hint = $("inspectorToolHint");
+    if (!hint) return;
+    const clipState = state.inspectorFrameClipboard ? " Clipboard: frame copied." : "";
+    const base = `Embedded XP frame editor. Visual layer only. Shortcuts: P/E/I tools, Q/R angle nav, A/D frame nav, C copy, V paste, F flip-H, Delete clear.${clipState}`;
+    if (state.inspectorTool === "paint") hint.textContent = `${base} Drag to paint half-cells.`;
+    else if (state.inspectorTool === "erase") hint.textContent = `${base} Drag to erase half-cells to transparent.`;
+    else if (state.inspectorTool === "dropper") hint.textContent = `${base} Click a half-cell to sample color.`;
+    else hint.textContent = base;
+    const showGrid = $("inspectorShowGrid");
+    const showChecker = $("inspectorShowChecker");
+    if (showGrid) showGrid.checked = !!state.inspectorShowGrid;
+    if (showChecker) showChecker.checked = !!state.inspectorShowChecker;
+    const pasteBtn = $("inspectorPasteFrameBtn");
+    if (pasteBtn) pasteBtn.disabled = !state.inspectorFrameClipboard;
   }
 
   function transparentCell(idx) {
@@ -467,8 +1182,19 @@
     canvas.style.height = "64px";
     canvas.style.imageRendering = "pixelated";
     const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "rgb(0,0,0)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (state.inspectorShowChecker) {
+      const sz = Math.max(2, Math.floor(zoom / 2));
+      for (let y = 0; y < canvas.height; y += sz) {
+        for (let x = 0; x < canvas.width; x += sz) {
+          const dark = (((x / sz) | 0) + ((y / sz) | 0)) % 2 === 0;
+          ctx.fillStyle = dark ? "rgb(22,26,34)" : "rgb(34,40,52)";
+          ctx.fillRect(x, y, sz, sz);
+        }
+      }
+    } else {
+      ctx.fillStyle = "rgb(0,0,0)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
 
     for (let cy = 0; cy < state.frameHChars; cy++) {
       for (let cx = 0; cx < state.frameWChars; cx++) {
@@ -505,6 +1231,7 @@
       }
     }
     updateActionButtons();
+    renderJitterInfo();
   }
 
   function renderMeta() {
@@ -673,6 +1400,123 @@
     return { semanticFrames, proj, frame };
   }
 
+  function inspectorFrameCellMatrix(row, col) {
+    const out = [];
+    for (let y = 0; y < state.frameHChars; y++) {
+      const line = [];
+      for (let x = 0; x < state.frameWChars; x++) {
+        const gx = col * state.frameWChars + x;
+        const gy = row * state.frameHChars + y;
+        line.push(gx >= state.gridCols || gy >= state.gridRows ? transparentCell(0) : { ...cellAt(gx, gy) });
+      }
+      out.push(line);
+    }
+    return out;
+  }
+
+  function writeFrameCellMatrix(row, col, matrix) {
+    clearFrame(row, col);
+    if (!Array.isArray(matrix)) return;
+    for (let y = 0; y < Math.min(state.frameHChars, matrix.length); y++) {
+      const line = Array.isArray(matrix[y]) ? matrix[y] : [];
+      for (let x = 0; x < Math.min(state.frameWChars, line.length); x++) {
+        const gx = col * state.frameWChars + x;
+        const gy = row * state.frameHChars + y;
+        if (gx >= state.gridCols || gy >= state.gridRows) continue;
+        setCell(gx, gy, line[x] || transparentCell(0));
+      }
+    }
+  }
+
+  function flipFrameMatrixH(matrix) {
+    return (matrix || []).map((line) => [...line].reverse().map((c) => ({ ...c })));
+  }
+
+  function inspectorCurrentFrameCoord() {
+    const row = Math.max(0, Math.min(state.angles - 1, Number(state.inspectorRow || 0)));
+    const semanticFrames = Math.max(1, state.anims.reduce((a, b) => a + b, 0));
+    const maxCol = Math.max(0, semanticFrames * Math.max(1, state.projs) - 1);
+    const col = Math.max(0, Math.min(maxCol, Number(state.inspectorCol || 0)));
+    return { row, col, semanticFrames, maxCol };
+  }
+
+  function moveInspectorSelection(deltaRow, deltaCol) {
+    if (!state.inspectorOpen) return false;
+    commitInspectorStrokeIfNeeded();
+    const cur = inspectorCurrentFrameCoord();
+    const nextRow = Math.max(0, Math.min(state.angles - 1, cur.row + Number(deltaRow || 0)));
+    const nextCol = Math.max(0, Math.min(cur.maxCol, cur.col + Number(deltaCol || 0)));
+    state.inspectorRow = nextRow;
+    state.inspectorCol = nextCol;
+    state.selectedRow = nextRow;
+    state.selectedCols = new Set([nextCol]);
+    renderFrameGrid();
+    renderPreviewFrame(nextRow, Math.max(0, Math.min(cur.semanticFrames - 1, nextCol % cur.semanticFrames)));
+    renderInspector();
+    return true;
+  }
+
+  function copyInspectorFrame() {
+    if (!state.inspectorOpen) return false;
+    commitInspectorStrokeIfNeeded();
+    const { row, col } = inspectorCurrentFrameCoord();
+    state.inspectorFrameClipboard = inspectorFrameCellMatrix(row, col);
+    updateInspectorToolUI();
+    status(`Copied frame row=${row} col=${col}`, "ok");
+    return true;
+  }
+
+  function pasteInspectorFrame() {
+    if (!state.inspectorOpen || !state.inspectorFrameClipboard) {
+      status("No copied frame in clipboard", "warn");
+      return false;
+    }
+    if (!editableLayerActive()) {
+      status("Visual layer (2) must be active for frame paste", "warn");
+      return false;
+    }
+    const { row, col } = inspectorCurrentFrameCoord();
+    pushHistory();
+    writeFrameCellMatrix(row, col, state.inspectorFrameClipboard);
+    renderAll();
+    saveSessionState("inspector-paste-frame");
+    status(`Pasted frame into row=${row} col=${col}`, "ok");
+    return true;
+  }
+
+  function flipInspectorFrameHorizontal() {
+    if (!state.inspectorOpen) return false;
+    commitInspectorStrokeIfNeeded();
+    if (!editableLayerActive()) {
+      status("Visual layer (2) must be active for frame flip", "warn");
+      return false;
+    }
+    const { row, col } = inspectorCurrentFrameCoord();
+    pushHistory();
+    const flipped = flipFrameMatrixH(inspectorFrameCellMatrix(row, col));
+    writeFrameCellMatrix(row, col, flipped);
+    renderAll();
+    saveSessionState("inspector-flip-frame-h");
+    status(`Flipped frame horizontally row=${row} col=${col}`, "ok");
+    return true;
+  }
+
+  function clearInspectorFrame() {
+    if (!state.inspectorOpen) return false;
+    commitInspectorStrokeIfNeeded();
+    if (!editableLayerActive()) {
+      status("Visual layer (2) must be active to clear frame", "warn");
+      return false;
+    }
+    const { row, col } = inspectorCurrentFrameCoord();
+    pushHistory();
+    clearFrame(row, col);
+    renderAll();
+    saveSessionState("inspector-clear-frame");
+    status(`Cleared frame row=${row} col=${col}`, "ok");
+    return true;
+  }
+
   function openInspector(row, col) {
     state.inspectorOpen = true;
     state.inspectorRow = Math.max(0, row);
@@ -683,6 +1527,7 @@
   }
 
   function closeInspector() {
+    commitInspectorStrokeIfNeeded();
     state.inspectorOpen = false;
     const panel = $("cellInspectorPanel");
     if (panel) panel.classList.add("hidden");
@@ -725,21 +1570,23 @@
       }
     }
 
-    ctx.strokeStyle = "rgba(88,108,136,0.35)";
-    ctx.lineWidth = 1;
-    for (let x = 0; x <= pixW; x++) {
-      const px = x * zoom + 0.5;
-      ctx.beginPath();
-      ctx.moveTo(px, 0);
-      ctx.lineTo(px, canvas.height);
-      ctx.stroke();
-    }
-    for (let y = 0; y <= pixH; y++) {
-      const py = y * zoom + 0.5;
-      ctx.beginPath();
-      ctx.moveTo(0, py);
-      ctx.lineTo(canvas.width, py);
-      ctx.stroke();
+    if (state.inspectorShowGrid) {
+      ctx.strokeStyle = "rgba(88,108,136,0.35)";
+      ctx.lineWidth = 1;
+      for (let x = 0; x <= pixW; x++) {
+        const px = x * zoom + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(px, 0);
+        ctx.lineTo(px, canvas.height);
+        ctx.stroke();
+      }
+      for (let y = 0; y <= pixH; y++) {
+        const py = y * zoom + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(0, py);
+        ctx.lineTo(canvas.width, py);
+        ctx.stroke();
+      }
     }
 
     const info = frameColInfo(col);
@@ -748,7 +1595,79 @@
       `angle=${row} proj=${info.proj} frame=${info.frame}/${Math.max(0, info.semanticFrames - 1)}`,
       `active_layer=${state.activeLayer} visible_layers=[${[...state.visibleLayers].sort((a, b) => a - b).join(",")}]`,
       `frame_chars=${state.frameWChars}x${state.frameHChars * 2}`,
+      `tool=${state.inspectorTool} paint=${rgbToHex(state.inspectorPaintColor)} grid=${state.inspectorShowGrid ? 1 : 0} checker=${state.inspectorShowChecker ? 1 : 0}`,
     ].join(" | ");
+    updateInspectorToolUI();
+  }
+
+  function inspectorHalfCellAtEvent(evt) {
+    const canvas = $("cellInspectorCanvas");
+    if (!canvas || !state.inspectorOpen) return null;
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    const px = Math.floor((evt.clientX - rect.left) * (canvas.width / rect.width));
+    const py = Math.floor((evt.clientY - rect.top) * (canvas.height / rect.height));
+    if (px < 0 || py < 0 || px >= canvas.width || py >= canvas.height) return null;
+    const zoom = Math.max(1, Number(state.inspectorZoom || 10));
+    const halfX = Math.floor(px / zoom);
+    const halfY = Math.floor(py / zoom);
+    const cx = halfX;
+    const half = (halfY % 2) === 0 ? "top" : "bottom";
+    const cy = Math.floor(halfY / 2);
+    if (cx < 0 || cy < 0 || cx >= state.frameWChars || cy >= state.frameHChars) return null;
+    const row = Math.max(0, Math.min(state.angles - 1, Number(state.inspectorRow || 0)));
+    const semanticFrames = Math.max(1, state.anims.reduce((a, b) => a + b, 0));
+    const maxCol = Math.max(0, semanticFrames * Math.max(1, state.projs) - 1);
+    const col = Math.max(0, Math.min(maxCol, Number(state.inspectorCol || 0)));
+    return { row, col, cx, cy, half };
+  }
+
+  function applyInspectorToolAt(hit) {
+    if (!hit) return false;
+    if (!editableLayerActive()) {
+      status("Visual layer (2) must be active for inspector edits", "warn");
+      return false;
+    }
+    const gx = hit.col * state.frameWChars + hit.cx;
+    const gy = hit.row * state.frameHChars + hit.cy;
+    if (gx < 0 || gy < 0 || gx >= state.gridCols || gy >= state.gridRows) return false;
+    const prev = cellAt(gx, gy);
+    const halves = decodeCellHalves(prev);
+    if (state.inspectorTool === "dropper") {
+      const sampled = hit.half === "top" ? halves.top : halves.bottom;
+      if (!sampled) {
+        status("Dropper sampled transparent half-cell", "warn");
+        return false;
+      }
+      state.inspectorPaintColor = [...sampled];
+      updateInspectorToolUI();
+      renderInspector();
+      status(`Sampled color ${rgbToHex(sampled)}`, "ok");
+      return false;
+    }
+    if (state.inspectorTool !== "paint" && state.inspectorTool !== "erase") return false;
+    if (state.inspectorTool === "paint") {
+      if (hit.half === "top") halves.top = [...state.inspectorPaintColor];
+      else halves.bottom = [...state.inspectorPaintColor];
+    } else {
+      if (hit.half === "top") halves.top = null;
+      else halves.bottom = null;
+    }
+    const next = encodeCellHalves(halves.top, halves.bottom, prev);
+    const changed =
+      Number(prev.glyph || 0) !== Number(next.glyph || 0) ||
+      !colorsEqual(prev.fg || [0, 0, 0], next.fg || [0, 0, 0]) ||
+      !colorsEqual(prev.bg || [0, 0, 0], next.bg || [0, 0, 0]);
+    if (!changed) return false;
+    setCell(gx, gy, next);
+    return true;
+  }
+
+  function commitInspectorStrokeIfNeeded() {
+    if (!state.inspectorPainting) return;
+    state.inspectorPainting = false;
+    renderAll();
+    saveSessionState("inspector-edit");
   }
 
   function stopPreview() {
@@ -783,6 +1702,14 @@
     $("deleteCellBtn").disabled = readOnly || !hasSelection;
     $("assignAnimCategoryBtn").disabled = readOnly || !hasRow;
     $("assignFrameGroupBtn").disabled = readOnly || !hasSelection;
+    const jitterDisabled = readOnly || !hasSelection;
+    const jitterRowDisabled = readOnly || !hasRow;
+    if ($("autoAlignSelectedBtn")) $("autoAlignSelectedBtn").disabled = jitterDisabled;
+    if ($("autoAlignRowBtn")) $("autoAlignRowBtn").disabled = jitterRowDisabled;
+    if ($("jitterLeftBtn")) $("jitterLeftBtn").disabled = jitterDisabled;
+    if ($("jitterRightBtn")) $("jitterRightBtn").disabled = jitterDisabled;
+    if ($("jitterUpBtn")) $("jitterUpBtn").disabled = jitterDisabled;
+    if ($("jitterDownBtn")) $("jitterDownBtn").disabled = jitterDisabled;
   }
 
   async function saveSessionState(reason) {
@@ -822,6 +1749,7 @@
     renderLegacyGrid();
     renderFrameGrid();
     renderMeta();
+    renderJitterInfo();
     renderSession();
     renderSourceCanvas();
     const row = state.selectedRow === null ? 0 : state.selectedRow;
@@ -886,12 +1814,16 @@
       state.latestXpPath = "";
       $("openXpToolBtn").disabled = true;
       setXpToolHint("Export an `.xp` to generate XP tool command.");
+      updateVerifyUI();
+      updateTermppSkinUI();
+      updateWebbuildUI();
       updateSourceToolUI();
       updateUndoRedoButtons();
       $("btnExport").disabled = false;
       syncLayersFromSessionCells();
       status(`Session active: ${state.sessionId.slice(0, 8)}...`, "ok");
       renderAll();
+      if (!state.webbuild.loaded) openWebbuild();
       await saveSessionState("load");
     } catch (e) {
       status("Load failed: fetch/timeout", "err");
@@ -915,11 +1847,22 @@
       state.latestXpPath = String(j.xp_path);
       $("openXpToolBtn").disabled = false;
       await refreshXpToolCommand(state.latestXpPath);
+      try {
+        const a = document.createElement("a");
+        a.href = `/api/workbench/download-xp?xp_path=${encodeURIComponent(state.latestXpPath)}`;
+        a.download = "";
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } catch (_e) {
+        // Export succeeded even if the browser blocks programmatic download.
+      }
     } else {
       state.latestXpPath = "";
       $("openXpToolBtn").disabled = true;
     }
-    status(r.ok ? "Export succeeded" : "Export failed", r.ok ? "ok" : "err");
+    status(r.ok ? "Export succeeded (download started)" : "Export failed", r.ok ? "ok" : "err");
   }
 
   function normalizeBox(a, b) {
@@ -1699,6 +2642,222 @@
     return true;
   }
 
+  function selectedFrameColsSorted() {
+    return [...state.selectedCols].map((c) => Number(c)).sort((a, b) => a - b);
+  }
+
+  function frameVisualBounds(row, col) {
+    let minX = null;
+    let minY = null;
+    let maxX = null;
+    let maxY = null;
+    for (let y = 0; y < state.frameHChars; y++) {
+      for (let x = 0; x < state.frameWChars; x++) {
+        const gx = col * state.frameWChars + x;
+        const gy = row * state.frameHChars + y;
+        if (gx >= state.gridCols || gy >= state.gridRows) continue;
+        const c = cellAt(gx, gy);
+        if (Number(c.glyph || 0) <= 32) continue;
+        minX = minX === null ? x : Math.min(minX, x);
+        minY = minY === null ? y : Math.min(minY, y);
+        maxX = maxX === null ? x : Math.max(maxX, x);
+        maxY = maxY === null ? y : Math.max(maxY, y);
+      }
+    }
+    if (minX === null) return null;
+    return { minX, minY, maxX, maxY, w: (maxX - minX + 1), h: (maxY - minY + 1) };
+  }
+
+  function frameBoundsForCols(row, cols) {
+    return cols
+      .map((col) => ({ row, col, bounds: frameVisualBounds(row, col) }))
+      .filter((x) => !!x.bounds);
+  }
+
+  function medianInt(values) {
+    const vals = (values || []).filter((v) => Number.isFinite(Number(v))).map((v) => Number(v)).sort((a, b) => a - b);
+    if (!vals.length) return 0;
+    const mid = Math.floor(vals.length / 2);
+    if (vals.length % 2 === 1) return vals[mid];
+    return Math.round((vals[mid - 1] + vals[mid]) / 2);
+  }
+
+  function computeAlignTarget(boundsEntries, refMode) {
+    if (!boundsEntries.length) return null;
+    if (refMode === "first_selected") {
+      const b = boundsEntries[0].bounds;
+      return {
+        left: b.minX,
+        top: b.minY,
+        right: b.maxX,
+        bottom: b.maxY,
+        center2: b.minX + b.maxX,
+        middle2: b.minY + b.maxY,
+      };
+    }
+    const bs = boundsEntries.map((e) => e.bounds);
+    return {
+      left: medianInt(bs.map((b) => b.minX)),
+      top: medianInt(bs.map((b) => b.minY)),
+      right: medianInt(bs.map((b) => b.maxX)),
+      bottom: medianInt(bs.map((b) => b.maxY)),
+      center2: medianInt(bs.map((b) => b.minX + b.maxX)),
+      middle2: medianInt(bs.map((b) => b.minY + b.maxY)),
+    };
+  }
+
+  function computeAlignShift(bounds, target, mode) {
+    if (!bounds || !target) return { dx: 0, dy: 0 };
+    const center2 = bounds.minX + bounds.maxX;
+    const middle2 = bounds.minY + bounds.maxY;
+    if (mode === "bottom_left") {
+      return { dx: target.left - bounds.minX, dy: target.bottom - bounds.maxY };
+    }
+    if (mode === "top_left") {
+      return { dx: target.left - bounds.minX, dy: target.top - bounds.minY };
+    }
+    if (mode === "center") {
+      return {
+        dx: Math.round((target.center2 - center2) / 2),
+        dy: Math.round((target.middle2 - middle2) / 2),
+      };
+    }
+    return {
+      dx: Math.round((target.center2 - center2) / 2),
+      dy: target.bottom - bounds.maxY,
+    };
+  }
+
+  function shiftFrameContents(row, col, dx, dy) {
+    dx = Math.round(Number(dx || 0));
+    dy = Math.round(Number(dy || 0));
+    if (!dx && !dy) return { moved: false, clippedCells: 0 };
+    const src = [];
+    for (let y = 0; y < state.frameHChars; y++) {
+      const line = [];
+      for (let x = 0; x < state.frameWChars; x++) {
+        const gx = col * state.frameWChars + x;
+        const gy = row * state.frameHChars + y;
+        if (gx >= state.gridCols || gy >= state.gridRows) line.push(transparentCell(0));
+        else line.push({ ...cellAt(gx, gy) });
+      }
+      src.push(line);
+    }
+
+    let clippedCells = 0;
+    clearFrame(row, col);
+    for (let y = 0; y < state.frameHChars; y++) {
+      for (let x = 0; x < state.frameWChars; x++) {
+        const c = src[y][x];
+        if (Number(c.glyph || 0) <= 32) continue;
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= state.frameWChars || ny >= state.frameHChars) {
+          clippedCells += 1;
+          continue;
+        }
+        const gx = col * state.frameWChars + nx;
+        const gy = row * state.frameHChars + ny;
+        if (gx >= state.gridCols || gy >= state.gridRows) {
+          clippedCells += 1;
+          continue;
+        }
+        setCell(gx, gy, c);
+      }
+    }
+    return { moved: true, clippedCells };
+  }
+
+  function nudgeSelectedFrames(dx, dy) {
+    if (!editableLayerActive()) {
+      status("Selected layer is read-only. Switch to Visual layer (2) to edit.", "warn");
+      return false;
+    }
+    if (state.selectedRow === null || state.selectedCols.size === 0) {
+      status("Select one or more frames on a row first", "warn");
+      return false;
+    }
+    const row = Number(state.selectedRow);
+    const cols = selectedFrameColsSorted();
+    pushHistory();
+    let moved = 0;
+    let clipped = 0;
+    for (const col of cols) {
+      const res = shiftFrameContents(row, col, dx, dy);
+      if (res.moved) moved += 1;
+      clipped += Number(res.clippedCells || 0);
+    }
+    renderAll();
+    saveSessionState("nudge-frame-jitter");
+    status(`Nudged ${moved} frame(s) by dx=${dx}, dy=${dy}${clipped ? ` (clipped ${clipped} cells)` : ""}`, clipped ? "warn" : "ok");
+    return true;
+  }
+
+  function autoAlignFrameJitter(useEntireRow = false) {
+    if (!editableLayerActive()) {
+      status("Selected layer is read-only. Switch to Visual layer (2) to edit.", "warn");
+      return false;
+    }
+    if (state.selectedRow === null) {
+      status("Select a grid row/frame first", "warn");
+      return false;
+    }
+    const row = Number(state.selectedRow);
+    const cols = useEntireRow
+      ? Array.from({ length: totalGridFrameCols() }, (_v, i) => i)
+      : selectedFrameColsSorted();
+    if (!cols.length) {
+      status("Select one or more frames on a row first", "warn");
+      return false;
+    }
+    const entries = frameBoundsForCols(row, cols);
+    if (entries.length < 2) {
+      status(entries.length === 1 ? "Only one non-empty frame in selection; no jitter alignment needed" : "No non-empty frames in selection", "warn");
+      return false;
+    }
+    const alignMode = String($("jitterAlignMode")?.value || "bottom_center");
+    const refMode = String($("jitterRefMode")?.value || "first_selected");
+    const target = computeAlignTarget(entries, refMode);
+    pushHistory();
+    let shifted = 0;
+    let clipped = 0;
+    for (const entry of entries) {
+      const { dx, dy } = computeAlignShift(entry.bounds, target, alignMode);
+      if (!dx && !dy) continue;
+      const res = shiftFrameContents(row, entry.col, dx, dy);
+      if (res.moved) shifted += 1;
+      clipped += Number(res.clippedCells || 0);
+    }
+    renderAll();
+    saveSessionState(useEntireRow ? "auto-align-row-jitter" : "auto-align-selected-jitter");
+    status(
+      `Auto-aligned ${shifted} frame(s) on row ${row} (${alignMode}, ${refMode})${clipped ? `; clipped ${clipped} cells` : ""}`,
+      clipped ? "warn" : "ok"
+    );
+    return true;
+  }
+
+  function renderJitterInfo() {
+    const el = $("jitterInfo");
+    if (!el) return;
+    if (state.selectedRow === null || state.selectedCols.size === 0) {
+      el.textContent = "Select one or more grid frames on a row to align/nudge jitter.";
+      return;
+    }
+    const row = Number(state.selectedRow);
+    const cols = selectedFrameColsSorted();
+    const firstCol = cols[0];
+    const firstBounds = frameVisualBounds(row, firstCol);
+    const entries = frameBoundsForCols(row, cols);
+    const nonEmpty = entries.length;
+    const total = cols.length;
+    if (!firstBounds) {
+      el.textContent = `Row ${row} selected (${total} frame(s)); first selected frame is empty. Use W/A/S/D or Option+Arrow to nudge frame contents.`;
+      return;
+    }
+    el.textContent = `Row ${row} (${angleNameForIndex(row)}) | selected=${total} non_empty=${nonEmpty} | first_bounds x=${firstBounds.minX}..${firstBounds.maxX} y=${firstBounds.minY}..${firstBounds.maxY} (${firstBounds.w}x${firstBounds.h}) | W/A/S/D or Option+Arrow nudges selected frames`;
+  }
+
   function totalGridFrameCols() {
     return Math.max(1, state.anims.reduce((a, b) => a + b, 0) * Math.max(1, state.projs));
   }
@@ -2093,6 +3252,7 @@
       for (let c = lo; c <= hi; c++) state.selectedCols.add(c);
     }
     renderFrameGrid();
+    renderJitterInfo();
     const semanticFrames = Math.max(1, state.anims.reduce((a, b) => a + b, 0));
     renderPreviewFrame(row, Math.max(0, Math.min(semanticFrames - 1, col % semanticFrames)));
   }
@@ -2217,9 +3377,50 @@
   }
 
   function bindUI() {
+    moveWebbuildDockToBottom();
+    movePanelsToBottom();
     $("btnLoad").addEventListener("click", loadFromJob);
     $("btnExport").addEventListener("click", exportXp);
     $("openXpToolBtn").addEventListener("click", openInXpTool);
+    $("webbuildOpenBtn").addEventListener("click", openWebbuild);
+    $("webbuildReloadBtn").addEventListener("click", reloadWebbuild);
+    $("webbuildApplySkinBtn").addEventListener("click", applyCurrentXpAsWebSkin);
+    $("webbuildQuickTestBtn").addEventListener("click", applyCurrentXpAsWebSkin);
+    $("webbuildUploadTestBtn").addEventListener("click", onWebbuildUploadTestClick);
+    $("webbuildUploadTestInput").addEventListener("change", onWebbuildUploadTestInputChange);
+    $("webbuildFrame").addEventListener("load", () => {
+      state.webbuild.loaded = true;
+      state.webbuild.ready = false;
+      updateWebbuildUI();
+      setWebbuildState("Webbuild frame loaded, waiting for runtime...", "warn");
+      stopWebbuildReadyPoll();
+      state.webbuild.readyPoll = setInterval(detectWebbuildReady, 500);
+    });
+    $("termppSkinCmdBtn").addEventListener("click", termppSkinCommandPreview);
+    $("termppSkinLaunchBtn").addEventListener("click", launchTermppSkin);
+    $("termppStreamPreviewBtn").addEventListener("click", previewTermppEmbedStream);
+    $("termppStreamStartBtn").addEventListener("click", startTermppEmbedStream);
+    $("termppStreamStopBtn").addEventListener("click", stopTermppEmbedStream);
+    $("termppBinary").addEventListener("change", () => {
+      $("termppSkinOut").textContent = "";
+    });
+    ["termppStreamX", "termppStreamY", "termppStreamW", "termppStreamH", "termppStreamFps"].forEach((id) => {
+      $(id).addEventListener("change", persistTermppStreamRegion);
+    });
+    $("verifyProfile").addEventListener("change", () => {
+      const profile = String($("verifyProfile").value || "local_xp_sanity");
+      if (profile === "legacy_verify_e2e" && !$("verifyCommandTemplate").value.trim()) {
+        $("verifyCommandTemplate").value = defaultVerifyTemplate(profile);
+      }
+      updateVerifyUI();
+    });
+    $("verifyRunBtn").addEventListener("click", () => runWorkbenchVerification(false));
+    $("verifyDryRunBtn").addEventListener("click", () => runWorkbenchVerification(true));
+    $("verifyCommandTemplate").addEventListener("input", () => {
+      try {
+        localStorage.setItem(VERIFY_CMD_TEMPLATE_STORAGE_KEY, $("verifyCommandTemplate").value || "");
+      } catch (_e) {}
+    });
     $("undoBtn").addEventListener("click", undo);
     $("redoBtn").addEventListener("click", redo);
 
@@ -2338,6 +3539,24 @@
     $("assignAnimCategoryBtn").addEventListener("click", assignRowCategory);
     $("assignFrameGroupBtn").addEventListener("click", assignFrameGroup);
     $("applyGroupsToAnimsBtn").addEventListener("click", applyGroupsToAnims);
+    $("autoAlignSelectedBtn").addEventListener("click", () => autoAlignFrameJitter(false));
+    $("autoAlignRowBtn").addEventListener("click", () => autoAlignFrameJitter(true));
+    $("jitterLeftBtn").addEventListener("click", () => {
+      const step = Math.max(1, Number($("jitterStep").value || 1));
+      nudgeSelectedFrames(-step, 0);
+    });
+    $("jitterRightBtn").addEventListener("click", () => {
+      const step = Math.max(1, Number($("jitterStep").value || 1));
+      nudgeSelectedFrames(step, 0);
+    });
+    $("jitterUpBtn").addEventListener("click", () => {
+      const step = Math.max(1, Number($("jitterStep").value || 1));
+      nudgeSelectedFrames(0, -step);
+    });
+    $("jitterDownBtn").addEventListener("click", () => {
+      const step = Math.max(1, Number($("jitterStep").value || 1));
+      nudgeSelectedFrames(0, step);
+    });
 
     $("playBtn").addEventListener("click", startPreview);
     $("stopBtn").addEventListener("click", stopPreview);
@@ -2363,9 +3582,77 @@
       renderAll();
     });
     $("inspectorCloseBtn").addEventListener("click", closeInspector);
+    $("inspectorPrevAngleBtn").addEventListener("click", () => moveInspectorSelection(-1, 0));
+    $("inspectorNextAngleBtn").addEventListener("click", () => moveInspectorSelection(1, 0));
+    $("inspectorPrevFrameBtn").addEventListener("click", () => moveInspectorSelection(0, -1));
+    $("inspectorNextFrameBtn").addEventListener("click", () => moveInspectorSelection(0, 1));
     $("inspectorZoom").addEventListener("input", () => {
       state.inspectorZoom = Number($("inspectorZoom").value || 10);
       renderInspector();
+    });
+    $("inspectorToolInspectBtn").addEventListener("click", () => {
+      state.inspectorTool = "inspect";
+      updateInspectorToolUI();
+      renderInspector();
+    });
+    $("inspectorToolPaintBtn").addEventListener("click", () => {
+      state.inspectorTool = "paint";
+      updateInspectorToolUI();
+      renderInspector();
+    });
+    $("inspectorToolEraseBtn").addEventListener("click", () => {
+      state.inspectorTool = "erase";
+      updateInspectorToolUI();
+      renderInspector();
+    });
+    $("inspectorToolDropperBtn").addEventListener("click", () => {
+      state.inspectorTool = "dropper";
+      updateInspectorToolUI();
+      renderInspector();
+    });
+    $("inspectorPaintColor").addEventListener("input", () => {
+      state.inspectorPaintColor = hexToRgb($("inspectorPaintColor").value || "#ffffff");
+      updateInspectorToolUI();
+      renderInspector();
+    });
+    $("inspectorCopyFrameBtn").addEventListener("click", copyInspectorFrame);
+    $("inspectorPasteFrameBtn").addEventListener("click", pasteInspectorFrame);
+    $("inspectorFlipHBtn").addEventListener("click", flipInspectorFrameHorizontal);
+    $("inspectorClearFrameBtn").addEventListener("click", clearInspectorFrame);
+    $("inspectorShowGrid").addEventListener("change", () => {
+      state.inspectorShowGrid = !!$("inspectorShowGrid").checked;
+      renderInspector();
+    });
+    $("inspectorShowChecker").addEventListener("change", () => {
+      state.inspectorShowChecker = !!$("inspectorShowChecker").checked;
+      renderInspector();
+    });
+    $("cellInspectorCanvas").addEventListener("mousedown", (e) => {
+      if (!state.inspectorOpen) return;
+      const hit = inspectorHalfCellAtEvent(e);
+      if (!hit) return;
+      if (state.inspectorTool === "paint" || state.inspectorTool === "erase") {
+        pushHistory();
+        state.inspectorPainting = true;
+      }
+      const changed = applyInspectorToolAt(hit);
+      if (changed) {
+        renderAll();
+      }
+      if (state.inspectorTool === "dropper" || state.inspectorTool === "inspect") {
+        state.inspectorPainting = false;
+      }
+    });
+    $("cellInspectorCanvas").addEventListener("mousemove", (e) => {
+      if (!state.inspectorPainting) return;
+      if (state.inspectorTool !== "paint" && state.inspectorTool !== "erase") return;
+      const hit = inspectorHalfCellAtEvent(e);
+      if (!hit) return;
+      const changed = applyInspectorToolAt(hit);
+      if (changed) renderAll();
+    });
+    window.addEventListener("mouseup", () => {
+      if (state.inspectorPainting) commitInspectorStrokeIfNeeded();
     });
 
     window.addEventListener("keydown", (e) => {
@@ -2375,6 +3662,65 @@
         t instanceof HTMLTextAreaElement ||
         t instanceof HTMLSelectElement;
       if (typingTarget && !(e.ctrlKey || e.metaKey)) return;
+      if (state.inspectorOpen && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const k = e.key.toLowerCase();
+        if (k === "p") {
+          state.inspectorTool = "paint";
+          updateInspectorToolUI();
+          renderInspector();
+          e.preventDefault();
+          return;
+        }
+        if (k === "e") {
+          state.inspectorTool = "erase";
+          updateInspectorToolUI();
+          renderInspector();
+          e.preventDefault();
+          return;
+        }
+        if (k === "i") {
+          state.inspectorTool = "dropper";
+          updateInspectorToolUI();
+          renderInspector();
+          e.preventDefault();
+          return;
+        }
+        if (k === "q") {
+          moveInspectorSelection(-1, 0);
+          e.preventDefault();
+          return;
+        }
+        if (k === "r") {
+          moveInspectorSelection(1, 0);
+          e.preventDefault();
+          return;
+        }
+        if (k === "a") {
+          moveInspectorSelection(0, -1);
+          e.preventDefault();
+          return;
+        }
+        if (k === "d") {
+          moveInspectorSelection(0, 1);
+          e.preventDefault();
+          return;
+        }
+        if (k === "c") {
+          copyInspectorFrame();
+          e.preventDefault();
+          return;
+        }
+        if (k === "v") {
+          pasteInspectorFrame();
+          e.preventDefault();
+          return;
+        }
+        if (k === "f") {
+          flipInspectorFrameHorizontal();
+          e.preventDefault();
+          return;
+        }
+      }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         undo();
@@ -2414,12 +3760,29 @@
         setSourceMode("col_select");
       } else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "x") {
         setSourceMode("cut_v");
+      } else if (!e.ctrlKey && !e.metaKey && !e.altKey && ["w", "a", "s", "d"].includes(e.key.toLowerCase())) {
+        const step = e.shiftKey ? 10 : Math.max(1, Number($("jitterStep")?.value || 1));
+        const key = e.key.toLowerCase();
+        const dx = key === "a" ? -step : key === "d" ? step : 0;
+        const dy = key === "w" ? -step : key === "s" ? step : 0;
+        if (dx !== 0 || dy !== 0) {
+          if (nudgeSelectedFrames(dx, dy)) e.preventDefault();
+        }
       } else if (e.key === "Enter") {
         if (state.drawCurrent) {
           e.preventDefault();
           commitDraftToSource("manual");
         }
       } else if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
+        if (e.altKey && !e.ctrlKey && !e.metaKey) {
+          const step = e.shiftKey ? 10 : Math.max(1, Number($("jitterStep")?.value || 1));
+          const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
+          const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
+          if (dx !== 0 || dy !== 0) {
+            if (nudgeSelectedFrames(dx, dy)) e.preventDefault();
+            return;
+          }
+        }
         const step = e.shiftKey ? 10 : 1;
         const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
         const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
@@ -2432,6 +3795,11 @@
     });
     attachGridHandlers();
     updateUndoRedoButtons();
+    try {
+      const savedCmd = localStorage.getItem(VERIFY_CMD_TEMPLATE_STORAGE_KEY);
+      if (savedCmd) $("verifyCommandTemplate").value = savedCmd;
+    } catch (_e) {}
+    loadPersistedTermppStreamRegion();
     setXpToolHint("Export an `.xp` to generate XP tool command.");
     $("xpToolCommandHint").addEventListener("click", async () => {
       const txt = $("xpToolCommandHint").textContent || "";
@@ -2445,6 +3813,11 @@
       }
     });
     updateSourceToolUI();
+    updateVerifyUI();
+    updateTermppSkinUI();
+    updateWebbuildUI();
+    window.addEventListener("beforeunload", () => stopTermppStreamPolling());
+    window.addEventListener("beforeunload", () => stopWebbuildReadyPoll());
   }
 
   // Audit hooks for deterministic browser checks.
@@ -2484,3 +3857,4 @@
   renderSourceCanvas();
   if (state.jobId) loadFromJob();
 })();
+    commitInspectorStrokeIfNeeded();

@@ -585,6 +585,8 @@
         clearInterval(timer);
         state.webbuild.pendingAutoStartToken = "";
         setWebbuildState("Webbuild ready (starting game...)", "ok");
+        try { $("webbuildFrame")?.focus?.(); } catch (_e) {}
+        setTimeout(() => { try { $("webbuildFrame")?.focus?.(); } catch (_e) {} }, 300);
       } catch (e) {
         clearInterval(timer);
         state.webbuild.pendingAutoStartToken = "";
@@ -2711,7 +2713,9 @@
     try {
       requestAnimationFrame(() => {
         try { panel?.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (_e) {}
-        try { $("cellInspectorCanvas")?.focus?.(); } catch (_e) {}
+        if (document.activeElement !== $("webbuildFrame")) {
+          try { $("cellInspectorCanvas")?.focus?.(); } catch (_e) {}
+        }
       });
     } catch (_e) {}
   }

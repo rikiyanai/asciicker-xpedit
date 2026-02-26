@@ -5,13 +5,31 @@
   // Replaces /a3d/game_map_y8.a3d in Emscripten FS before StartGame/Load.
 
   var TARGET_MAP_PATH = "/a3d/game_map_y8.a3d";
-  var DEFAULT_FLAT_MAP = "minimal_2x2.a3d";
+  var DEFAULT_FLAT_MAP = "game_map_y8_original_game_map.a3d";
+  var FALLBACK_FLAT_MAP = "minimal_2x2.a3d";
   var MAP_DIR = "flatmaps";
 
   var cachedMapBytes = null;
   var cachedMapName = null;
   var appliedStamp = 0;
   var wrapInstalled = false;
+  var benignErrno20Suppressed = 0;
+  var startGuardActive = false;
+  var startGuardStamp = 0;
+  var startGuardTimer = 0;
+  var autoMenuTimer = 0;
+  var autoMenuStartedAt = 0;
+  var loadingUiCleared = false;
+
+  function boolParam(name, fallback) {
+    var v = String(qs(name) || "").trim().toLowerCase();
+    if (!v) return !!fallback;
+    if (v === "1" || v === "true" || v === "yes" || v === "on") return true;
+    if (v === "0" || v === "false" || v === "no" || v === "off") return false;
+    return !!fallback;
+  }
+
+  var AUTO_NEW_GAME = boolParam("autonewgame", true);
 
   function nowMs() { return Date.now ? Date.now() : +new Date(); }
 
@@ -34,24 +52,80 @@
     try { console.log("[flat-map-bootstrap] " + msg); } catch (_e) {}
   }
 
+  function installBenignErrnoSuppression() {
+    try {
+      if (window.__flatMapBenignErrnoSuppressionInstalled) return;
+      window.__flatMapBenignErrnoSuppressionInstalled = true;
+      window.addEventListener("unhandledrejection", function (ev) {
+        var r = ev && ev.reason;
+        if (!r || typeof r !== "object") return;
+        if (String(r.name || "") !== "ErrnoError") return;
+        if (Number(r.errno) !== 20) return; // ENOTDIR in browser webbuild startup; observed benign after successful StartGame.
+        if (typeof ev.preventDefault === "function") ev.preventDefault();
+        benignErrno20Suppressed++;
+        if (benignErrno20Suppressed <= 3) {
+          log("suppressed benign unhandledrejection ErrnoError errno=20");
+        }
+      });
+    } catch (_e) {}
+  }
+
   function setStatusText(msg) {
     try {
       if (window.Module && typeof window.Module.setStatus === "function") window.Module.setStatus(msg);
     } catch (_e) {}
   }
 
+  function clearLoadingUi(reason) {
+    if (loadingUiCleared) return;
+    loadingUiCleared = true;
+    try { setStatusText(""); } catch (_e) {}
+    try {
+      var statusEl = document.getElementById("status");
+      if (statusEl) {
+        statusEl.textContent = "";
+        statusEl.hidden = true;
+        statusEl.style.display = "none";
+      }
+    } catch (_e) {}
+    try {
+      var spinnerEl = document.getElementById("spinner");
+      if (spinnerEl) {
+        spinnerEl.hidden = true;
+        spinnerEl.style.display = "none";
+      }
+    } catch (_e) {}
+    try {
+      var progressEl = document.getElementById("progress");
+      if (progressEl) progressEl.hidden = true;
+    } catch (_e) {}
+    if (reason) log("cleared loading UI (" + String(reason) + ")");
+  }
+
   async function fetchFlatMapBytes() {
     var name = selectedMapName();
     if (cachedMapBytes && cachedMapName === name) return cachedMapBytes;
-    var url = mapUrl();
-    log("fetching " + url);
-    var r = await fetch(url, { cache: "no-store" });
-    if (!r.ok) throw new Error("flat map fetch failed: " + r.status + " " + url);
-    var ab = await r.arrayBuffer();
-    cachedMapBytes = new Uint8Array(ab);
-    cachedMapName = name;
-    log("fetched " + cachedMapBytes.length + " bytes from " + url);
-    return cachedMapBytes;
+    var attempts = [name];
+    if (name !== FALLBACK_FLAT_MAP) attempts.push(FALLBACK_FLAT_MAP);
+    for (var i = 0; i < attempts.length; i++) {
+      var mapName = attempts[i];
+      var url = MAP_DIR + "/" + mapName;
+      log("fetching " + url);
+      var r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) {
+        if (i + 1 < attempts.length) {
+          log("flat map fetch failed (" + r.status + "), falling back to " + FALLBACK_FLAT_MAP);
+          continue;
+        }
+        throw new Error("flat map fetch failed: " + r.status + " " + url);
+      }
+      var ab = await r.arrayBuffer();
+      cachedMapBytes = new Uint8Array(ab);
+      cachedMapName = mapName;
+      log("fetched " + cachedMapBytes.length + " bytes from " + url);
+      return cachedMapBytes;
+    }
+    throw new Error("flat map fetch exhausted without success");
   }
 
   async function waitForFs(timeoutMs) {
@@ -70,17 +144,36 @@
     throw new Error("webbuild FS not ready");
   }
 
+  function emfsReplaceFile(M, absPath, bytes) {
+    var path = String(absPath || "");
+    if (path.charAt(0) !== "/") throw new Error("invalid emfs path: " + path);
+    var slash = path.lastIndexOf("/");
+    var dir = slash > 0 ? path.slice(0, slash) : "/";
+    var name = path.slice(slash + 1);
+    if (!name) throw new Error("invalid emfs filename: " + path);
+    var FS = M && M.FS;
+    if (FS && typeof FS.writeFile === "function") {
+      try {
+        FS.writeFile(path, bytes, { canOwn: true });
+        return { mode: "writeFile" };
+      } catch (_e) {}
+    }
+    try { M.FS_unlink(path); } catch (_e) {}
+    M.FS_createDataFile(dir, name, bytes, true, true, true);
+    return { mode: "createDataFile" };
+  }
+
   async function applyFlatMapOverride(force) {
     if (!force && appliedStamp) return { applied: false, reason: "already_applied", stamp: appliedStamp };
+    loadingUiCleared = false;
     setStatusText("Loading flat test arena...");
     var M = await waitForFs(15000);
     var bytes = await fetchFlatMapBytes();
     try { M.FS_createPath("/", "a3d", true, true); } catch (_e) {}
-    try { M.FS_unlink(TARGET_MAP_PATH); } catch (_e) {}
-    M.FS_createDataFile("/a3d", "game_map_y8.a3d", bytes, true, true, true);
+    var writeRes = emfsReplaceFile(M, TARGET_MAP_PATH, bytes);
     appliedStamp = nowMs();
-    log("patched " + TARGET_MAP_PATH + " with " + cachedMapName + " (" + bytes.length + " bytes)");
-    return { applied: true, target: TARGET_MAP_PATH, source: cachedMapName, bytes: bytes.length, stamp: appliedStamp };
+    log("patched " + TARGET_MAP_PATH + " with " + cachedMapName + " (" + bytes.length + " bytes, " + String(writeRes.mode || "unknown") + ")");
+    return { applied: true, target: TARGET_MAP_PATH, source: cachedMapName, bytes: bytes.length, fs_write_mode: String(writeRes.mode || "unknown"), stamp: appliedStamp };
   }
 
   function disablePlayUi(disabled, label) {
@@ -93,11 +186,206 @@
     } catch (_e) {}
   }
 
+  function overlayVisibleNow() {
+    try {
+      var overlay = document.getElementById("login-overlay");
+      if (!overlay) return false;
+      if (overlay.hidden) return false;
+      var cs = window.getComputedStyle ? window.getComputedStyle(overlay) : null;
+      if (cs && (cs.display === "none" || cs.visibility === "hidden")) return false;
+      if (overlay.style && overlay.style.display === "none") return false;
+      return true;
+    } catch (_e) {
+      return false;
+    }
+  }
+
+  function sendEnterPulse() {
+    var sentViaKeyb = false;
+    try {
+      if (typeof window.Keyb === "function") {
+        // Same sequence as native key handlers: DOWN(Enter=3) -> CHAR(10) -> UP(Enter=3).
+        window.Keyb(0, 3);
+        window.Keyb(2, 10);
+        window.Keyb(1, 3);
+        sentViaKeyb = true;
+      }
+    } catch (_e) {}
+    if (sentViaKeyb) return "Keyb";
+
+    // Fallback for builds where Keyb isn't globally reachable.
+    var targets = [window, document, document.body, document.getElementById("asciicker_canvas")];
+    for (var i = 0; i < targets.length; i++) {
+      var t = targets[i];
+      if (!t || typeof t.dispatchEvent !== "function") continue;
+      try {
+        t.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true }));
+        t.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true }));
+      } catch (_e) {}
+    }
+    return "DOM";
+  }
+
+  function safeCall(fn) {
+    try {
+      if (typeof fn === "function") return fn();
+    } catch (_e) {}
+    return null;
+  }
+
+  function menuProbe() {
+    var out = {
+      main_menu: safeCall(window.GameMainMenuActive),
+      world_ready: safeCall(window.GameWorldReady),
+      render_stage: safeCall(window.GetRenderStageCode),
+    };
+    try {
+      if (window.ak && typeof window.ak.getPos === "function") {
+        var p = [0, 0, 0];
+        window.ak.getPos(p, 0);
+        out.pos = [Number(p[0]), Number(p[1]), Number(p[2])];
+      } else {
+        out.pos = null;
+      }
+    } catch (_e) {
+      out.pos = null;
+    }
+    try {
+      if (window.ak && typeof window.ak.getWater === "function") out.water = Number(window.ak.getWater());
+      else out.water = null;
+    } catch (_e) {
+      out.water = null;
+    }
+    try {
+      if (window.ak && typeof window.ak.isGrounded === "function") out.grounded = !!window.ak.isGrounded();
+      else out.grounded = null;
+    } catch (_e) {
+      out.grounded = null;
+    }
+    return out;
+  }
+
+  function gameplayLikelyStarted(probe) {
+    if (!probe || typeof probe !== "object") return false;
+    var mainMenu = (probe.main_menu === true || Number(probe.main_menu) === 1);
+    var worldReady = (probe.world_ready === true || Number(probe.world_ready) === 1);
+    var renderStage = Number(probe.render_stage);
+    var stageReady = isFinite(renderStage) && renderStage >= 70;
+    var grounded = (probe.grounded === true);
+    var water = Number(probe.water);
+    var inWater = isFinite(water) && water > 0;
+    if (Array.isArray(probe.pos) && probe.pos.length === 3) {
+      var nonZeroPos = false;
+      for (var i = 0; i < 3; i++) {
+        var v = Number(probe.pos[i]);
+        if (isFinite(v) && Math.abs(v) > 0.001) {
+          nonZeroPos = true;
+          break;
+        }
+      }
+      if (worldReady && !mainMenu) return true;
+      if (stageReady && (grounded || inWater || nonZeroPos)) return true;
+      if (grounded && nonZeroPos) return true;
+      return false;
+    }
+    if (worldReady && !mainMenu) return true;
+    if (stageReady && (grounded || inWater)) return true;
+    return false;
+  }
+
+  function scheduleAutoNewGameAdvance() {
+    if (!AUTO_NEW_GAME) return;
+    if (autoMenuTimer) {
+      clearInterval(autoMenuTimer);
+      autoMenuTimer = 0;
+    }
+    autoMenuStartedAt = nowMs();
+    log("auto-newgame schedule armed");
+    var pulsesSent = 0;
+    var overlayWaitTicks = 0;
+    autoMenuTimer = setInterval(function () {
+      var age = nowMs() - autoMenuStartedAt;
+      // Wait until login overlay is gone (i.e., runtime accepted PLAY).
+      if (overlayVisibleNow()) {
+        overlayWaitTicks++;
+        if (overlayWaitTicks <= 2 || (overlayWaitTicks % 8) === 0) {
+          log("auto-newgame waiting for overlay to hide...");
+        }
+        if (age > 45000) {
+          log("auto-newgame timeout while waiting for overlay");
+          clearInterval(autoMenuTimer);
+          autoMenuTimer = 0;
+        }
+        return;
+      }
+      clearLoadingUi("overlay_hidden");
+      var probe = menuProbe();
+      var inMainMenu = (probe.main_menu === true || Number(probe.main_menu) === 1);
+      if (!inMainMenu) {
+        clearLoadingUi("main_menu_cleared");
+        log("auto-newgame stopped (main menu cleared)");
+        clearInterval(autoMenuTimer);
+        autoMenuTimer = 0;
+        return;
+      }
+      if (gameplayLikelyStarted(probe) || (probe.world_ready === true && probe.main_menu === false)) {
+        clearLoadingUi("world_ready");
+        log("auto-newgame stopped (world ready)");
+        clearInterval(autoMenuTimer);
+        autoMenuTimer = 0;
+        return;
+      }
+      pulsesSent++;
+      var mode = sendEnterPulse();
+      log("auto-newgame pulse #" + pulsesSent + " (" + mode + ") age_ms=" + age + " menu=" + String(probe.main_menu) + " world=" + String(probe.world_ready) + " stage=" + String(probe.render_stage) + " pos=" + String(probe.pos) + " water=" + String(probe.water) + " grounded=" + String(probe.grounded));
+      if (pulsesSent >= 24 || age > 20000) {
+        log("auto-newgame pulse budget exhausted");
+        clearInterval(autoMenuTimer);
+        autoMenuTimer = 0;
+      }
+    }, 500);
+  }
+
+  function clearStartGuard() {
+    startGuardActive = false;
+    startGuardStamp = 0;
+    if (startGuardTimer) {
+      clearInterval(startGuardTimer);
+      startGuardTimer = 0;
+    }
+  }
+
+  function armStartGuard() {
+    clearStartGuard();
+    startGuardActive = true;
+    startGuardStamp = nowMs();
+    startGuardTimer = setInterval(function () {
+      try {
+        if (!startGuardActive) {
+          clearStartGuard();
+          return;
+        }
+        var age = nowMs() - startGuardStamp;
+        // Release the guard after the overlay hides (game started) or after a long timeout.
+        if (!overlayVisibleNow() || age > 45000) {
+          clearStartGuard();
+        }
+      } catch (_e) {
+        clearStartGuard();
+      }
+    }, 200);
+  }
+
   function installStartGameWrapper() {
     if (wrapInstalled) return true;
     if (typeof window.StartGame !== "function") return false;
     var original = window.StartGame;
     window.StartGame = async function () {
+      if (startGuardActive) {
+        log("ignored duplicate StartGame while startup is already in progress");
+        return;
+      }
+      armStartGuard();
       try {
         disablePlayUi(true, "LOADING MAP...");
         var res = await applyFlatMapOverride(false);
@@ -107,7 +395,12 @@
       } finally {
         disablePlayUi(false, "PLAY");
       }
-      return original.apply(this, arguments);
+      var ret = original.apply(this, arguments);
+      // Do not leave the Emscripten loading label pinned forever once startup transitions.
+      setTimeout(function () { clearLoadingUi("post_startgame"); }, 1200);
+      setTimeout(function () { clearLoadingUi("post_startgame_fallback"); }, 5000);
+      scheduleAutoNewGameAdvance();
+      return ret;
     };
     wrapInstalled = true;
     log("StartGame wrapper installed");
@@ -124,15 +417,38 @@
         var originalLoad = window.Load;
         var wrapped = function () {
           var args = arguments;
-          applyFlatMapOverride(false).catch(function (e) { log("pre-Load override failed: " + e); })
+          // Preserve synchronous Load() ordering when StartGame wrapper already applied the flat map.
+          // Async deferral here can reorder Load/Resize/frame-start and cause visible spawn/camera glitches.
+          if (appliedStamp) {
+            return originalLoad.apply(window, args);
+          }
+          applyFlatMapOverride(false)
+            .catch(function (e) { log("pre-Load override failed: " + e); })
             .finally(function () { originalLoad.apply(window, args); });
         };
         wrapped.__flatWrapped = true;
         window.Load = wrapped;
         log("Load wrapper installed");
       }
+      if (typeof window.Resize === "function" && !window.Resize.__flatWrapped) {
+        var originalResize = window.Resize;
+        var wrappedResize = function () {
+          try {
+            var ww = Number(window.innerWidth || 0);
+            var wh = Number(window.innerHeight || 0);
+            if (!(ww > 0) || !(wh > 0)) {
+              log("ignored Resize during zero-sized viewport (" + ww + "x" + wh + ")");
+              return;
+            }
+          } catch (_e) {}
+          return originalResize.apply(window, arguments);
+        };
+        wrappedResize.__flatWrapped = true;
+        window.Resize = wrappedResize;
+        log("Resize wrapper installed");
+      }
       installStartGameWrapper();
-      if (attempts > 400 || (wrapInstalled && window.Load && window.Load.__flatWrapped)) clearInterval(timer);
+      if (attempts > 400 || (wrapInstalled && window.Load && window.Load.__flatWrapped && window.Resize && window.Resize.__flatWrapped)) clearInterval(timer);
     }, 100);
   }
 
@@ -158,6 +474,7 @@
   };
 
   installLoadWrapperWhenReady();
+  installBenignErrnoSuppression();
   prefetchSoon();
   log("bootstrap active (flatmap=" + selectedMapName() + ")");
 })();

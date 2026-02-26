@@ -4,6 +4,7 @@
   const MAGENTA = [255, 0, 255];
   const $ = (id) => document.getElementById(id);
   const params = new URLSearchParams(window.location.search);
+  const SERVER_BOOT_NONCE = String(window.__WB_SERVER_BOOT_NONCE || "").trim();
   const DEFAULT_LAYER_NAMES = ["Metadata", "Layer 1", "Visual", "Layer 3"];
   const VERIFY_CMD_TEMPLATE_STORAGE_KEY = "wb_verify_command_template_v1";
   const TERM_STREAM_REGION_STORAGE_KEY = "wb_termpp_stream_region_v1";
@@ -23,13 +24,26 @@
   ];
   const WEBBUILD_DEFAULT_OVERRIDE_NAMES = (() => {
     const out = ["player-nude.xp"];
-    const groups = ["player", "attack", "plydie", "wolfie", "wolack"];
+    // MVP workbench skin loop targets the playable character only.
+    // Overriding NPC/attack/death sheets with arbitrary test XP can destabilize runtime rendering.
+    const groups = ["player"];
     for (const group of groups) {
       for (let i = 0; i < 16; i++) {
         out.push(`${group}-${i.toString(2).padStart(4, "0")}.xp`);
       }
     }
     return out;
+  })();
+  const WEBBUILD_READY_TIMEOUT_MS = 180000;
+  const DEFAULT_FLATMAP_NAME = "game_map_y8_original_game_map.a3d";
+  const WEBBUILD_BASE_SRC = (() => {
+    const u = new URL("/termpp-web-flat/index.html?solo=1&player=player", window.location.origin);
+    if (SERVER_BOOT_NONCE) u.searchParams.set("_srv", SERVER_BOOT_NONCE);
+    const flatmapParam = String(params.get("flatmap") || "").trim();
+    u.searchParams.set("flatmap", flatmapParam || DEFAULT_FLATMAP_NAME);
+    const autoNewGameParam = String(params.get("autonewgame") || "1").trim();
+    if (autoNewGameParam) u.searchParams.set("autonewgame", autoNewGameParam);
+    return `${u.pathname}${u.search}`;
   })();
 
   const state = {
@@ -54,6 +68,7 @@
     sourceSelectedCut: null,
     sourceNextId: 1,
     rapidManualAdd: false,
+    sourceCanvasZoom: 1,
     sourceDragHoverFrame: null,
     cells: [],
     gridCols: 0,
@@ -110,15 +125,24 @@
       running: false,
     },
     webbuild: {
-      src: "/termpp-web-flat/index.html?solo=1&player=player",
+      src: WEBBUILD_BASE_SRC,
       loaded: false,
       ready: false,
       readyPoll: null,
+      loadRequestedAt: 0,
+      expectedSrc: "",
+      lastLoadedSrc: "",
+      pendingAutoStartToken: "",
       uploadedXpBytes: null,
       uploadedXpName: "",
     },
     inspectorHover: null, // {cx,cy,half,cell}
     inspectorLastHoverAnchor: null, // {cx,cy}
+    gridFrameDragSelect: null, // {row,startCol,lastCol}
+    gridRowDrag: null, // {fromRow}
+    gridCellDrag: null, // {fromRow,fromCol,startX,startY,dragging,hover:{row,col,mode}}
+    gridCellDragSuppressClick: false,
+    gridPanelZoom: 1,
   };
 
   function status(text, cls) {
@@ -247,6 +271,15 @@
     return frame && frame.contentWindow ? frame.contentWindow : null;
   }
 
+  function webbuildCurrentPathQuery(win) {
+    if (!win || !win.location) return "";
+    try {
+      return `${String(win.location.pathname || "")}${String(win.location.search || "")}`;
+    } catch (_e) {
+      return "";
+    }
+  }
+
   function readWebbuildLoadingDetail(win) {
     if (!win) return "";
     try {
@@ -274,6 +307,19 @@
     if (state.webbuild.readyPoll) {
       clearInterval(state.webbuild.readyPoll);
       state.webbuild.readyPoll = null;
+    }
+  }
+
+  function webbuildFrameSrc(forceFresh = false) {
+    const raw = String(state.webbuild.src || "/termpp-web-flat/index.html?solo=1&player=player");
+    if (!forceFresh) return raw;
+    try {
+      const u = new URL(raw, window.location.origin);
+      u.searchParams.set("_wb", String(Date.now()));
+      return `${u.pathname}${u.search}`;
+    } catch (_e) {
+      const sep = raw.includes("?") ? "&" : "?";
+      return `${raw}${sep}_wb=${Date.now()}`;
     }
   }
 
@@ -306,10 +352,20 @@
     const win = webbuildFrameWindow();
     if (!win) return false;
     try {
+      const expectedSrc = String(state.webbuild.expectedSrc || "");
+      const currentPathQuery = webbuildCurrentPathQuery(win);
+      if (expectedSrc && currentPathQuery && currentPathQuery !== expectedSrc) {
+        state.webbuild.ready = false;
+        updateWebbuildUI();
+        setWebbuildState("Webbuild navigating to fresh preview instance...", "warn");
+        return false;
+      }
       const hasModule = !!win.Module;
       const calledRun = !!(win.Module && win.Module.calledRun);
       const hasLoad = typeof win.Load === "function";
-      const hasFSOps = !!(win.Module && typeof win.Module.FS_createDataFile === "function" && typeof win.Module.FS_unlink === "function");
+      const hasLegacyFSOps = !!(win.Module && typeof win.Module.FS_createDataFile === "function" && typeof win.Module.FS_unlink === "function");
+      const hasWriteFileFS = !!(win.Module && win.Module.FS && typeof win.Module.FS.writeFile === "function");
+      const hasFSOps = hasLegacyFSOps || hasWriteFileFS;
       const ready = hasModule && calledRun && hasLoad && hasFSOps;
       state.webbuild.ready = ready;
       updateWebbuildUI();
@@ -318,7 +374,9 @@
         stopWebbuildReadyPoll();
       } else {
         const detail = readWebbuildLoadingDetail(win);
-        setWebbuildState(detail ? `Webbuild loading... ${detail}` : "Webbuild loading... (first load may take 5-30s)", "warn");
+        const elapsedMs = state.webbuild.loadRequestedAt ? Math.max(0, Date.now() - state.webbuild.loadRequestedAt) : 0;
+        const elapsedTxt = elapsedMs > 0 ? ` (${Math.round(elapsedMs / 1000)}s)` : "";
+        setWebbuildState(detail ? `Webbuild loading... ${detail}${elapsedTxt}` : `Webbuild loading... (first load may take 30-120s)${elapsedTxt}`, "warn");
       }
       return ready;
     } catch (e) {
@@ -329,32 +387,41 @@
     }
   }
 
-  function openWebbuild() {
+  function openWebbuild(opts = {}) {
     const frame = $("webbuildFrame");
     if (!frame) return;
     frame.classList.remove("hidden");
     state.webbuild.loaded = true;
     state.webbuild.ready = false;
+    state.webbuild.loadRequestedAt = Date.now();
     updateWebbuildUI();
     setWebbuildState("Opening flat arena preview... (first load downloads ~24MB)", "warn");
     stopWebbuildReadyPoll();
-    frame.src = state.webbuild.src;
+    const nextSrc = webbuildFrameSrc(opts.force_fresh !== false);
+    state.webbuild.expectedSrc = nextSrc;
+    try { frame.src = "about:blank"; } catch (_e) {}
+    setTimeout(() => {
+      try { frame.src = nextSrc; } catch (_e) {}
+    }, 10);
     state.webbuild.readyPoll = setInterval(detectWebbuildReady, 500);
   }
 
-  function reloadWebbuild() {
+  function reloadWebbuild(opts = {}) {
     const frame = $("webbuildFrame");
     if (!frame) return;
     if (frame.classList.contains("hidden")) frame.classList.remove("hidden");
+    state.webbuild.loaded = true;
     state.webbuild.ready = false;
+    state.webbuild.loadRequestedAt = Date.now();
     updateWebbuildUI();
     setWebbuildState("Reloading webbuild...", "warn");
     stopWebbuildReadyPoll();
-    try {
-      frame.contentWindow?.location.reload();
-    } catch (_e) {
-      frame.src = state.webbuild.src;
-    }
+    const nextSrc = webbuildFrameSrc(opts.force_fresh !== false);
+    state.webbuild.expectedSrc = nextSrc;
+    try { frame.src = "about:blank"; } catch (_e) {}
+    setTimeout(() => {
+      try { frame.src = nextSrc; } catch (_e) {}
+    }, 10);
     state.webbuild.readyPoll = setInterval(detectWebbuildReady, 500);
   }
 
@@ -365,13 +432,61 @@
     return out;
   }
 
-  async function waitForWebbuildReady(timeoutMs = 25000) {
-    if (!state.webbuild.loaded) openWebbuild();
+  function emfsReplaceFile(M, absPath, bytes) {
+    const path = String(absPath || "");
+    if (!path.startsWith("/")) throw new Error(`invalid emfs path: ${path}`);
+    const slash = path.lastIndexOf("/");
+    const dir = slash > 0 ? path.slice(0, slash) : "/";
+    const name = path.slice(slash + 1);
+    if (!name) throw new Error(`invalid emfs filename: ${path}`);
+    const FS = M && M.FS;
+    if (FS && typeof FS.writeFile === "function") {
+      try {
+        FS.writeFile(path, bytes, { canOwn: true });
+        return { mode: "writeFile" };
+      } catch (_e) {
+        // Fall back to unlink/create for runtimes that don't expose writable nodes yet.
+      }
+    }
+    try { M.FS_unlink(path); } catch (_e) {}
+    M.FS_createDataFile(dir, name, bytes, true, true, true);
+    return { mode: "createDataFile" };
+  }
+
+  async function waitForWebbuildReady(timeoutMs = WEBBUILD_READY_TIMEOUT_MS) {
+    const frame = $("webbuildFrame");
+    const needsOpen = (
+      !state.webbuild.loaded ||
+      !frame ||
+      frame.classList.contains("hidden") ||
+      !String(state.webbuild.expectedSrc || "").trim()
+    );
+    if (needsOpen) openWebbuild();
     const t0 = Date.now();
+    let nextPulse = t0 + 5000;
     while (Date.now() - t0 < timeoutMs) {
       if (detectWebbuildReady()) return true;
+      const now = Date.now();
+      if (now >= nextPulse) {
+        const secs = Math.max(1, Math.round((now - t0) / 1000));
+        setWebbuildState(`Webbuild loading... still initializing (${secs}s elapsed; first load can take 30-120s)`, "warn");
+        nextPulse = now + 5000;
+      }
       await new Promise((r) => setTimeout(r, 150));
     }
+    const waitedSecs = Math.max(1, Math.round((Date.now() - t0) / 1000));
+    setWebbuildState(`Webbuild still loading after ${waitedSecs}s. Keep this tab open, then retry in a moment.`, "warn");
+    try {
+      const out = $("webbuildOut");
+      if (out && !String(out.textContent || "").trim()) {
+        out.textContent = JSON.stringify({
+          phase: "wait_for_webbuild_ready_timeout",
+          timeout_ms: timeoutMs,
+          waited_seconds: waitedSecs,
+          detail: readWebbuildLoadingDetail(webbuildFrameWindow()) || "",
+        }, null, 2);
+      }
+    } catch (_e) {}
     return false;
   }
 
@@ -387,6 +502,95 @@
     } catch (_e) {}
     if (overlay.hidden) return false;
     if (overlay.style && overlay.style.display === "none") return false;
+    return true;
+  }
+
+  function webbuildStartGameReady(win) {
+    if (!win || !win.document || typeof win.document.getElementById !== "function") return false;
+    try {
+      return win._wasmReady === true;
+    } catch (_e) {}
+    return false;
+  }
+
+  function scheduleDeferredWebbuildStart(win, opts = {}) {
+    if (!win || typeof win.StartGame !== "function") return false;
+    const frame = $("webbuildFrame");
+    const expectedSrc = String(opts.expected_src || state.webbuild.expectedSrc || "");
+    const playerName = String(opts.player_name || "player").trim() || "player";
+    const token = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
+    state.webbuild.pendingAutoStartToken = token;
+    const t0 = Date.now();
+    const timer = setInterval(() => {
+      try {
+        if (state.webbuild.pendingAutoStartToken !== token) {
+          clearInterval(timer);
+          return;
+        }
+        const liveWin = webbuildFrameWindow();
+        if (!liveWin || liveWin !== win) {
+          clearInterval(timer);
+          return;
+        }
+        if (expectedSrc) {
+          const currentPathQuery = webbuildCurrentPathQuery(liveWin);
+          if (currentPathQuery && currentPathQuery !== expectedSrc) {
+            clearInterval(timer);
+            return;
+          }
+        }
+        if (!webbuildLoginOverlayVisible(liveWin)) {
+          clearInterval(timer);
+          state.webbuild.pendingAutoStartToken = "";
+          return;
+        }
+        if (!webbuildStartGameReady(liveWin)) {
+          const secs = Math.max(1, Math.round((Date.now() - t0) / 1000));
+          if (secs <= 60) {
+            setWebbuildState(`Webbuild ready; waiting for game init (${secs}s)...`, "warn");
+          }
+          if (Date.now() - t0 > 60000) {
+            clearInterval(timer);
+            state.webbuild.pendingAutoStartToken = "";
+            status("Skin applied, but game init timed out — click Test This Skin to retry", "warn");
+            setWebbuildState("Webbuild ready (game init timed out)", "warn");
+            try {
+              const out = $("webbuildOut");
+              if (out) {
+                out.textContent = JSON.stringify({
+                  stage: "deferred_webbuild_start_timeout",
+                  waited_ms: Date.now() - t0,
+                  expected_src: expectedSrc,
+                  iframe_src: frame ? String(frame.getAttribute("src") || "") : "",
+                  wasm_ready: !!liveWin._wasmReady,
+                }, null, 2);
+              }
+            } catch (_e) {}
+          }
+          return;
+        }
+        const d = liveWin.document;
+        const playerInput = d && d.getElementById ? d.getElementById("player-name") : null;
+        const serverInput = d && d.getElementById ? d.getElementById("server-addr") : null;
+        const playBtn = d && d.getElementById ? d.getElementById("play-btn") : null;
+        if (playerInput && !String(playerInput.value || "").trim()) playerInput.value = playerName;
+        if (serverInput) serverInput.value = "";
+        if (playBtn) playBtn.disabled = false;
+        const startRes = liveWin.StartGame();
+        if (startRes && typeof startRes.then === "function") {
+          startRes.catch((e) => {
+            try { console.warn("[workbench] deferred webbuild StartGame rejected:", e); } catch (_e2) {}
+          });
+        }
+        clearInterval(timer);
+        state.webbuild.pendingAutoStartToken = "";
+        setWebbuildState("Webbuild ready (starting game...)", "ok");
+      } catch (e) {
+        clearInterval(timer);
+        state.webbuild.pendingAutoStartToken = "";
+        try { console.warn("[workbench] deferred webbuild StartGame failed:", e); } catch (_e2) {}
+      }
+    }, 200);
     return true;
   }
 
@@ -413,7 +617,7 @@
     const initialWin = webbuildFrameWindow();
     const overlayVisible = webbuildLoginOverlayVisible(initialWin);
     if (forceRestart || (restartIfOverlayHidden && !overlayVisible)) {
-      reloadWebbuild();
+      reloadWebbuild({ force_fresh: true });
       if (!(await waitForWebbuildReady())) return { ready: false, restarted: true, overlay_visible: 0 };
       const restartedWin = webbuildFrameWindow();
       return {
@@ -443,12 +647,15 @@
     const names = normalizeWebbuildOverrideNames(opts.override_names);
     const playerName = String(opts.reload_player_name || "player");
     const requireStartGame = !!opts.require_start_game;
+    let fsWriteMode = "";
     for (const name of names) {
-      try { M.FS_unlink(`/sprites/${name}`); } catch (_e) {}
-      M.FS_createDataFile("/sprites", name, xpBytes, true, true, true);
+      const res = emfsReplaceFile(M, `/sprites/${name}`, xpBytes);
+      if (!fsWriteMode && res && res.mode) fsWriteMode = String(res.mode);
     }
+    const autoStartGame = !!opts.auto_start_game;
     let startedVia = "load";
     let overlayVisible = false;
+    let startDeferred = false;
     try {
       const loginOverlay = win.document && win.document.getElementById ? win.document.getElementById("login-overlay") : null;
       const playBtn = win.document && win.document.getElementById ? win.document.getElementById("play-btn") : null;
@@ -458,24 +665,63 @@
       if (overlayVisible && typeof win.StartGame === "function") {
         if (playerInput && !String(playerInput.value || "").trim()) playerInput.value = playerName;
         if (serverInput) serverInput.value = "";
-        if (playBtn) playBtn.disabled = false;
-        win.StartGame();
-        startedVia = "start_game";
+        if (autoStartGame) {
+          if (webbuildStartGameReady(win)) {
+            if (playBtn) playBtn.disabled = false;
+            try {
+              const startRes = win.StartGame();
+              if (startRes && typeof startRes.then === "function") {
+                startRes.catch((e) => {
+                  try { console.warn("[workbench] webbuild StartGame rejected:", e); } catch (_e2) {}
+                });
+              }
+            } catch (_e) {
+              throw _e;
+            }
+            startedVia = "start_game";
+          } else {
+            startDeferred = true;
+            scheduleDeferredWebbuildStart(win, {
+              expected_src: String(state.webbuild.expectedSrc || ""),
+              player_name: playerName,
+            });
+            if (playBtn) {
+              // Keep UI in a user-clickable state while wasm init finishes.
+              playBtn.disabled = false;
+              if (String(playBtn.textContent || "").trim().toUpperCase() === "LOADING...") {
+                playBtn.textContent = "PLAY";
+              }
+            }
+          }
+        } else {
+          startedVia = webbuildStartGameReady(win) ? "play_ready" : "play_wait_wasm";
+          if (playBtn && webbuildStartGameReady(win)) {
+            playBtn.disabled = false;
+            if (String(playBtn.textContent || "").trim().toUpperCase() === "LOADING...") {
+              playBtn.textContent = "PLAY";
+            }
+          }
+        }
       }
     } catch (_e) {}
-    if (startedVia !== "start_game") {
-      if (requireStartGame) {
+    const manualPlayPending = (startedVia === "play_ready" || startedVia === "play_wait_wasm");
+    if (startedVia !== "start_game" && !manualPlayPending) {
+      if (startDeferred) {
+        startedVia = "deferred_start";
+      } else if (requireStartGame) {
         throw new Error("webbuild did not expose login overlay for StartGame path (preview needs restart)");
       }
-      if (typeof win.Load === "function") win.Load(playerName);
-      if (typeof win.Resize === "function") {
-        try { win.Resize(null); } catch (_e) {}
+      if (!startDeferred) {
+        if (typeof win.Load === "function") win.Load(playerName);
+        if (typeof win.Resize === "function") {
+          try { win.Resize(null); } catch (_e) {}
+        }
       }
     }
     if (typeof win.ak_canvas !== "undefined" && win.ak_canvas && typeof win.ak_canvas.focus === "function") {
       try { win.ak_canvas.focus(); } catch (_e) {}
     }
-    return { bytes: xpBytes.length, files_written: names.length, player_name: playerName, started_via: startedVia, overlay_visible: overlayVisible ? 1 : 0 };
+    return { bytes: xpBytes.length, files_written: names.length, fs_write_mode: fsWriteMode || "unknown", player_name: playerName, started_via: startedVia, overlay_visible: overlayVisible ? 1 : 0 };
   }
 
   async function injectXpIntoWebbuild(win, payload) {
@@ -491,22 +737,49 @@
       status("Load a workbench session first", "warn");
       return;
     }
+    const t0 = Date.now();
+    const timings = {};
+    status("Preparing flat arena runtime for skin test...", "warn");
     const prep = await prepareWebbuildForSkinApply({
       force_restart: !!opts.force_restart,
       restart_if_overlay_hidden: opts.restart_if_overlay_hidden !== false,
     });
+    timings.prepare_ms = Date.now() - t0;
     if (!prep.ready) {
       status("Webbuild not ready yet; wait for load to finish", "warn");
+      try {
+        $("webbuildOut").textContent = JSON.stringify({
+          stage: "prepare_webbuild_not_ready",
+          prep,
+          timings,
+          webbuild_state: String($("webbuildState")?.textContent || ""),
+        }, null, 2);
+      } catch (_e) {}
       return;
     }
     try {
-      await saveSessionState("pre-web-skin-apply");
-      status(prep.restarted ? "Reloaded preview; exporting XP and applying web skin..." : "Exporting XP and applying web skin...", "warn");
+      const tSave = Date.now();
+      status("Saving current session before skin test...", "warn");
+      const saveRes = await saveSessionState("pre-web-skin-apply", { wait_for_idle: true, timeout_ms: 15000 });
+      if (!saveRes || !saveRes.ok) {
+        timings.save_session_failed = saveRes || { ok: false };
+        $("webbuildOut").textContent = JSON.stringify({
+          stage: "save_session_before_web_skin_apply_failed",
+          save: saveRes,
+          timings,
+        }, null, 2);
+        status("Skin test blocked: session save failed/timed out", "err");
+        return;
+      }
+      timings.save_session_ms = Date.now() - tSave;
+      status(prep.restarted ? "Reloaded preview; exporting XP skin payload..." : "Exporting XP skin payload...", "warn");
+      const tPayload = Date.now();
       const r = await fetch("/api/workbench/web-skin-payload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ session_id: state.sessionId }),
       });
+      timings.fetch_payload_ms = Date.now() - tPayload;
       const j = await r.json();
       if (!r.ok) {
         $("webbuildOut").textContent = JSON.stringify(j, null, 2);
@@ -514,22 +787,50 @@
         return;
       }
       const win = webbuildFrameWindow();
+      status("Injecting XP into flat arena runtime...", "warn");
+      const tInject = Date.now();
       const inject = await injectXpBytesIntoWebbuild(win, b64ToUint8Array(j.xp_b64 || ""), {
         override_names: j.override_names,
         reload_player_name: String(j.reload_player_name || "player"),
         require_start_game: prep.restarted || prep.overlay_visible,
+        auto_start_game: true,
       });
+      timings.inject_ms = Date.now() - tInject;
+      timings.total_ms = Date.now() - t0;
       $("webbuildOut").textContent = JSON.stringify({
+        timings,
         prep,
         payload: { ...j, override_names: normalizeWebbuildOverrideNames(j.override_names), xp_b64: `(<${(j.xp_b64 || "").length} base64 chars>)` },
         inject,
       }, null, 2);
       state.webbuild.ready = true;
       updateWebbuildUI();
-      status("Applied XP as web skin", "ok");
-      setWebbuildState("Webbuild ready (skin applied)", "ok");
+      const injectMode = String(inject?.started_via || "");
+      if (injectMode === "deferred_start") {
+        status(`Applied XP as web skin (${Math.round(timings.total_ms || 0)}ms); waiting for game init...`, "warn");
+        setWebbuildState("Webbuild ready (skin applied; waiting for game init...)", "warn");
+      } else if (injectMode === "play_wait_wasm") {
+        status(`Applied XP as web skin (${Math.round(timings.total_ms || 0)}ms); game init still loading (use PLAY when ready)`, "warn");
+        setWebbuildState("Webbuild ready (skin applied; game init loading...)", "warn");
+      } else if (injectMode === "play_ready") {
+        status(`Applied XP as web skin (${Math.round(timings.total_ms || 0)}ms); click PLAY in the test dock`, "ok");
+        setWebbuildState("Webbuild ready (skin applied; click PLAY)", "ok");
+      } else {
+        status(`Applied XP as web skin (${Math.round(timings.total_ms || 0)}ms)`, "ok");
+        setWebbuildState("Webbuild ready (skin applied)", "ok");
+      }
     } catch (e) {
-      $("webbuildOut").textContent = String(e);
+      try {
+        timings.total_ms = Date.now() - t0;
+        $("webbuildOut").textContent = JSON.stringify({
+          stage: "apply_current_xp_as_web_skin_exception",
+          error: String(e),
+          timings,
+          webbuild_state: String($("webbuildState")?.textContent || ""),
+        }, null, 2);
+      } catch (_e2) {
+        $("webbuildOut").textContent = String(e);
+      }
       status("Web skin apply failed", "err");
     }
   }
@@ -539,14 +840,9 @@
       status("Load a workbench session first", "warn");
       return;
     }
-    const frame = $("webbuildFrame");
-    if (frame && frame.classList.contains("hidden")) {
-      status("Opening flat preview and testing current skin...", "warn");
-    } else {
-      status("Reloading flat preview and testing current skin...", "warn");
-    }
+    status("Restarting flat test arena and testing current skin...", "warn");
     await applyCurrentXpAsWebSkin({
-      force_restart: !!(frame && !frame.classList.contains("hidden")),
+      force_restart: true,
       restart_if_overlay_hidden: true,
     });
   }
@@ -559,7 +855,7 @@
   }
 
   async function applyUploadedXpBytesToWebbuild(fileName, xpBytes) {
-    const prep = await prepareWebbuildForSkinApply({ restart_if_overlay_hidden: true });
+    const prep = await prepareWebbuildForSkinApply({ force_restart: true, restart_if_overlay_hidden: true });
     if (!prep.ready) {
       status("Webbuild not ready; preview failed to load", "err");
       return;
@@ -571,6 +867,7 @@
         override_names,
         reload_player_name: "player",
         require_start_game: prep.restarted || prep.overlay_visible,
+        auto_start_game: true,
       });
       state.webbuild.uploadedXpBytes = xpBytes;
       state.webbuild.uploadedXpName = fileName || "upload.xp";
@@ -582,8 +879,17 @@
       }, null, 2);
       state.webbuild.ready = true;
       updateWebbuildUI();
-      status(`Uploaded test skin applied: ${state.webbuild.uploadedXpName}`, "ok");
-      setWebbuildState("Webbuild ready (uploaded skin applied)", "ok");
+      const injectMode = String(inject?.started_via || "");
+      if (injectMode === "play_wait_wasm") {
+        status(`Uploaded test skin applied: ${state.webbuild.uploadedXpName} (game init loading)`, "warn");
+        setWebbuildState("Webbuild ready (uploaded skin applied; game init loading...)", "warn");
+      } else if (injectMode === "play_ready") {
+        status(`Uploaded test skin applied: ${state.webbuild.uploadedXpName} (click PLAY)`, "ok");
+        setWebbuildState("Webbuild ready (uploaded skin applied; click PLAY)", "ok");
+      } else {
+        status(`Uploaded test skin applied: ${state.webbuild.uploadedXpName}`, "ok");
+        setWebbuildState("Webbuild ready (uploaded skin applied)", "ok");
+      }
     } catch (e) {
       $("webbuildOut").textContent = String(e);
       status("Upload test skin failed", "err");
@@ -1249,7 +1555,7 @@
     for (const rgb of INSPECTOR_SWATCHES) {
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.title = `FG click / BG right-click ${rgbToHex(rgb)}`;
+      btn.title = `Paint+FG click / BG right-click ${rgbToHex(rgb)}`;
       btn.style.width = "18px";
       btn.style.height = "18px";
       btn.style.padding = "0";
@@ -1257,6 +1563,7 @@
       btn.style.background = rgbToHex(rgb);
       btn.dataset.color = rgb.join(",");
       btn.addEventListener("click", () => {
+        state.inspectorPaintColor = [...rgb];
         state.inspectorGlyphFgColor = [...rgb];
         updateInspectorToolUI();
         renderInspector();
@@ -1419,6 +1726,8 @@
       c.className = "cell";
       const x = i % cols;
       const y = Math.floor(i / cols);
+      c.dataset.x = String(x);
+      c.dataset.y = String(y);
       const cell = cellForRender(x, y);
       if (cell) {
         const glyph = Number(cell.glyph || 32);
@@ -1465,6 +1774,12 @@
     if (selected) frame.classList.add("selected");
     if (rowSelected) frame.classList.add("row-selected");
     if (groupSelected) frame.classList.add("group-selected");
+    const dragHover = state.gridCellDrag && state.gridCellDrag.dragging && state.gridCellDrag.hover;
+    if (dragHover && Number(dragHover.row) === Number(row) && Number(dragHover.col) === Number(col)) {
+      frame.classList.add("drop-target");
+      frame.classList.toggle("drop-mode-replace", String(dragHover.mode) === "replace");
+      frame.classList.toggle("drop-mode-swap", String(dragHover.mode) === "swap");
+    }
     frame.dataset.row = String(row);
     frame.dataset.col = String(col);
 
@@ -1474,8 +1789,9 @@
     const scale = Math.max(1, Math.floor(56 / Math.max(pixW, pixH)));
     canvas.width = pixW * scale;
     canvas.height = pixH * scale;
-    canvas.style.width = "64px";
-    canvas.style.height = "64px";
+    const thumbCanvasPx = Math.max(40, gridPanelTilePx() - 4);
+    canvas.style.width = `${thumbCanvasPx}px`;
+    canvas.style.height = `${thumbCanvasPx}px`;
     canvas.style.imageRendering = "pixelated";
     const ctx = canvas.getContext("2d");
     if (state.inspectorShowChecker) {
@@ -1507,8 +1823,86 @@
     label.textContent = semanticFrameLabel(row, col);
     frame.title = `Angle ${row} (${angleNameForIndex(row)}), Frame ${frameColInfo(col).frame}${state.projs > 1 ? `, Proj ${frameColInfo(col).proj}` : ""}`;
     frame.appendChild(canvas);
+    if (dragHover && Number(dragHover.row) === Number(row) && Number(dragHover.col) === Number(col)) {
+      const overlay = document.createElement("div");
+      overlay.className = "grid-drop-choice-overlay";
+      const top = document.createElement("div");
+      top.className = "grid-drop-choice top";
+      top.textContent = "Replace";
+      const bottom = document.createElement("div");
+      bottom.className = "grid-drop-choice bottom";
+      bottom.textContent = "Swap";
+      overlay.appendChild(top);
+      overlay.appendChild(bottom);
+      frame.appendChild(overlay);
+    }
     frame.appendChild(label);
     return frame;
+  }
+
+  function makeFrameRowHeader(row, frameCols) {
+    const wrap = document.createElement("div");
+    wrap.className = "frame-row-header row-header";
+    if (state.selectedRow === row) wrap.classList.add("selected");
+    wrap.dataset.row = String(row);
+    wrap.setAttribute("draggable", "true");
+
+    const handle = document.createElement("div");
+    handle.className = "row-drag-handle";
+    handle.dataset.rowDragHandle = "1";
+    handle.title = "Drag to reorder row";
+
+    const label = document.createElement("div");
+    label.className = "frame-row-label";
+    label.dataset.rowLabel = "1";
+
+    const idx = document.createElement("div");
+    idx.className = "row-index";
+    idx.textContent = `Row ${row}`;
+    const nm = document.createElement("div");
+    nm.className = "row-name";
+    nm.textContent = angleNameForIndex(row);
+    label.appendChild(idx);
+    label.appendChild(nm);
+
+    wrap.title = `Select ${angleNameForIndex(row)} row (${frameCols} frame slots)`;
+    wrap.appendChild(handle);
+    wrap.appendChild(label);
+    return wrap;
+  }
+
+  function selectWholeRow(row) {
+    const semanticFrames = Math.max(1, state.anims.reduce((a, b) => a + b, 0));
+    const frameCols = semanticFrames * Math.max(1, state.projs);
+    state.selectedRow = row;
+    state.selectedCols = new Set();
+    for (let c = 0; c < frameCols; c++) state.selectedCols.add(c);
+    renderFrameGrid();
+    renderJitterInfo();
+    renderPreviewFrame(row, 0);
+    status(`Selected row ${row} (${angleNameForIndex(row)})`, "ok");
+  }
+
+  function moveRowToIndex(fromRow, toRow) {
+    const from = Math.max(0, Math.min(state.angles - 1, Number(fromRow)));
+    const to = Math.max(0, Math.min(state.angles - 1, Number(toRow)));
+    if (from === to) return false;
+    if (!editableLayerActive()) {
+      status("Selected layer is read-only. Switch to Visual layer (2) to edit.", "warn");
+      return false;
+    }
+    pushHistory();
+    const step = to > from ? 1 : -1;
+    let cur = from;
+    while (cur !== to) {
+      swapRowBlocks(cur, cur + step);
+      cur += step;
+    }
+    state.selectedRow = to;
+    renderAll();
+    saveSessionState("move-row-to-index");
+    status(`Moved row to ${to} (${angleNameForIndex(to)})`, "ok");
+    return true;
   }
 
   function renderFrameGrid() {
@@ -1516,8 +1910,10 @@
     panel.innerHTML = "";
     const semanticFrames = Math.max(1, state.anims.reduce((a, b) => a + b, 0));
     const frameCols = semanticFrames * Math.max(1, state.projs);
-    panel.style.gridTemplateColumns = `repeat(${frameCols}, 68px)`;
+    updateGridPanelZoomUI();
+    panel.style.gridTemplateColumns = `${gridPanelHeaderPx()}px repeat(${frameCols}, ${gridPanelTilePx()}px)`;
     for (let row = 0; row < state.angles; row++) {
+      panel.appendChild(makeFrameRowHeader(row, frameCols));
       for (let col = 0; col < frameCols; col++) {
         const selected = state.selectedRow === row && state.selectedCols.has(col);
         const rowSelected = state.selectedRow === row;
@@ -1612,6 +2008,7 @@
     if (!state.sourceImage) {
       drawChecker(canvas.width, canvas.height, 8);
       $("sourceInfo").textContent = "No source image loaded.";
+      updateSourceCanvasZoomUI();
       return;
     }
     canvas.width = state.sourceImage.width;
@@ -1662,6 +2059,7 @@
     const selTxt = ` selected=${state.sourceSelection.size}`;
     const cutTxt = ` cutsV=${state.sourceCutsV.length}`;
     $("sourceInfo").textContent = `sprites_detected=${state.extractedBoxes.length}${anchorTxt}${draftTxt}${selTxt}${cutTxt}`;
+    updateSourceCanvasZoomUI();
   }
 
   function renderPreviewFrame(row, frame) {
@@ -2309,6 +2707,13 @@
     const panel = $("cellInspectorPanel");
     if (panel) panel.classList.remove("hidden");
     renderInspector();
+    status(`Opened XP Editor for row=${state.inspectorRow} col=${state.inspectorCol}`, "ok");
+    try {
+      requestAnimationFrame(() => {
+        try { panel?.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (_e) {}
+        try { $("cellInspectorCanvas")?.focus?.(); } catch (_e) {}
+      });
+    } catch (_e) {}
   }
 
   function closeInspector() {
@@ -2454,16 +2859,7 @@
       return false;
     }
     if (state.inspectorTool === "dropper") {
-      const sampled = hit.half === "top" ? halves.top : halves.bottom;
-      setInspectorGlyphUIFromCell(prev);
-      if (!sampled) {
-        status("Dropper sampled transparent half-cell", "warn");
-        return false;
-      }
-      state.inspectorPaintColor = [...sampled];
-      updateInspectorToolUI();
-      renderInspector();
-      status(`Sampled color ${rgbToHex(sampled)}`, "ok");
+      sampleInspectorGlyphAndPaintFromHit(hit);
       return false;
     }
     if (!editableLayerActive()) {
@@ -2485,6 +2881,28 @@
       !colorsEqual(prev.bg || [0, 0, 0], next.bg || [0, 0, 0]);
     if (!changed) return false;
     setCell(gx, gy, next);
+    return true;
+  }
+
+  function sampleInspectorGlyphAndPaintFromHit(hit, opts = {}) {
+    if (!hit) return false;
+    const rec = inspectorCellFromLocal(hit.row, hit.col, hit.cx, hit.cy);
+    if (!rec) return false;
+    const prev = rec.cell;
+    const halves = decodeCellHalves(prev);
+    const sampled = hit.half === "top" ? halves.top : halves.bottom;
+    setInspectorGlyphUIFromCell(prev);
+    if (sampled) state.inspectorPaintColor = [...sampled];
+    updateInspectorToolUI();
+    renderInspector();
+    if (!opts.silent) {
+      status(
+        sampled
+          ? `Sampled glyph=${Number(prev.glyph || 0)} and paint=${rgbToHex(sampled)}`
+          : `Sampled glyph=${Number(prev.glyph || 0)} (transparent ${String(hit.half || "half")} half-cell)`,
+        sampled ? "ok" : "warn"
+      );
+    }
     return true;
   }
 
@@ -2535,7 +2953,9 @@
     const maxSel = hasSelection ? Math.max(...state.selectedCols) : 0;
     $("colLeftBtn").disabled = readOnly || !hasSelection || minSel <= 0;
     $("colRightBtn").disabled = readOnly || !hasSelection || maxSel >= maxCol;
+    if ($("addFrameBtn")) $("addFrameBtn").disabled = readOnly || !(state.gridCols > 0 && state.gridRows > 0);
     $("deleteCellBtn").disabled = readOnly || !hasSelection;
+    if ($("openInspectorBtn")) $("openInspectorBtn").disabled = !hasSelection;
     $("assignAnimCategoryBtn").disabled = readOnly || !hasRow;
     $("assignFrameGroupBtn").disabled = readOnly || !hasSelection;
     const jitterDisabled = readOnly || !hasSelection;
@@ -2548,10 +2968,25 @@
     if ($("jitterDownBtn")) $("jitterDownBtn").disabled = jitterDisabled;
   }
 
-  async function saveSessionState(reason) {
-    if (!state.sessionId) return;
+  async function saveSessionState(reason, opts = {}) {
+    if (!state.sessionId) return { ok: false, skipped: "no_session" };
+    const waitForIdle = !!opts.wait_for_idle;
+    const timeoutMs = Math.max(1000, Number(opts.timeout_ms || 15000));
+    if (state.sessionSaveInFlight) {
+      if (!waitForIdle) return { ok: true, skipped: "save_in_flight" };
+      const waitStart = Date.now();
+      while (state.sessionSaveInFlight && (Date.now() - waitStart) < timeoutMs) {
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      if (state.sessionSaveInFlight) {
+        status(`Save busy (${reason})`, "warn");
+        return { ok: false, timed_out: true, stage: "wait_for_idle" };
+      }
+    }
     state.sessionSaveInFlight = true;
     updateSessionDirtyBadge();
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), timeoutMs);
     try {
       const payload = {
         session_id: state.sessionId,
@@ -2570,6 +3005,7 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        signal: ctl.signal,
       });
       if (!r.ok) {
         const txt = await r.text();
@@ -2577,13 +3013,20 @@
         status(`Save failed (${reason})`, "err");
         $("exportOut").textContent = txt;
         updateSessionDirtyBadge();
+        clearTimeout(timer);
+        return { ok: false, status: r.status };
       } else {
         markSessionSaved(reason);
+        clearTimeout(timer);
+        return { ok: true };
       }
     } catch (e) {
       state.sessionSaveInFlight = false;
-      status(`Save failed (${reason})`, "err");
+      const timedOut = e && (e.name === "AbortError");
+      status(timedOut ? `Save timed out (${reason})` : `Save failed (${reason})`, timedOut ? "warn" : "err");
       updateSessionDirtyBadge();
+      clearTimeout(timer);
+      return { ok: false, timed_out: timedOut, error: String(e) };
     }
   }
 
@@ -2672,8 +3115,24 @@
       syncLayersFromSessionCells();
       status(`Session active: ${state.sessionId.slice(0, 8)}...`, "ok");
       renderAll();
-      if (!state.webbuild.loaded) openWebbuild();
-      await saveSessionState("load");
+      // Avoid an expensive immediate full-session save (and background webbuild boot) right after convert/load.
+      // Large sprite sheets can make the UI feel frozen here; defer both until the user edits or runs skin test.
+      stopWebbuildReadyPoll();
+      state.webbuild.loaded = false;
+      state.webbuild.ready = false;
+      state.webbuild.loadRequestedAt = 0;
+      state.webbuild.expectedSrc = "";
+      state.webbuild.lastLoadedSrc = "";
+      state.webbuild.pendingAutoStartToken = "";
+      state.webbuild.uploadedXpBytes = null;
+      state.webbuild.uploadedXpName = "";
+      const webbuildFrame = $("webbuildFrame");
+      if (webbuildFrame) {
+        webbuildFrame.classList.add("hidden");
+        try { webbuildFrame.removeAttribute("src"); } catch (_e) {}
+      }
+      updateWebbuildUI();
+      setWebbuildState("Webbuild not loaded", "");
     } catch (e) {
       status("Load failed: fetch/timeout", "err");
       $("sessionOut").textContent = String(e);
@@ -2684,7 +3143,12 @@
 
   async function exportXp() {
     if (!state.sessionId) return;
-    await saveSessionState("pre-export");
+    const saveRes = await saveSessionState("pre-export", { wait_for_idle: true, timeout_ms: 15000 });
+    if (!saveRes || !saveRes.ok) {
+      $("exportOut").textContent = JSON.stringify({ stage: "save_before_export_failed", save: saveRes }, null, 2);
+      status("Export blocked: session save failed/timed out", "err");
+      return;
+    }
     const r = await fetch("/api/workbench/export-xp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2738,6 +3202,77 @@
   function sourceCanvasSize() {
     const c = $("sourceCanvas");
     return { w: Math.max(1, c.width || 1), h: Math.max(1, c.height || 1) };
+  }
+
+  function clampSourceCanvasZoom(v) {
+    return Math.max(1, Math.min(6, Number(v || 1)));
+  }
+
+  function clampGridPanelZoom(v) {
+    return Math.max(0.75, Math.min(2.5, Number(v || 1)));
+  }
+
+  function updateSourceCanvasZoomUI() {
+    state.sourceCanvasZoom = clampSourceCanvasZoom(state.sourceCanvasZoom);
+    const z = state.sourceCanvasZoom;
+    if ($("sourceZoomInput")) $("sourceZoomInput").value = String(z);
+    if ($("sourceZoomValue")) $("sourceZoomValue").textContent = `${z}x`;
+    const c = $("sourceCanvas");
+    if (!c) return;
+    c.style.width = `${Math.max(1, Math.round(Number(c.width || 1) * z))}px`;
+    c.style.height = `${Math.max(1, Math.round(Number(c.height || 1) * z))}px`;
+  }
+
+  function gridPanelTilePx() {
+    return Math.max(52, Math.round(68 * clampGridPanelZoom(state.gridPanelZoom)));
+  }
+
+  function gridPanelHeaderPx() {
+    return Math.max(84, Math.round(92 * clampGridPanelZoom(state.gridPanelZoom)));
+  }
+
+  function updateGridPanelZoomUI() {
+    state.gridPanelZoom = clampGridPanelZoom(state.gridPanelZoom);
+    const z = state.gridPanelZoom;
+    if ($("gridZoomInput")) $("gridZoomInput").value = String(z);
+    if ($("gridZoomValue")) $("gridZoomValue").textContent = `${z}x`;
+    const panel = $("gridPanel");
+    if (!panel) return;
+    const tile = gridPanelTilePx();
+    panel.style.setProperty("--wb-grid-cell-size", `${tile}px`);
+    panel.style.setProperty("--wb-grid-label-canvas-size", `${Math.max(40, tile - 4)}px`);
+    panel.style.setProperty("--wb-grid-row-header-width", `${gridPanelHeaderPx()}px`);
+  }
+
+  function resizeGridCharCanvas(newGridCols, newGridRows) {
+    const nextCols = Math.max(1, Math.floor(Number(newGridCols) || 1));
+    const nextRows = Math.max(1, Math.floor(Number(newGridRows) || 1));
+    const oldCols = Math.max(0, Number(state.gridCols || 0));
+    const oldRows = Math.max(0, Number(state.gridRows || 0));
+    if (nextCols === oldCols && nextRows === oldRows) return false;
+    const oldCells = deepCloneCells(Array.isArray(state.cells) ? state.cells : []);
+    const next = [];
+    for (let y = 0; y < nextRows; y++) {
+      for (let x = 0; x < nextCols; x++) {
+        const idx = y * nextCols + x;
+        if (x < oldCols && y < oldRows) {
+          const prev = oldCells[y * oldCols + x] || transparentCell(idx);
+          next.push({
+            idx,
+            glyph: Number(prev.glyph || 0),
+            fg: [Number(prev.fg?.[0] || 0), Number(prev.fg?.[1] || 0), Number(prev.fg?.[2] || 0)],
+            bg: [Number(prev.bg?.[0] || 0), Number(prev.bg?.[1] || 0), Number(prev.bg?.[2] || 0)],
+          });
+        } else {
+          next.push(transparentCell(idx));
+        }
+      }
+    }
+    state.gridCols = nextCols;
+    state.gridRows = nextRows;
+    state.cells = next;
+    syncLayersFromSessionCells();
+    return true;
   }
 
   function clampBoxToCanvas(box) {
@@ -3617,6 +4152,19 @@
     return { moved: true, clippedCells };
   }
 
+  function clampShiftToFrameBounds(bounds, dx, dy) {
+    dx = Math.round(Number(dx || 0));
+    dy = Math.round(Number(dy || 0));
+    if (!bounds) return { dx, dy, clamped: false };
+    const minDx = -Number(bounds.minX || 0);
+    const maxDx = Math.max(0, state.frameWChars - 1 - Number(bounds.maxX || 0));
+    const minDy = -Number(bounds.minY || 0);
+    const maxDy = Math.max(0, state.frameHChars - 1 - Number(bounds.maxY || 0));
+    const cdx = Math.max(minDx, Math.min(maxDx, dx));
+    const cdy = Math.max(minDy, Math.min(maxDy, dy));
+    return { dx: cdx, dy: cdy, clamped: cdx !== dx || cdy !== dy };
+  }
+
   function nudgeSelectedFrames(dx, dy) {
     if (!editableLayerActive()) {
       status("Selected layer is read-only. Switch to Visual layer (2) to edit.", "warn");
@@ -3631,14 +4179,21 @@
     pushHistory();
     let moved = 0;
     let clipped = 0;
+    let clampedFrames = 0;
     for (const col of cols) {
-      const res = shiftFrameContents(row, col, dx, dy);
+      const bounds = frameVisualBounds(row, col);
+      const shift = clampShiftToFrameBounds(bounds, dx, dy);
+      if (shift.clamped) clampedFrames += 1;
+      const res = shiftFrameContents(row, col, shift.dx, shift.dy);
       if (res.moved) moved += 1;
       clipped += Number(res.clippedCells || 0);
     }
     renderAll();
     saveSessionState("nudge-frame-jitter");
-    status(`Nudged ${moved} frame(s) by dx=${dx}, dy=${dy}${clipped ? ` (clipped ${clipped} cells)` : ""}`, clipped ? "warn" : "ok");
+    status(
+      `Nudged ${moved} frame(s) by dx=${dx}, dy=${dy}${clampedFrames ? ` (clamped ${clampedFrames} frame(s) at bounds)` : ""}${clipped ? ` (clipped ${clipped} cells)` : ""}`,
+      clipped ? "warn" : (clampedFrames ? "warn" : "ok")
+    );
     return true;
   }
 
@@ -3670,18 +4225,21 @@
     pushHistory();
     let shifted = 0;
     let clipped = 0;
+    let clampedFrames = 0;
     for (const entry of entries) {
-      const { dx, dy } = computeAlignShift(entry.bounds, target, alignMode);
-      if (!dx && !dy) continue;
-      const res = shiftFrameContents(row, entry.col, dx, dy);
+      const wanted = computeAlignShift(entry.bounds, target, alignMode);
+      const shift = clampShiftToFrameBounds(entry.bounds, wanted.dx, wanted.dy);
+      if (shift.clamped) clampedFrames += 1;
+      if (!shift.dx && !shift.dy) continue;
+      const res = shiftFrameContents(row, entry.col, shift.dx, shift.dy);
       if (res.moved) shifted += 1;
       clipped += Number(res.clippedCells || 0);
     }
     renderAll();
     saveSessionState(useEntireRow ? "auto-align-row-jitter" : "auto-align-selected-jitter");
     status(
-      `Auto-aligned ${shifted} frame(s) on row ${row} (${alignMode}, ${refMode})${clipped ? `; clipped ${clipped} cells` : ""}`,
-      clipped ? "warn" : "ok"
+      `Auto-aligned ${shifted} frame(s) on row ${row} (${alignMode}, ${refMode})${clampedFrames ? `; clamped ${clampedFrames} at frame bounds` : ""}${clipped ? `; clipped ${clipped} cells` : ""}`,
+      (clipped || clampedFrames) ? "warn" : "ok"
     );
     return true;
   }
@@ -3689,6 +4247,13 @@
   function renderJitterInfo() {
     const el = $("jitterInfo");
     if (!el) return;
+    const jitterRowInput = $("jitterRow");
+    if (jitterRowInput) {
+      jitterRowInput.min = "0";
+      jitterRowInput.max = String(Math.max(0, state.angles - 1));
+      jitterRowInput.value = String(state.selectedRow === null ? 0 : Number(state.selectedRow));
+      jitterRowInput.disabled = state.angles <= 0;
+    }
     if (state.selectedRow === null || state.selectedCols.size === 0) {
       el.textContent = "Select one or more grid frames on a row to align/nudge jitter.";
       return;
@@ -3709,6 +4274,53 @@
 
   function totalGridFrameCols() {
     return Math.max(1, state.anims.reduce((a, b) => a + b, 0) * Math.max(1, state.projs));
+  }
+
+  function addGridFrameSlot() {
+    if (!editableLayerActive()) {
+      status("Selected layer is read-only. Switch to Visual layer (2) to edit.", "warn");
+      return false;
+    }
+    if (!(state.frameWChars > 0 && state.gridRows > 0)) {
+      status("No grid/session loaded", "warn");
+      return false;
+    }
+    const beforeDirty = !!state.sessionDirty;
+    pushHistory();
+    const charColsPerSemanticFrame = Math.max(1, Number(state.frameWChars || 1) * Math.max(1, Number(state.projs || 1)));
+    if (!Array.isArray(state.anims) || !state.anims.length) state.anims = [1];
+    else state.anims[state.anims.length - 1] = Math.max(1, Number(state.anims[state.anims.length - 1] || 1) + 1);
+    const resized = resizeGridCharCanvas(Number(state.gridCols || 0) + charColsPerSemanticFrame, state.gridRows || 1);
+    if (!resized) {
+      revertNoopHistory(beforeDirty);
+      status("Add Frame made no changes", "warn");
+      return false;
+    }
+    const lastCol = Math.max(0, totalGridFrameCols() - 1);
+    const row = state.selectedRow === null ? 0 : Math.max(0, Math.min(state.angles - 1, Number(state.selectedRow)));
+    state.selectedRow = row;
+    state.selectedCols = new Set([lastCol]);
+    renderAll();
+    saveSessionState("grid-add-frame");
+    status(`Added frame slot (frames=${state.anims.reduce((a, b) => a + b, 0)})`, "ok");
+    return true;
+  }
+
+  function jumpSelectionToRow(row) {
+    if (!Number.isFinite(Number(row))) return false;
+    const nextRow = Math.max(0, Math.min(state.angles - 1, Math.round(Number(row))));
+    if (state.angles <= 0) return false;
+    if (state.selectedCols.size <= 0 || state.selectedRow === null) {
+      selectFrame(nextRow, 0, false);
+      return true;
+    }
+    state.selectedRow = nextRow;
+    renderFrameGrid();
+    renderJitterInfo();
+    const semanticFrames = Math.max(1, state.anims.reduce((a, b) => a + b, 0));
+    const firstCol = Math.max(0, Math.min(totalGridFrameCols() - 1, selectedFrameColsSorted()[0] ?? 0));
+    renderPreviewFrame(nextRow, Math.max(0, Math.min(semanticFrames - 1, firstCol % semanticFrames)));
+    return true;
   }
 
   function writeSourceCellsToFrame(row, col, cells) {
@@ -4106,9 +4718,263 @@
     renderPreviewFrame(row, Math.max(0, Math.min(semanticFrames - 1, col % semanticFrames)));
   }
 
+  function openInspectorForSelectedFrame() {
+    if (state.selectedRow === null || state.selectedCols.size <= 0) {
+      status("Select a frame tile first, then click Open XP Editor", "warn");
+      return false;
+    }
+    const col = Math.min(...state.selectedCols);
+    openInspector(Number(state.selectedRow), Number(col));
+    return true;
+  }
+
+  function selectedPrimaryFrameCoord() {
+    if (state.selectedRow === null || state.selectedCols.size <= 0) return null;
+    return {
+      row: Number(state.selectedRow),
+      col: Number(Math.min(...state.selectedCols)),
+    };
+  }
+
+  function gridFrameSignature(row, col) {
+    const vals = [];
+    for (let y = 0; y < state.frameHChars; y++) {
+      for (let x = 0; x < state.frameWChars; x++) {
+        const gx = col * state.frameWChars + x;
+        const gy = row * state.frameHChars + y;
+        if (gx >= state.gridCols || gy >= state.gridRows) continue;
+        const c = cellAt(gx, gy);
+        vals.push(`${c.glyph}:${c.fg[0]}:${c.fg[1]}:${c.fg[2]}:${c.bg[0]}:${c.bg[1]}:${c.bg[2]}`);
+      }
+    }
+    return vals.join("|");
+  }
+
+  function copySelectedFrameToClipboard() {
+    const coord = selectedPrimaryFrameCoord();
+    if (!coord) {
+      status("Select a frame tile first", "warn");
+      return false;
+    }
+    state.inspectorFrameClipboard = inspectorFrameCellMatrix(coord.row, coord.col);
+    updateInspectorToolUI();
+    status(`Copied frame row=${coord.row} col=${coord.col}`, "ok");
+    return true;
+  }
+
+  function pasteClipboardToSelectedFrame() {
+    const coord = selectedPrimaryFrameCoord();
+    if (!coord) {
+      status("Select a frame tile first", "warn");
+      return false;
+    }
+    if (!state.inspectorFrameClipboard) {
+      status("No copied frame in clipboard", "warn");
+      return false;
+    }
+    if (!editableLayerActive()) {
+      status("Selected layer is read-only. Switch to Visual layer (2) to edit.", "warn");
+      return false;
+    }
+    const wasDirty = !!state.sessionDirty;
+    const beforeSig = gridFrameSignature(coord.row, coord.col);
+    pushHistory();
+    writeFrameCellMatrix(coord.row, coord.col, state.inspectorFrameClipboard);
+    const afterSig = gridFrameSignature(coord.row, coord.col);
+    if (String(beforeSig) === String(afterSig)) {
+      revertNoopHistory(wasDirty);
+      status("Paste frame made no changes", "warn");
+      return false;
+    }
+    renderAll();
+    saveSessionState("grid-paste-frame");
+    status(`Pasted frame into row=${coord.row} col=${coord.col}`, "ok");
+    return true;
+  }
+
+  function openInspectorFromGridContextMenu() {
+    const coord = selectedPrimaryFrameCoord();
+    if (!coord) {
+      status("Select a frame tile first", "warn");
+      return false;
+    }
+    openInspector(coord.row, coord.col);
+    return true;
+  }
+
+  function updateGridContextMenuUI() {
+    const hasSel = !!selectedPrimaryFrameCoord();
+    if ($("ctxCopy")) $("ctxCopy").disabled = !hasSel;
+    if ($("ctxPaste")) $("ctxPaste").disabled = !hasSel || !state.inspectorFrameClipboard || !editableLayerActive();
+    if ($("ctxOpenInspector")) $("ctxOpenInspector").disabled = !hasSel;
+    if ($("ctxDelete")) $("ctxDelete").disabled = !hasSel || !editableLayerActive();
+  }
+
+  function frameCellMatricesEqual(a, b) {
+    const rows = Math.max(Array.isArray(a) ? a.length : 0, Array.isArray(b) ? b.length : 0);
+    for (let y = 0; y < rows; y++) {
+      const ar = Array.isArray(a?.[y]) ? a[y] : [];
+      const br = Array.isArray(b?.[y]) ? b[y] : [];
+      const cols = Math.max(ar.length, br.length);
+      for (let x = 0; x < cols; x++) {
+        if (!cellEquals(ar[x], br[x])) return false;
+      }
+    }
+    return true;
+  }
+
+  function applyGridCellDropAction(fromRow, fromCol, toRow, toCol, mode) {
+    if (!editableLayerActive()) {
+      status("Selected layer is read-only. Switch to Visual layer (2) to edit.", "warn");
+      return false;
+    }
+    const fr = Math.max(0, Math.min(state.angles - 1, Number(fromRow)));
+    const tr = Math.max(0, Math.min(state.angles - 1, Number(toRow)));
+    const maxCol = Math.max(0, totalGridFrameCols() - 1);
+    const fc = Math.max(0, Math.min(maxCol, Number(fromCol)));
+    const tc = Math.max(0, Math.min(maxCol, Number(toCol)));
+    if (!Number.isFinite(fr) || !Number.isFinite(fc) || !Number.isFinite(tr) || !Number.isFinite(tc)) return false;
+    if (fr === tr && fc === tc) return false;
+    const src = inspectorFrameCellMatrix(fr, fc);
+    const dst = inspectorFrameCellMatrix(tr, tc);
+    const wasDirty = !!state.sessionDirty;
+    pushHistory();
+    if (String(mode) === "swap") {
+      writeFrameCellMatrix(tr, tc, src);
+      writeFrameCellMatrix(fr, fc, dst);
+    } else {
+      writeFrameCellMatrix(tr, tc, src);
+    }
+    const srcAfter = inspectorFrameCellMatrix(fr, fc);
+    const dstAfter = inspectorFrameCellMatrix(tr, tc);
+    const changed = !frameCellMatricesEqual(src, dstAfter) || (String(mode) === "swap" && !frameCellMatricesEqual(dst, srcAfter));
+    if (!changed) {
+      revertNoopHistory(wasDirty);
+      status(`Grid ${mode} made no changes`, "warn");
+      return false;
+    }
+    state.selectedRow = tr;
+    state.selectedCols = new Set([tc]);
+    renderAll();
+    saveSessionState(String(mode) === "swap" ? "grid-cell-swap" : "grid-cell-replace");
+    status(String(mode) === "swap"
+      ? `Swapped frame row=${fr} col=${fc} with row=${tr} col=${tc}`
+      : `Replaced target row=${tr} col=${tc} with dragged frame row=${fr} col=${fc}`, "ok");
+    return true;
+  }
+
   function attachGridHandlers() {
     const panel = $("gridPanel");
+    panel.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      const header = e.target.closest(".frame-row-header");
+      if (header) return;
+      const cell = e.target.closest(".frame-cell");
+      if (!cell) return;
+      const row = Number(cell.dataset.row);
+      const col = Number(cell.dataset.col);
+      const singleSelected = state.selectedRow === row && state.selectedCols.size === 1 && state.selectedCols.has(col);
+      if (!e.shiftKey && singleSelected) {
+        state.gridCellDrag = {
+          fromRow: row,
+          fromCol: col,
+          startX: Number(e.clientX || 0),
+          startY: Number(e.clientY || 0),
+          startedAt: Date.now(),
+          dragging: false,
+          hover: null,
+        };
+        state.gridFrameDragSelect = null;
+        $("gridContextMenu").classList.add("hidden");
+        return;
+      }
+      state.gridCellDrag = null;
+      selectFrame(row, col, !!e.shiftKey);
+      state.gridFrameDragSelect = { row, startCol: col, lastCol: col };
+      $("gridContextMenu").classList.add("hidden");
+    });
+    panel.addEventListener("mousemove", (e) => {
+      const cellDrag = state.gridCellDrag;
+      if (cellDrag) {
+        const dx = Number(e.clientX || 0) - Number(cellDrag.startX || 0);
+        const dy = Number(e.clientY || 0) - Number(cellDrag.startY || 0);
+        const dist = Math.hypot(dx, dy);
+        if (!cellDrag.dragging && dist >= 5) {
+          const heldMs = Date.now() - Number(cellDrag.startedAt || 0);
+          if (heldMs < 180) {
+            // Preserve quick row drag-select behavior; hold briefly to initiate cell replace/swap drag.
+            state.gridCellDrag = null;
+            state.gridFrameDragSelect = { row: Number(cellDrag.fromRow), startCol: Number(cellDrag.fromCol), lastCol: Number(cellDrag.fromCol) };
+          } else {
+            cellDrag.dragging = true;
+            state.gridCellDragSuppressClick = true;
+          }
+        }
+        if (!state.gridCellDrag) {
+          // fall through into row drag-select handling below on the same mousemove tick
+        } else if (!cellDrag.dragging) {
+          return;
+        } else {
+          const targetCell = e.target.closest(".frame-cell");
+          let nextHover = null;
+          if (targetCell) {
+            const tr = Number(targetCell.dataset.row);
+            const tc = Number(targetCell.dataset.col);
+            if (Number.isFinite(tr) && Number.isFinite(tc) && !(tr === cellDrag.fromRow && tc === cellDrag.fromCol)) {
+              const rect = targetCell.getBoundingClientRect();
+              const midY = rect.top + (rect.height / 2);
+              nextHover = { row: tr, col: tc, mode: (Number(e.clientY || 0) < midY) ? "replace" : "swap" };
+            }
+          }
+          const prev = cellDrag.hover;
+          const changed =
+            (!prev && !!nextHover) ||
+            (!!prev && !nextHover) ||
+            (!!prev && !!nextHover && (prev.row !== nextHover.row || prev.col !== nextHover.col || prev.mode !== nextHover.mode));
+          if (changed) {
+            cellDrag.hover = nextHover;
+            renderFrameGrid();
+          }
+          return;
+        }
+      }
+      const drag = state.gridFrameDragSelect;
+      if (!drag) return;
+      const cell = e.target.closest(".frame-cell");
+      if (!cell) return;
+      const row = Number(cell.dataset.row);
+      const col = Number(cell.dataset.col);
+      if (row !== Number(drag.row) || col === Number(drag.lastCol)) return;
+      drag.lastCol = col;
+      selectFrame(Number(drag.row), col, true);
+    });
+    window.addEventListener("mouseup", () => {
+      if (state.gridCellDrag) {
+        const drag = state.gridCellDrag;
+        const hadHover = !!drag.hover;
+        const shouldApply = !!drag.dragging && !!drag.hover;
+        const hover = drag.hover ? { ...drag.hover } : null;
+        const src = { row: Number(drag.fromRow), col: Number(drag.fromCol) };
+        state.gridCellDrag = null;
+        if (hadHover) renderFrameGrid();
+        if (shouldApply && hover) {
+          applyGridCellDropAction(src.row, src.col, hover.row, hover.col, hover.mode);
+        }
+      }
+      state.gridFrameDragSelect = null;
+    });
     panel.addEventListener("click", (e) => {
+      if (state.gridCellDragSuppressClick) {
+        state.gridCellDragSuppressClick = false;
+        return;
+      }
+      const header = e.target.closest(".frame-row-header");
+      if (header) {
+        const row = Number(header.dataset.row);
+        if (Number.isFinite(row)) selectWholeRow(row);
+        $("gridContextMenu").classList.add("hidden");
+        return;
+      }
       const cell = e.target.closest(".frame-cell");
       if (!cell) return;
       const row = Number(cell.dataset.row);
@@ -4117,6 +4983,16 @@
       $("gridContextMenu").classList.add("hidden");
     });
     panel.addEventListener("dblclick", (e) => {
+      const header = e.target.closest(".frame-row-header");
+      if (header) {
+        const row = Number(header.dataset.row);
+        if (Number.isFinite(row)) {
+          selectWholeRow(row);
+          openInspector(row, 0);
+        }
+        $("gridContextMenu").classList.add("hidden");
+        return;
+      }
       const cell = e.target.closest(".frame-cell");
       if (!cell) return;
       const row = Number(cell.dataset.row);
@@ -4126,17 +5002,89 @@
       $("gridContextMenu").classList.add("hidden");
     });
     panel.addEventListener("contextmenu", (e) => {
+      if (state.gridCellDrag && state.gridCellDrag.dragging) {
+        e.preventDefault();
+        return;
+      }
+      const header = e.target.closest(".frame-row-header");
+      if (header) {
+        e.preventDefault();
+        const row = Number(header.dataset.row);
+        if (Number.isFinite(row)) selectWholeRow(row);
+      }
       const cell = e.target.closest(".frame-cell");
-      if (!cell) return;
-      e.preventDefault();
-      const row = Number(cell.dataset.row);
-      const col = Number(cell.dataset.col);
-      selectFrame(row, col, false);
+      if (cell) {
+        e.preventDefault();
+        const row = Number(cell.dataset.row);
+        const col = Number(cell.dataset.col);
+        selectFrame(row, col, false);
+      }
+      if (!header && !cell) return;
       const menu = $("gridContextMenu");
+      updateGridContextMenuUI();
       menu.style.left = `${e.clientX}px`;
       menu.style.top = `${e.clientY}px`;
       menu.classList.remove("hidden");
     });
+    panel.addEventListener("dragstart", (e) => {
+      const header = e.target.closest(".frame-row-header");
+      if (!header) return;
+      const row = Number(header.dataset.row);
+      if (!Number.isFinite(row)) return;
+      state.gridRowDrag = { fromRow: row };
+      try {
+        e.dataTransfer.setData("text/plain", String(row));
+        e.dataTransfer.effectAllowed = "move";
+      } catch (_e) {}
+    });
+    panel.addEventListener("dragover", (e) => {
+      const header = e.target.closest(".frame-row-header");
+      if (!header) return;
+      e.preventDefault();
+      panel.querySelectorAll(".frame-row-header.drag-target").forEach((n) => n.classList.remove("drag-target"));
+      header.classList.add("drag-target");
+      try {
+        e.dataTransfer.dropEffect = "move";
+      } catch (_e) {}
+    });
+    panel.addEventListener("dragleave", (e) => {
+      const header = e.target.closest(".frame-row-header");
+      if (header) header.classList.remove("drag-target");
+    });
+    panel.addEventListener("drop", (e) => {
+      const header = e.target.closest(".frame-row-header");
+      if (!header) return;
+      e.preventDefault();
+      header.classList.remove("drag-target");
+      const toRow = Number(header.dataset.row);
+      let fromRow = Number(state.gridRowDrag?.fromRow);
+      try {
+        const dt = Number((e.dataTransfer && e.dataTransfer.getData("text/plain")) || "");
+        if (Number.isFinite(dt)) fromRow = dt;
+      } catch (_e) {}
+      if (Number.isFinite(fromRow) && Number.isFinite(toRow)) moveRowToIndex(fromRow, toRow);
+      state.gridRowDrag = null;
+    });
+    panel.addEventListener("dragend", () => {
+      panel.querySelectorAll(".frame-row-header.drag-target").forEach((n) => n.classList.remove("drag-target"));
+      state.gridRowDrag = null;
+    });
+    const legacy = $("grid");
+    if (legacy) {
+      legacy.addEventListener("dblclick", (e) => {
+        const cell = e.target.closest(".cell");
+        if (!cell || !state.sessionId) return;
+        const gx = Number(cell.dataset.x || 0);
+        const gy = Number(cell.dataset.y || 0);
+        if (!Number.isFinite(gx) || !Number.isFinite(gy) || state.frameWChars <= 0 || state.frameHChars <= 0) return;
+        const row = Math.max(0, Math.min(state.angles - 1, Math.floor(gy / Math.max(1, state.frameHChars))));
+        const maxCol = Math.max(0, totalGridFrameCols() - 1);
+        const col = Math.max(0, Math.min(maxCol, Math.floor(gx / Math.max(1, state.frameWChars))));
+        selectFrame(row, col, false);
+        openInspector(row, col);
+        $("gridContextMenu").classList.add("hidden");
+      });
+    }
     document.addEventListener("click", () => {
       $("gridContextMenu").classList.add("hidden");
       hideSourceContextMenu();
@@ -4244,6 +5192,7 @@
     $("webbuildFrame").addEventListener("load", () => {
       state.webbuild.loaded = true;
       state.webbuild.ready = false;
+      state.webbuild.lastLoadedSrc = String($("webbuildFrame")?.getAttribute("src") || "");
       updateWebbuildUI();
       setWebbuildState("Webbuild frame loaded, waiting for runtime...", "warn");
       stopWebbuildReadyPoll();
@@ -4381,6 +5330,18 @@
     });
 
     $("deleteCellBtn").addEventListener("click", deleteSelectedFrames);
+    $("ctxCopy").addEventListener("click", () => {
+      copySelectedFrameToClipboard();
+      $("gridContextMenu").classList.add("hidden");
+    });
+    $("ctxPaste").addEventListener("click", () => {
+      pasteClipboardToSelectedFrame();
+      $("gridContextMenu").classList.add("hidden");
+    });
+    $("ctxOpenInspector").addEventListener("click", () => {
+      openInspectorFromGridContextMenu();
+      $("gridContextMenu").classList.add("hidden");
+    });
     $("ctxDelete").addEventListener("click", () => {
       deleteSelectedFrames();
       $("gridContextMenu").classList.add("hidden");
@@ -4389,6 +5350,16 @@
     $("rowDownBtn").addEventListener("click", () => moveSelectedRow(1));
     $("colLeftBtn").addEventListener("click", () => moveSelectedCols(-1));
     $("colRightBtn").addEventListener("click", () => moveSelectedCols(1));
+    if ($("addFrameBtn")) $("addFrameBtn").addEventListener("click", addGridFrameSlot);
+    $("openInspectorBtn").addEventListener("click", openInspectorForSelectedFrame);
+    if ($("sourceZoomInput")) $("sourceZoomInput").addEventListener("input", () => {
+      state.sourceCanvasZoom = clampSourceCanvasZoom($("sourceZoomInput").value || 1);
+      updateSourceCanvasZoomUI();
+    });
+    if ($("gridZoomInput")) $("gridZoomInput").addEventListener("input", () => {
+      state.gridPanelZoom = clampGridPanelZoom($("gridZoomInput").value || 1);
+      renderFrameGrid();
+    });
     $("assignAnimCategoryBtn").addEventListener("click", assignRowCategory);
     $("assignFrameGroupBtn").addEventListener("click", assignFrameGroup);
     $("applyGroupsToAnimsBtn").addEventListener("click", applyGroupsToAnims);
@@ -4409,6 +5380,9 @@
     $("jitterDownBtn").addEventListener("click", () => {
       const step = Math.max(1, Number($("jitterStep").value || 1));
       nudgeSelectedFrames(0, step);
+    });
+    $("jitterRow").addEventListener("change", () => {
+      jumpSelectionToRow(Number($("jitterRow").value || 0));
     });
 
     $("playBtn").addEventListener("click", startPreview);
@@ -4530,8 +5504,19 @@
       state.inspectorShowChecker = !!$("inspectorShowChecker").checked;
       renderInspector();
     });
+    $("cellInspectorCanvas").addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+    });
     $("cellInspectorCanvas").addEventListener("mousedown", (e) => {
       if (!state.inspectorOpen) return;
+      if (e.button === 2) {
+        const hit = inspectorHalfCellAtEvent(e);
+        if (!hit) return;
+        setInspectorHoverFromHit(hit);
+        sampleInspectorGlyphAndPaintFromHit(hit);
+        return;
+      }
+      if (e.button !== 0) return;
       if (state.inspectorTool === "select") {
         const hitCell = inspectorCellRectAtEvent(e);
         if (!hitCell) return;
@@ -4846,16 +5831,70 @@
       angles: state.angles,
       anims: [...state.anims],
       projs: state.projs,
+      frameWChars: state.frameWChars,
+      frameHChars: state.frameHChars,
       selectedRow: state.selectedRow,
       selectedCols: [...state.selectedCols],
       rowCategories: { ...state.rowCategories },
       frameGroups: JSON.parse(JSON.stringify(state.frameGroups)),
+      sourceMode: String(state.sourceMode || "select"),
+      rapidManualAdd: !!state.rapidManualAdd,
       sourceImageLoaded: !!state.sourceImage,
+      drawCurrent: state.drawCurrent ? { ...state.drawCurrent } : null,
+      sourceSelection: [...state.sourceSelection],
       extractedBoxes: state.extractedBoxes.length,
+      sourceBoxes: state.extractedBoxes.map((b) => ({ id: Number(b.id), x: Number(b.x), y: Number(b.y), w: Number(b.w), h: Number(b.h) })),
       anchorBox: state.anchorBox ? { ...state.anchorBox } : null,
       historyDepth: state.history.length,
       futureDepth: state.future.length,
     }),
+    getWebbuildDebugState: () => {
+      const frame = $("webbuildFrame");
+      const out = {
+        loaded: !!state.webbuild.loaded,
+        ready: !!state.webbuild.ready,
+        loadRequestedAt: Number(state.webbuild.loadRequestedAt || 0),
+        wbStatus: String($("wbStatus")?.textContent || ""),
+        webbuildState: String($("webbuildState")?.textContent || ""),
+        quickBtnDisabled: !!$("webbuildQuickTestBtn")?.disabled,
+        quickBtnText: String($("webbuildQuickTestBtn")?.textContent || ""),
+        iframeVisible: !!frame && !frame.classList.contains("hidden"),
+        iframeSrc: frame ? String(frame.getAttribute("src") || "") : "",
+      };
+      const win = webbuildFrameWindow();
+      if (!win) return out;
+      try {
+        const progressEl = win.document && win.document.getElementById ? win.document.getElementById("progress") : null;
+        const statusEl = win.document && win.document.getElementById ? win.document.getElementById("status") : null;
+        out.iframe = {
+          href: String(win.location?.href || ""),
+          readyState: String(win.document?.readyState || ""),
+          hasModule: !!win.Module,
+          calledRun: !!(win.Module && win.Module.calledRun),
+          hasLoad: typeof win.Load === "function",
+          hasStartGame: typeof win.StartGame === "function",
+          wasmReady: !!win._wasmReady,
+          hasLegacyFsOps: !!(win.Module && typeof win.Module.FS_createDataFile === "function" && typeof win.Module.FS_unlink === "function"),
+          hasWriteFileFs: !!(win.Module && win.Module.FS && typeof win.Module.FS.writeFile === "function"),
+          statusText: String(statusEl?.textContent || "").trim(),
+          progressHidden: !!(progressEl && progressEl.hidden),
+          progressValue: progressEl ? Number(progressEl.value || 0) : null,
+          progressMax: progressEl ? Number(progressEl.max || 0) : null,
+          overlayVisible: webbuildLoginOverlayVisible(win),
+        };
+      } catch (e) {
+        out.iframeError = String(e);
+      }
+      return out;
+    },
+    openWebbuild: (forceFresh = true) => {
+      openWebbuild({ force_fresh: forceFresh !== false });
+      return true;
+    },
+    testSkinDock: () => {
+      testCurrentSkinInDock();
+      return true;
+    },
     openInspector: (row = 0, col = 0) => {
       openInspector(Number(row) || 0, Number(col) || 0);
       return {
@@ -4864,11 +5903,41 @@
         col: state.inspectorCol,
       };
     },
+    commitDraftSource: () => {
+      const before = state.extractedBoxes.length;
+      const box = commitDraftToSource("manual") || null;
+      return {
+        before,
+        after: state.extractedBoxes.length,
+        box: box ? { id: Number(box.id), x: Number(box.x), y: Number(box.y), w: Number(box.w), h: Number(box.h) } : null,
+        drawCurrent: state.drawCurrent ? { ...state.drawCurrent } : null,
+      };
+    },
+    selectSourceBoxes: (ids = []) => {
+      const vals = Array.isArray(ids) ? ids.map((x) => Number(x)).filter((x) => Number.isFinite(x)) : [];
+      state.sourceSelection = new Set(vals);
+      renderSourceCanvas();
+      return { selected: [...state.sourceSelection] };
+    },
+    addSourceBoxToSelectedRowById: (id) => {
+      const box = state.extractedBoxes.find((b) => Number(b.id) === Number(id)) || null;
+      if (!box) return { ok: false, reason: "source_box_not_found", id: Number(id) };
+      const beforeSelRow = state.selectedRow;
+      const beforeSelCols = [...state.selectedCols];
+      const ok = addSourceBoxToSelectedRowSequence(box);
+      return {
+        ok: !!ok,
+        id: Number(id),
+        before: { selectedRow: beforeSelRow, selectedCols: beforeSelCols },
+        after: { selectedRow: state.selectedRow, selectedCols: [...state.selectedCols] },
+      };
+    },
     getInspectorState: () => ({
       open: !!state.inspectorOpen,
       row: Number(state.inspectorRow || 0),
       col: Number(state.inspectorCol || 0),
       tool: String(state.inspectorTool || "inspect"),
+      paintColor: [...(state.inspectorPaintColor || [255, 255, 255])],
       selection: state.inspectorSelection ? { ...state.inspectorSelection } : null,
       hover: state.inspectorHover ? {
         cx: Number(state.inspectorHover.cx || 0),
@@ -4889,7 +5958,192 @@
         fg: [...(state.inspectorGlyphFgColor || [255, 255, 255])],
         bg: [...(state.inspectorGlyphBgColor || MAGENTA)],
       },
+      selectionClipboardSize: state.inspectorSelectionClipboard
+        ? {
+            rows: Number(state.inspectorSelectionClipboard.length || 0),
+            cols: Number((Array.isArray(state.inspectorSelectionClipboard[0]) && state.inspectorSelectionClipboard[0].length) || 0),
+          }
+        : null,
+      frameClipboardSize: state.inspectorFrameClipboard
+        ? {
+            rows: Number(state.inspectorFrameClipboard.length || 0),
+            cols: Number((Array.isArray(state.inspectorFrameClipboard[0]) && state.inspectorFrameClipboard[0].length) || 0),
+          }
+        : null,
     }),
+    setInspectorSelection: (sel = null) => {
+      state.inspectorSelection = sel ? normalizeInspectorSelection({
+        x1: Number(sel.x1 || 0),
+        y1: Number(sel.y1 || 0),
+        x2: Number(sel.x2 || 0),
+        y2: Number(sel.y2 || 0),
+      }) : null;
+      updateInspectorToolUI();
+      renderInspector();
+      return state.inspectorSelection ? { ...state.inspectorSelection } : null;
+    },
+    setInspectorHoverAnchor: (cx = 0, cy = 0, half = "top") => {
+      if (!state.inspectorOpen) return null;
+      const { row, col } = inspectorCurrentFrameCoord();
+      const lx = Math.max(0, Math.min(state.frameWChars - 1, Number(cx) || 0));
+      const ly = Math.max(0, Math.min(state.frameHChars - 1, Number(cy) || 0));
+      const rec = inspectorCellFromLocal(row, col, lx, ly);
+      state.inspectorHover = rec ? { cx: lx, cy: ly, half: String(half || "top"), cell: { ...rec.cell } } : null;
+      state.inspectorLastHoverAnchor = { cx: lx, cy: ly };
+      updateInspectorToolUI();
+      renderInspector();
+      return state.inspectorHover ? {
+        cx: Number(state.inspectorHover.cx || 0),
+        cy: Number(state.inspectorHover.cy || 0),
+        half: String(state.inspectorHover.half || "top"),
+      } : null;
+    },
+    clearInspectorHover: () => {
+      state.inspectorHover = null;
+      updateInspectorToolUI();
+      renderInspector();
+      return state.inspectorLastHoverAnchor ? {
+        cx: Number(state.inspectorLastHoverAnchor.cx || 0),
+        cy: Number(state.inspectorLastHoverAnchor.cy || 0),
+      } : null;
+    },
+    sampleInspectorCell: (cx = 0, cy = 0) => {
+      if (!state.inspectorOpen) return null;
+      const { row, col } = inspectorCurrentFrameCoord();
+      const lx = Math.max(0, Math.min(state.frameWChars - 1, Number(cx) || 0));
+      const ly = Math.max(0, Math.min(state.frameHChars - 1, Number(cy) || 0));
+      const rec = inspectorCellFromLocal(row, col, lx, ly);
+      if (!rec) return null;
+      setInspectorGlyphUIFromCell(rec.cell);
+      updateInspectorToolUI();
+      renderInspector();
+      return {
+        glyph: Number(rec.cell?.glyph || 0),
+        fg: [...(rec.cell?.fg || [0, 0, 0])],
+        bg: [...(rec.cell?.bg || [0, 0, 0])],
+      };
+    },
+    setInspectorGlyphCell: (payload = {}) => {
+      state.inspectorGlyphCode = clampInspectorGlyphCode(payload.glyph ?? state.inspectorGlyphCode);
+      if (Array.isArray(payload.fg) && payload.fg.length >= 3) state.inspectorGlyphFgColor = payload.fg.slice(0, 3).map((v) => Math.max(0, Math.min(255, Number(v || 0) | 0)));
+      if (Array.isArray(payload.bg) && payload.bg.length >= 3) state.inspectorGlyphBgColor = payload.bg.slice(0, 3).map((v) => Math.max(0, Math.min(255, Number(v || 0) | 0)));
+      if ($("inspectorGlyphCode")) $("inspectorGlyphCode").value = String(state.inspectorGlyphCode);
+      if ($("inspectorGlyphChar")) $("inspectorGlyphChar").value = String.fromCharCode(clampInspectorGlyphCode(state.inspectorGlyphCode));
+      if ($("inspectorGlyphFgColor")) $("inspectorGlyphFgColor").value = rgbToHex(state.inspectorGlyphFgColor);
+      if ($("inspectorGlyphBgColor")) $("inspectorGlyphBgColor").value = rgbToHex(state.inspectorGlyphBgColor);
+      updateInspectorToolUI();
+      return {
+        glyph: Number(state.inspectorGlyphCode || 0),
+        fg: [...(state.inspectorGlyphFgColor || [0, 0, 0])],
+        bg: [...(state.inspectorGlyphBgColor || [0, 0, 0])],
+      };
+    },
+    setInspectorFindReplace: (cfg = {}) => {
+      const setChk = (id, key) => {
+        if ($(id) && key in cfg) $(id).checked = !!cfg[key];
+      };
+      const setVal = (id, key) => {
+        if ($(id) && key in cfg && cfg[key] !== undefined && cfg[key] !== null) $(id).value = String(cfg[key]);
+      };
+      setChk("inspectorFrMatchGlyphChk", "matchGlyph");
+      setChk("inspectorFrMatchFgChk", "matchFg");
+      setChk("inspectorFrMatchBgChk", "matchBg");
+      setChk("inspectorFrReplaceGlyphChk", "replaceGlyph");
+      setChk("inspectorFrReplaceFgChk", "replaceFg");
+      setChk("inspectorFrReplaceBgChk", "replaceBg");
+      setVal("inspectorFrFindGlyph", "findGlyph");
+      setVal("inspectorFrFindFg", "findFg");
+      setVal("inspectorFrFindBg", "findBg");
+      setVal("inspectorFrReplGlyph", "replGlyph");
+      setVal("inspectorFrReplFg", "replFg");
+      setVal("inspectorFrReplBg", "replBg");
+      setVal("inspectorFrScope", "scope");
+      updateInspectorToolUI();
+      return true;
+    },
+    runInspectorAction: (name, arg = null) => {
+      const key = String(name || "");
+      if (key === "select_all") return !!inspectorSelectAll();
+      if (key === "copy_selection") return !!copyInspectorSelection();
+      if (key === "paste_selection") return !!pasteInspectorSelection();
+      if (key === "cut_selection") return !!cutInspectorSelection();
+      if (key === "clear_selection") return !!clearInspectorSelectionCells();
+      if (key === "fill_selection") return !!fillInspectorSelectionWithGlyph();
+      if (key === "replace_fg") return !!replaceInspectorSelectionColor("fg");
+      if (key === "replace_bg") return !!replaceInspectorSelectionColor("bg");
+      if (key === "find_replace") return !!applyInspectorFindReplace();
+      if (key === "transform_selection") return !!transformInspectorSelection(String(arg || ""));
+      if (key === "copy_frame") return !!copyInspectorFrame();
+      if (key === "paste_frame") return !!pasteInspectorFrame();
+      if (key === "flip_frame_h") return !!flipInspectorFrameHorizontal();
+      if (key === "clear_frame") return !!clearInspectorFrame();
+      if (key === "move_frame") {
+        const dr = Number(arg?.row || 0);
+        const dc = Number(arg?.col || 0);
+        return !!moveInspectorSelection(dr, dc);
+      }
+      return false;
+    },
+    readFrameCell: (row = 0, col = 0, cx = 0, cy = 0) => {
+      const r = Math.max(0, Math.min(state.angles - 1, Number(row) || 0));
+      const maxCol = Math.max(0, totalGridFrameCols() - 1);
+      const c = Math.max(0, Math.min(maxCol, Number(col) || 0));
+      const lx = Math.max(0, Math.min(state.frameWChars - 1, Number(cx) || 0));
+      const ly = Math.max(0, Math.min(state.frameHChars - 1, Number(cy) || 0));
+      const rec = inspectorCellFromLocal(r, c, lx, ly);
+      if (!rec) return null;
+      return {
+        row: r,
+        col: c,
+        cx: lx,
+        cy: ly,
+        gx: rec.gx,
+        gy: rec.gy,
+        cell: {
+          glyph: Number(rec.cell?.glyph || 0),
+          fg: [...(rec.cell?.fg || [0, 0, 0])],
+          bg: [...(rec.cell?.bg || [0, 0, 0])],
+        },
+      };
+    },
+    writeFrameCell: (row = 0, col = 0, cx = 0, cy = 0, payload = {}) => {
+      const r = Math.max(0, Math.min(state.angles - 1, Number(row) || 0));
+      const maxCol = Math.max(0, totalGridFrameCols() - 1);
+      const c = Math.max(0, Math.min(maxCol, Number(col) || 0));
+      const lx = Math.max(0, Math.min(state.frameWChars - 1, Number(cx) || 0));
+      const ly = Math.max(0, Math.min(state.frameHChars - 1, Number(cy) || 0));
+      const rec = inspectorCellFromLocal(r, c, lx, ly);
+      if (!rec) return null;
+      const cur = rec.cell || transparentCell(0);
+      const next = {
+        glyph: clampInspectorGlyphCode(payload.glyph ?? cur.glyph ?? 0),
+        fg: Array.isArray(payload.fg) && payload.fg.length >= 3
+          ? payload.fg.slice(0, 3).map((v) => Math.max(0, Math.min(255, Number(v || 0) | 0)))
+          : [...(cur.fg || [0, 0, 0])],
+        bg: Array.isArray(payload.bg) && payload.bg.length >= 3
+          ? payload.bg.slice(0, 3).map((v) => Math.max(0, Math.min(255, Number(v || 0) | 0)))
+          : [...(cur.bg || [0, 0, 0])],
+      };
+      setCell(rec.gx, rec.gy, next);
+      renderAll();
+      return window.__wb_debug.readFrameCell(r, c, lx, ly);
+    },
+    readFrameRect: (row = 0, col = 0, x1 = 0, y1 = 0, x2 = 0, y2 = 0) => {
+      const out = [];
+      const ax1 = Math.min(Number(x1) || 0, Number(x2) || 0);
+      const ay1 = Math.min(Number(y1) || 0, Number(y2) || 0);
+      const ax2 = Math.max(Number(x1) || 0, Number(x2) || 0);
+      const ay2 = Math.max(Number(y1) || 0, Number(y2) || 0);
+      for (let y = ay1; y <= ay2; y++) {
+        const line = [];
+        for (let x = ax1; x <= ax2; x++) {
+          const rec = window.__wb_debug.readFrameCell(row, col, x, y);
+          line.push(rec ? rec.cell : null);
+        }
+        out.push(line);
+      }
+      return out;
+    },
     frameSignature: (row, col) => {
       const vals = [];
       for (let y = 0; y < state.frameHChars; y++) {
@@ -4906,6 +6160,8 @@
   };
 
   bindUI();
+  updateSourceCanvasZoomUI();
+  updateGridPanelZoomUI();
   renderSourceCanvas();
   if (state.jobId) loadFromJob();
 })();

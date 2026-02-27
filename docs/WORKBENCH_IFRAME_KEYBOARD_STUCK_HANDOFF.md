@@ -398,3 +398,12 @@ Evidence:
     - `/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/workbench-png-to-skin-2026-02-27T03-48-05-865Z/flat-arena-canvas.png`
 - Next technical action (pending):
   - move from narrow startup override to deterministic directional set parity for mounted player states (at least all `player/wolfie/wolack` variants used during movement), while preserving non-player sheets.
+
+### 2026-02-27T03:59Z — Correction: variant semantics note
+- Correction to prior note:
+  - `player/wolfie/wolack-xxxx` variation should not be described as "direction files".
+  - user clarification is accepted: each sheet contains directional poses internally; filename variants map to loadout/state variants (e.g., armor/weapon/mount state), not simple facing direction.
+- What remains true:
+  - current override scope is still a subset of mounted variants; if runtime selects a non-overridden variant file, mixed custom/default visuals can appear.
+- Follow-up requirement:
+  - implement mounted-variant-complete override strategy (deterministic full `player/wolfie/wolack` variant set present in runtime), instead of startup-subset targeting.

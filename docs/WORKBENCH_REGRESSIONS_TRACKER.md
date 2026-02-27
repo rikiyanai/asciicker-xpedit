@@ -195,3 +195,12 @@ Freeze note:
 Evidence:
 - `/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/workbench-png-to-skin-2026-02-27T03-48-05-865Z/result.json`
 - `/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/workbench-png-to-skin-2026-02-27T03-48-05-865Z/flat-arena-canvas.png`
+
+## 2026-02-27T03:59Z — Semantics correction (variant meaning)
+
+Correction:
+- `player/wolfie/wolack-xxxx` filenames should be treated as loadout/state variants (armor/weapon/mount), not simple directional frame splits.
+- Prior phrasing that tied mixed-sprite issue to "direction frame switching" is corrected.
+
+Unchanged conclusion:
+- Mixed/overlay visuals still occur when only a subset of mounted variant files is overridden and runtime selects a different variant file.

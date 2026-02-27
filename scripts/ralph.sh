@@ -108,7 +108,7 @@ print_verdict() {
   f_moved="$(echo "$extracted" | jq -r '.moved // "null"')"
 
   # Check for null fields → INVALID_RUN
-  for field in "$f_status" "$f_passed" "$f_gateA" "$f_gateB" "$f_class" "$f_menu_clear" "$f_wr_drops" "$f_moved"; do
+  for field in "$f_status" "$f_passed" "$f_gateA" "$f_gateB" "$f_class" "$f_menu_clear" "$f_wr_drops" "$f_vp_zero" "$f_moved"; do
     if [[ "$field" == "null" ]]; then
       echo "$sep"
       echo "CLAIM: Result has null required fields"
@@ -121,10 +121,23 @@ print_verdict() {
     fi
   done
 
-  # Determine verdict
-  local verdict="FAIL"
+  # Determine verdict — PASS requires consistency: passed=true AND status=valid AND error=null
+  local verdict
   if [[ "$f_passed" == "true" ]]; then
+    if [[ "$f_status" != "valid" || "$f_error" != "null" ]]; then
+      # Schema contradiction: passed=true but status/error disagree
+      echo "$sep"
+      echo "CLAIM: Schema contradiction — passed=true but status=$f_status, error=$f_error"
+      echo "EVIDENCE: $result_path"
+      echo "  (raw): $(echo "$extracted" | jq -c .)"
+      echo "VERDICT: INVALID_RUN"
+      echo "NEXT: watching for changes..."
+      echo "$sep"
+      return 1
+    fi
     verdict="PASS"
+  else
+    verdict="FAIL"
   fi
 
   echo "$sep"
@@ -158,6 +171,8 @@ echo ""
 # ── Run one test cycle ──
 run_one_cycle() {
   local cycle_num="$1"
+  local cycle_start
+  cycle_start="$(date +%s)"
   echo ""
   echo "── Cycle #$cycle_num ── $(date +%H:%M:%S) ──"
 
@@ -175,15 +190,29 @@ run_one_cycle() {
     --override-mode "$OVERRIDE_MODE" \
     --reload-mode "$RELOAD_MODE" 2>&1)" || true
 
-  # Extract RESULT_PATH from the test output
+  # Extract RESULT_PATH from the test output — no fallback to avoid stale-result false-pass
   result_path="$(echo "$test_output" | grep '^RESULT_PATH=' | tail -1 | cut -d= -f2-)"
 
   if [[ -z "$result_path" ]]; then
-    # Fallback: find the most recent result.json
-    result_path="$(ls -t "$REPO_ROOT"/output/playwright/workbench-png-to-skin-*/result.json 2>/dev/null | head -1)"
+    print_verdict "/dev/null"  # triggers "no result.json" verdict
+    return
   fi
 
-  print_verdict "${result_path:-/dev/null}"
+  # Guard: result.json must have been written during this cycle (mtime >= cycle start)
+  local result_mtime
+  result_mtime="$(stat -f %m "$result_path" 2>/dev/null || echo 0)"
+  if (( result_mtime < cycle_start )); then
+    local sep="══════════════════════════════════════════"
+    echo "$sep"
+    echo "CLAIM: result.json is stale (written before this cycle)"
+    echo "EVIDENCE: $result_path (mtime=$result_mtime, cycle_start=$cycle_start)"
+    echo "VERDICT: INVALID_RUN"
+    echo "NEXT: watching for changes..."
+    echo "$sep"
+    return
+  fi
+
+  print_verdict "$result_path"
 }
 
 # ── Initial run ──

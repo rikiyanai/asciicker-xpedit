@@ -194,7 +194,7 @@ run_one_cycle() {
   result_path="$(echo "$test_output" | grep '^RESULT_PATH=' | tail -1 | cut -d= -f2-)"
 
   if [[ -z "$result_path" ]]; then
-    print_verdict "/dev/null"  # triggers "no result.json" verdict
+    print_verdict "/dev/null" || true  # triggers "no result.json" verdict; don't exit on FAIL
     return
   fi
 
@@ -212,13 +212,14 @@ run_one_cycle() {
     return
   fi
 
-  print_verdict "$result_path"
+  # || true: print_verdict returns non-zero on FAIL/INVALID — don't let set -e kill the loop
+  print_verdict "$result_path" || true
 }
 
 # ── Initial run ──
 CYCLE=0
 CYCLE=$((CYCLE + 1))
-run_one_cycle "$CYCLE"
+run_one_cycle "$CYCLE" || true
 
 # ── Watch loop ──
 echo ""
@@ -229,7 +230,7 @@ fswatch -o --latency 1 \
   "$REPO_ROOT/web/workbench.html" |
 while read -r _; do
   CYCLE=$((CYCLE + 1))
-  run_one_cycle "$CYCLE"
+  run_one_cycle "$CYCLE" || true
   echo ""
   echo "Watching for changes..."
 done

@@ -23,16 +23,19 @@
     [128, 64, 0],
   ];
   const WEBBUILD_DEFAULT_OVERRIDE_NAMES = (() => {
-    const out = ["player-nude.xp"];
-    // MVP workbench skin loop targets the playable character only.
-    // Overriding NPC/attack/death sheets with arbitrary test XP can destabilize runtime rendering.
-    const groups = ["player"];
-    for (const group of groups) {
-      for (let i = 0; i < 16; i++) {
-        out.push(`${group}-${i.toString(2).padStart(4, "0")}.xp`);
-      }
-    }
-    return out;
+    // Spawn in flat-map mode is mounted (player + wolf mount sheets), and runtime uses
+    // frame suffixes ending in 0/1/2. Keep the override set focused on spawn-facing files.
+    return [
+      "player-nude.xp",
+      "player-0000.xp",
+      "player-0001.xp",
+      "player-0002.xp",
+      "wolfie-0000.xp",
+      "wolfie-0001.xp",
+      "wolfie-0002.xp",
+      "wolack-0001.xp",
+      "wolack-0002.xp",
+    ];
   })();
   const WEBBUILD_READY_TIMEOUT_MS = 180000;
   const DEFAULT_FLATMAP_NAME = "game_map_y8_original_game_map.a3d";
@@ -135,6 +138,14 @@
       pendingAutoStartToken: "",
       uploadedXpBytes: null,
       uploadedXpName: "",
+      runtimePreflight: {
+        checked: false,
+        ok: false,
+        missing_files: [],
+        invalid_files: [],
+        maps_found: [],
+        error: "",
+      },
     },
     inspectorHover: null, // {cx,cy,half,cell}
     inspectorLastHoverAnchor: null, // {cx,cy}
@@ -266,6 +277,102 @@
     el.textContent = text;
   }
 
+  function currentRuntimePreflight() {
+    return state.webbuild.runtimePreflight || null;
+  }
+
+  function runtimePreflightIssueLines(preflight) {
+    const out = [];
+    if (!preflight || typeof preflight !== "object") return out;
+    if (!preflight.checked) {
+      out.push("runtime preflight pending");
+      return out;
+    }
+    const missing = Array.isArray(preflight.missing_files) ? preflight.missing_files : [];
+    const invalid = Array.isArray(preflight.invalid_files) ? preflight.invalid_files : [];
+    for (const rel of missing) out.push(`missing: ${String(rel)}`);
+    for (const rec of invalid) {
+      const p = String(rec?.path || "");
+      const reason = String(rec?.reason || "invalid_file");
+      out.push(`invalid: ${p} (${reason})`);
+    }
+    if (!Array.isArray(preflight.maps_found) || preflight.maps_found.length === 0) {
+      out.push("missing map: one of termpp-web-flat/flatmaps/minimal_2x2.a3d or termpp-web-flat/flatmaps/game_map_y8_original_game_map.a3d");
+    }
+    if (!out.length && preflight.error) out.push(String(preflight.error));
+    return out;
+  }
+
+  function runtimePreflightTooltip(preflight) {
+    if (!preflight) return "Skin dock disabled: runtime preflight not loaded";
+    if (!preflight.checked) return "Skin dock disabled: checking runtime bundle...";
+    if (preflight.ok) return "Flat runtime bundle preflight passed";
+    const issues = runtimePreflightIssueLines(preflight);
+    if (!issues.length) return "Skin dock disabled: runtime preflight failed";
+    return `Skin dock disabled: ${issues.join("; ")}`;
+  }
+
+  function updateRuntimePreflightBanner(preflight) {
+    const banner = $("runtimePreflightBanner");
+    const text = $("runtimePreflightBannerText");
+    if (!banner || !text) return;
+    if (!preflight || !preflight.checked || preflight.ok) {
+      banner.classList.add("hidden");
+      text.textContent = "";
+      return;
+    }
+    banner.classList.remove("hidden");
+    const issues = runtimePreflightIssueLines(preflight);
+    text.textContent = issues.length
+      ? `Skin Test Dock is disabled until runtime bundle issues are fixed: ${issues.join("; ")}`
+      : "Skin Test Dock is disabled because runtime preflight failed.";
+  }
+
+  async function fetchRuntimePreflight() {
+    try {
+      const r = await fetch("/api/workbench/runtime-preflight", { cache: "no-store" });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error || `runtime preflight HTTP ${r.status}`);
+      state.webbuild.runtimePreflight = {
+        checked: true,
+        ok: !!j?.ok,
+        missing_files: Array.isArray(j?.missing_files) ? j.missing_files : [],
+        invalid_files: Array.isArray(j?.invalid_files) ? j.invalid_files : [],
+        maps_found: Array.isArray(j?.maps_found) ? j.maps_found : [],
+        runtime_root: String(j?.runtime_root || ""),
+        checked_at: String(j?.checked_at || ""),
+        error: "",
+      };
+    } catch (e) {
+      state.webbuild.runtimePreflight = {
+        checked: true,
+        ok: false,
+        missing_files: [],
+        invalid_files: [],
+        maps_found: [],
+        error: String(e),
+      };
+    }
+    updateRuntimePreflightBanner(state.webbuild.runtimePreflight);
+    updateWebbuildUI();
+    return currentRuntimePreflight();
+  }
+
+  async function ensureRuntimePreflight(opts = {}) {
+    const refresh = !!opts.refresh;
+    const silent = !!opts.silent;
+    const pre = currentRuntimePreflight();
+    if (refresh || !pre || !pre.checked) {
+      await fetchRuntimePreflight();
+    }
+    const ready = !!currentRuntimePreflight()?.ok;
+    if (!ready && !silent) {
+      status("Skin dock blocked: runtime preflight failed", "warn");
+      setWebbuildState("Skin dock blocked (runtime preflight failed)", "err");
+    }
+    return ready;
+  }
+
   function webbuildFrameWindow() {
     const frame = $("webbuildFrame");
     return frame && frame.contentWindow ? frame.contentWindow : null;
@@ -326,25 +433,58 @@
   function updateWebbuildUI() {
     const sessionReady = !!state.sessionId;
     const runtimeReady = !!state.webbuild.ready;
+    const preflightOk = !!currentRuntimePreflight()?.ok;
+    const preflightTitle = runtimePreflightTooltip(currentRuntimePreflight());
     const applyBtn = $("webbuildApplySkinBtn");
     if (applyBtn) {
-      applyBtn.disabled = !(sessionReady && runtimeReady);
-      applyBtn.title = sessionReady && runtimeReady ? "Apply current XP skin to the running webbuild" : "Requires an active session and a ready webbuild runtime";
+      applyBtn.disabled = !preflightOk || !(sessionReady && runtimeReady);
+      if (!preflightOk) {
+        applyBtn.title = preflightTitle;
+      } else {
+        applyBtn.title = sessionReady && runtimeReady ? "Apply current XP skin to the running webbuild" : "Requires an active session and a ready webbuild runtime";
+      }
     }
     const applyInPlaceBtn = $("webbuildApplyInPlaceBtn");
     if (applyInPlaceBtn) {
-      applyInPlaceBtn.disabled = !(sessionReady && runtimeReady);
-      applyInPlaceBtn.title = sessionReady && runtimeReady ? "Apply to the current runtime without a forced restart (faster)" : "Disabled: wait for the webbuild runtime to finish loading";
+      applyInPlaceBtn.disabled = !preflightOk || !(sessionReady && runtimeReady);
+      if (!preflightOk) {
+        applyInPlaceBtn.title = preflightTitle;
+      } else {
+        applyInPlaceBtn.title = sessionReady && runtimeReady ? "Apply to the current runtime without a forced restart (faster)" : "Disabled: wait for the webbuild runtime to finish loading";
+      }
     }
     const applyRestartBtn = $("webbuildApplyRestartBtn");
     if (applyRestartBtn) {
-      applyRestartBtn.disabled = !sessionReady;
-      applyRestartBtn.title = sessionReady ? "Export and apply current XP skin with a deterministic webbuild restart" : "Disabled: load or create a session first";
+      applyRestartBtn.disabled = !preflightOk || !sessionReady;
+      if (!preflightOk) {
+        applyRestartBtn.title = preflightTitle;
+      } else {
+        applyRestartBtn.title = sessionReady ? "Export and apply current XP skin with a deterministic webbuild restart" : "Disabled: load or create a session first";
+      }
     }
     const quickBtn = $("webbuildQuickTestBtn");
     if (quickBtn) {
-      quickBtn.disabled = !sessionReady;
-      quickBtn.title = sessionReady ? "Deterministic test path (opens/reloads preview as needed, then applies current XP skin)" : "Disabled: load or create a session first";
+      quickBtn.disabled = !preflightOk || !sessionReady;
+      if (!preflightOk) {
+        quickBtn.title = preflightTitle;
+      } else {
+        quickBtn.title = sessionReady ? "Deterministic test path (opens/reloads preview as needed, then applies current XP skin)" : "Disabled: load or create a session first";
+      }
+    }
+    const uploadBtn = $("webbuildUploadTestBtn");
+    if (uploadBtn) {
+      uploadBtn.disabled = !preflightOk;
+      uploadBtn.title = preflightOk ? "Upload an external .xp and apply it to flat arena runtime" : preflightTitle;
+    }
+    const openBtn = $("webbuildOpenBtn");
+    if (openBtn) {
+      openBtn.disabled = !preflightOk;
+      openBtn.title = preflightOk ? "Open flat arena runtime preview" : preflightTitle;
+    }
+    const reloadBtn = $("webbuildReloadBtn");
+    if (reloadBtn) {
+      reloadBtn.disabled = !preflightOk;
+      reloadBtn.title = preflightOk ? "Reload flat arena runtime preview" : preflightTitle;
     }
   }
 
@@ -454,6 +594,10 @@
   }
 
   async function waitForWebbuildReady(timeoutMs = WEBBUILD_READY_TIMEOUT_MS) {
+    if (!(await ensureRuntimePreflight({ silent: true }))) {
+      setWebbuildState("Skin dock blocked (runtime preflight failed)", "err");
+      return false;
+    }
     const frame = $("webbuildFrame");
     const needsOpen = (
       !state.webbuild.loaded ||
@@ -599,16 +743,22 @@
   function normalizeWebbuildOverrideNames(names) {
     const out = [];
     const seen = new Set();
+    const isSafePlayerOverride = (name) => {
+      const s = String(name || "").trim().toLowerCase();
+      if (s === "player-nude.xp") return true;
+      if (/^(player|wolfie)-[01]{3}[0-2]\.xp$/.test(s)) return true;
+      if (/^wolack-[01]{3}[1-2]\.xp$/.test(s)) return true;
+      return false;
+    };
     const add = (name) => {
       const s = String(name || "").trim();
-      if (!s || seen.has(s)) return;
+      if (!s || seen.has(s) || !isSafePlayerOverride(s)) return;
       seen.add(s);
       out.push(s);
     };
     for (const name of WEBBUILD_DEFAULT_OVERRIDE_NAMES) add(name);
-    if (Array.isArray(names)) {
-      for (const name of names) add(name);
-    }
+    // Intentionally ignore server-provided broad override lists here.
+    // Workbench web test should replace only the default spawn-facing sheet.
     return out;
   }
 
@@ -723,7 +873,15 @@
     if (typeof win.ak_canvas !== "undefined" && win.ak_canvas && typeof win.ak_canvas.focus === "function") {
       try { win.ak_canvas.focus(); } catch (_e) {}
     }
-    return { bytes: xpBytes.length, files_written: names.length, fs_write_mode: fsWriteMode || "unknown", player_name: playerName, started_via: startedVia, overlay_visible: overlayVisible ? 1 : 0 };
+    return {
+      bytes: xpBytes.length,
+      files_written: names.length,
+      override_names: [...names],
+      fs_write_mode: fsWriteMode || "unknown",
+      player_name: playerName,
+      started_via: startedVia,
+      overlay_visible: overlayVisible ? 1 : 0,
+    };
   }
 
   async function injectXpIntoWebbuild(win, payload) {
@@ -735,6 +893,7 @@
   }
 
   async function applyCurrentXpAsWebSkin(opts = {}) {
+    if (!(await ensureRuntimePreflight({ refresh: true }))) return;
     if (!state.sessionId) {
       status("Load a workbench session first", "warn");
       return;
@@ -838,6 +997,7 @@
   }
 
   async function testCurrentSkinInDock() {
+    if (!(await ensureRuntimePreflight({ refresh: true }))) return;
     if (!state.sessionId) {
       status("Load a workbench session first", "warn");
       return;
@@ -850,6 +1010,7 @@
   }
 
   async function onWebbuildUploadTestClick() {
+    if (!(await ensureRuntimePreflight({ refresh: true }))) return;
     const input = $("webbuildUploadTestInput");
     if (!input) return;
     input.value = "";
@@ -857,6 +1018,7 @@
   }
 
   async function applyUploadedXpBytesToWebbuild(fileName, xpBytes) {
+    if (!(await ensureRuntimePreflight({ refresh: true }))) return;
     const prep = await prepareWebbuildForSkinApply({ force_restart: true, restart_if_overlay_hidden: true });
     if (!prep.ready) {
       status("Webbuild not ready; preview failed to load", "err");
@@ -5857,6 +6019,14 @@
       const out = {
         loaded: !!state.webbuild.loaded,
         ready: !!state.webbuild.ready,
+        runtimePreflight: {
+          checked: !!state.webbuild.runtimePreflight?.checked,
+          ok: !!state.webbuild.runtimePreflight?.ok,
+          missing_files: Array.isArray(state.webbuild.runtimePreflight?.missing_files) ? [...state.webbuild.runtimePreflight.missing_files] : [],
+          invalid_files: Array.isArray(state.webbuild.runtimePreflight?.invalid_files) ? [...state.webbuild.runtimePreflight.invalid_files] : [],
+          maps_found: Array.isArray(state.webbuild.runtimePreflight?.maps_found) ? [...state.webbuild.runtimePreflight.maps_found] : [],
+          error: String(state.webbuild.runtimePreflight?.error || ""),
+        },
         loadRequestedAt: Number(state.webbuild.loadRequestedAt || 0),
         wbStatus: String($("wbStatus")?.textContent || ""),
         webbuildState: String($("webbuildState")?.textContent || ""),
@@ -6164,6 +6334,7 @@
   };
 
   bindUI();
+  fetchRuntimePreflight().catch((_e) => {});
   updateSourceCanvasZoomUI();
   updateGridPanelZoomUI();
   renderSourceCanvas();

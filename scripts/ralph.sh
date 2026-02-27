@@ -154,3 +154,53 @@ echo "  Mode:  $OVERRIDE_MODE / $RELOAD_MODE"
 echo "  Watch: web/termpp_flat_map_bootstrap.js, web/workbench.js, web/workbench.html"
 echo "  Press Ctrl-C to stop."
 echo ""
+
+# ── Run one test cycle ──
+run_one_cycle() {
+  local cycle_num="$1"
+  echo ""
+  echo "── Cycle #$cycle_num ── $(date +%H:%M:%S) ──"
+
+  # Sync bootstrap before every run
+  sync_bootstrap
+
+  # Run the test, capture RESULT_PATH from stdout
+  local test_output result_path
+  test_output="$(node "$REPO_ROOT/scripts/workbench_png_to_skin_test_playwright.mjs" \
+    --png "$PNG" \
+    --headed \
+    --url "$URL" \
+    --timeout-sec "$TIMEOUT_SEC" \
+    --move-sec "$MOVE_SEC" \
+    --override-mode "$OVERRIDE_MODE" \
+    --reload-mode "$RELOAD_MODE" 2>&1)" || true
+
+  # Extract RESULT_PATH from the test output
+  result_path="$(echo "$test_output" | grep '^RESULT_PATH=' | tail -1 | cut -d= -f2-)"
+
+  if [[ -z "$result_path" ]]; then
+    # Fallback: find the most recent result.json
+    result_path="$(ls -t "$REPO_ROOT"/output/playwright/workbench-png-to-skin-*/result.json 2>/dev/null | head -1)"
+  fi
+
+  print_verdict "${result_path:-/dev/null}"
+}
+
+# ── Initial run ──
+CYCLE=0
+CYCLE=$((CYCLE + 1))
+run_one_cycle "$CYCLE"
+
+# ── Watch loop ──
+echo ""
+echo "Watching for changes..."
+fswatch -o --latency 1 \
+  "$REPO_ROOT/web/termpp_flat_map_bootstrap.js" \
+  "$REPO_ROOT/web/workbench.js" \
+  "$REPO_ROOT/web/workbench.html" |
+while read -r _; do
+  CYCLE=$((CYCLE + 1))
+  run_one_cycle "$CYCLE"
+  echo ""
+  echo "Watching for changes..."
+done

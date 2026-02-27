@@ -94,18 +94,18 @@ print_verdict() {
     return 1
   }
 
-  # Read individual fields
+  # Read individual fields — use `tostring` not `//` to avoid jq treating false as null
   local f_error f_status f_passed f_gateA f_gateB f_class f_menu_clear f_wr_drops f_vp_zero f_moved
-  f_error="$(echo "$extracted" | jq -r '.error // "null"')"
-  f_status="$(echo "$extracted" | jq -r '.status // "null"')"
-  f_passed="$(echo "$extracted" | jq -r '.passed // "null"')"
-  f_gateA="$(echo "$extracted" | jq -r '.gateA_passed // "null"')"
-  f_gateB="$(echo "$extracted" | jq -r '.gateB_passed // "null"')"
-  f_class="$(echo "$extracted" | jq -r '.classification // "null"')"
-  f_menu_clear="$(echo "$extracted" | jq -r '.menu_cleared_while_not_ready // "null"')"
-  f_wr_drops="$(echo "$extracted" | jq -r '.world_ready_drop_count // "null"')"
-  f_vp_zero="$(echo "$extracted" | jq -r '.viewport_zero // "null"')"
-  f_moved="$(echo "$extracted" | jq -r '.moved // "null"')"
+  f_error="$(echo "$extracted" | jq -r '.error | tostring')"
+  f_status="$(echo "$extracted" | jq -r '.status | tostring')"
+  f_passed="$(echo "$extracted" | jq -r '.passed | tostring')"
+  f_gateA="$(echo "$extracted" | jq -r '.gateA_passed | tostring')"
+  f_gateB="$(echo "$extracted" | jq -r '.gateB_passed | tostring')"
+  f_class="$(echo "$extracted" | jq -r '.classification | tostring')"
+  f_menu_clear="$(echo "$extracted" | jq -r '.menu_cleared_while_not_ready | tostring')"
+  f_wr_drops="$(echo "$extracted" | jq -r '.world_ready_drop_count | tostring')"
+  f_vp_zero="$(echo "$extracted" | jq -r '.viewport_zero | tostring')"
+  f_moved="$(echo "$extracted" | jq -r '.moved | tostring')"
 
   # Check for null fields → INVALID_RUN
   for field in "$f_status" "$f_passed" "$f_gateA" "$f_gateB" "$f_class" "$f_menu_clear" "$f_wr_drops" "$f_vp_zero" "$f_moved"; do

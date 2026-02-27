@@ -204,3 +204,22 @@ Correction:
 
 Unchanged conclusion:
 - Mixed/overlay visuals still occur when only a subset of mounted variant files is overridden and runtime selects a different variant file.
+
+## 2026-02-27T04:04Z — Full parity override experiment (ASCIIID-equivalent set)
+
+Change:
+- Workbench web override list switched to native-equivalent parity set:
+  - `player-nude.xp`
+  - `(player|attack|plydie|wolfie|wolack)-[0000..1111].xp`
+- Added action mutex to prevent overlapping apply/upload actions from repeated clicks.
+
+Run artifact:
+- `/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/workbench-png-to-skin-2026-02-27T04-04-05-927Z/result.json`
+
+Observed:
+- `loaded=true`, `moved=true`, classification=`freeze_world_never_ready`.
+- `world_ready` remained `0` after menu clear in this run.
+
+Implication:
+- parity override set + click mutex do not eliminate world-readiness/freeze classification.
+- global FS override semantics remain: actors sharing overridden filenames can inherit custom skin (not per-entity scoped).

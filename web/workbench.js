@@ -22,21 +22,18 @@
     [128, 0, 255],
     [128, 64, 0],
   ];
-  const WEBBUILD_DEFAULT_OVERRIDE_NAMES = (() => {
-    // Spawn in flat-map mode is mounted (player + wolf mount sheets), and runtime uses
-    // frame suffixes ending in 0/1/2. Keep the override set focused on spawn-facing files.
-    return [
-      "player-nude.xp",
-      "player-0000.xp",
-      "player-0001.xp",
-      "player-0002.xp",
-      "wolfie-0000.xp",
-      "wolfie-0001.xp",
-      "wolfie-0002.xp",
-      "wolack-0001.xp",
-      "wolack-0002.xp",
-    ];
-  })();
+  function buildAsciidParityOverrideNames() {
+    // Match native TERM++ sandbox override policy (see pipeline service):
+    // player-nude + [player|attack|plydie|wolfie|wolack]-[0000..1111]
+    const out = ["player-nude.xp"];
+    for (const prefix of ["player", "attack", "plydie", "wolfie", "wolack"]) {
+      for (let i = 0; i < 16; i++) {
+        out.push(`${prefix}-${i.toString(2).padStart(4, "0")}.xp`);
+      }
+    }
+    return out;
+  }
+  const WEBBUILD_DEFAULT_OVERRIDE_NAMES = buildAsciidParityOverrideNames();
   const WEBBUILD_READY_TIMEOUT_MS = 180000;
   const DEFAULT_FLATMAP_NAME = "game_map_y8_original_game_map.a3d";
   const WEBBUILD_BASE_SRC = (() => {
@@ -131,6 +128,8 @@
       src: WEBBUILD_BASE_SRC,
       loaded: false,
       ready: false,
+      actionInFlight: false,
+      actionLabel: "",
       readyPoll: null,
       loadRequestedAt: 0,
       expectedSrc: "",
@@ -433,58 +432,90 @@
   function updateWebbuildUI() {
     const sessionReady = !!state.sessionId;
     const runtimeReady = !!state.webbuild.ready;
+    const actionBusy = !!state.webbuild.actionInFlight;
+    const actionBusyTitle = state.webbuild.actionLabel
+      ? `Skin dock busy: ${state.webbuild.actionLabel} is still running`
+      : "Skin dock busy: action already running";
     const preflightOk = !!currentRuntimePreflight()?.ok;
     const preflightTitle = runtimePreflightTooltip(currentRuntimePreflight());
     const applyBtn = $("webbuildApplySkinBtn");
     if (applyBtn) {
-      applyBtn.disabled = !preflightOk || !(sessionReady && runtimeReady);
+      applyBtn.disabled = actionBusy || !preflightOk || !(sessionReady && runtimeReady);
       if (!preflightOk) {
         applyBtn.title = preflightTitle;
+      } else if (actionBusy) {
+        applyBtn.title = actionBusyTitle;
       } else {
         applyBtn.title = sessionReady && runtimeReady ? "Apply current XP skin to the running webbuild" : "Requires an active session and a ready webbuild runtime";
       }
     }
     const applyInPlaceBtn = $("webbuildApplyInPlaceBtn");
     if (applyInPlaceBtn) {
-      applyInPlaceBtn.disabled = !preflightOk || !(sessionReady && runtimeReady);
+      applyInPlaceBtn.disabled = actionBusy || !preflightOk || !(sessionReady && runtimeReady);
       if (!preflightOk) {
         applyInPlaceBtn.title = preflightTitle;
+      } else if (actionBusy) {
+        applyInPlaceBtn.title = actionBusyTitle;
       } else {
         applyInPlaceBtn.title = sessionReady && runtimeReady ? "Apply to the current runtime without a forced restart (faster)" : "Disabled: wait for the webbuild runtime to finish loading";
       }
     }
     const applyRestartBtn = $("webbuildApplyRestartBtn");
     if (applyRestartBtn) {
-      applyRestartBtn.disabled = !preflightOk || !sessionReady;
+      applyRestartBtn.disabled = actionBusy || !preflightOk || !sessionReady;
       if (!preflightOk) {
         applyRestartBtn.title = preflightTitle;
+      } else if (actionBusy) {
+        applyRestartBtn.title = actionBusyTitle;
       } else {
         applyRestartBtn.title = sessionReady ? "Export and apply current XP skin with a deterministic webbuild restart" : "Disabled: load or create a session first";
       }
     }
     const quickBtn = $("webbuildQuickTestBtn");
     if (quickBtn) {
-      quickBtn.disabled = !preflightOk || !sessionReady;
+      quickBtn.disabled = actionBusy || !preflightOk || !sessionReady;
       if (!preflightOk) {
         quickBtn.title = preflightTitle;
+      } else if (actionBusy) {
+        quickBtn.title = actionBusyTitle;
       } else {
         quickBtn.title = sessionReady ? "Deterministic test path (opens/reloads preview as needed, then applies current XP skin)" : "Disabled: load or create a session first";
       }
     }
     const uploadBtn = $("webbuildUploadTestBtn");
     if (uploadBtn) {
-      uploadBtn.disabled = !preflightOk;
-      uploadBtn.title = preflightOk ? "Upload an external .xp and apply it to flat arena runtime" : preflightTitle;
+      uploadBtn.disabled = actionBusy || !preflightOk;
+      uploadBtn.title = !preflightOk ? preflightTitle : (actionBusy ? actionBusyTitle : "Upload an external .xp and apply it to flat arena runtime");
     }
     const openBtn = $("webbuildOpenBtn");
     if (openBtn) {
-      openBtn.disabled = !preflightOk;
-      openBtn.title = preflightOk ? "Open flat arena runtime preview" : preflightTitle;
+      openBtn.disabled = actionBusy || !preflightOk;
+      openBtn.title = !preflightOk ? preflightTitle : (actionBusy ? actionBusyTitle : "Open flat arena runtime preview");
     }
     const reloadBtn = $("webbuildReloadBtn");
     if (reloadBtn) {
-      reloadBtn.disabled = !preflightOk;
-      reloadBtn.title = preflightOk ? "Reload flat arena runtime preview" : preflightTitle;
+      reloadBtn.disabled = actionBusy || !preflightOk;
+      reloadBtn.title = !preflightOk ? preflightTitle : (actionBusy ? actionBusyTitle : "Reload flat arena runtime preview");
+    }
+  }
+
+  async function runWebbuildSkinAction(label, fn) {
+    const name = String(label || "skin action");
+    if (state.webbuild.actionInFlight) {
+      const active = String(state.webbuild.actionLabel || "another skin action");
+      status(`Skin dock busy: ${active} still running`, "warn");
+      return false;
+    }
+    state.webbuild.actionInFlight = true;
+    state.webbuild.actionLabel = name;
+    updateWebbuildUI();
+    try {
+      await fn();
+      return true;
+    } finally {
+      state.webbuild.actionInFlight = false;
+      state.webbuild.actionLabel = "";
+      updateWebbuildUI();
     }
   }
 
@@ -746,8 +777,7 @@
     const isSafePlayerOverride = (name) => {
       const s = String(name || "").trim().toLowerCase();
       if (s === "player-nude.xp") return true;
-      if (/^(player|wolfie)-[01]{3}[0-2]\.xp$/.test(s)) return true;
-      if (/^wolack-[01]{3}[1-2]\.xp$/.test(s)) return true;
+      if (/^(player|attack|plydie|wolfie|wolack)-[01]{4}\.xp$/.test(s)) return true;
       return false;
     };
     const add = (name) => {
@@ -756,9 +786,10 @@
       seen.add(s);
       out.push(s);
     };
+    if (Array.isArray(names)) {
+      for (const name of names) add(name);
+    }
     for (const name of WEBBUILD_DEFAULT_OVERRIDE_NAMES) add(name);
-    // Intentionally ignore server-provided broad override lists here.
-    // Workbench web test should replace only the default spawn-facing sheet.
     return out;
   }
 
@@ -893,107 +924,109 @@
   }
 
   async function applyCurrentXpAsWebSkin(opts = {}) {
-    if (!(await ensureRuntimePreflight({ refresh: true }))) return;
-    if (!state.sessionId) {
-      status("Load a workbench session first", "warn");
-      return;
-    }
-    const t0 = Date.now();
-    const timings = {};
-    status("Preparing flat arena runtime for skin test...", "warn");
-    const prep = await prepareWebbuildForSkinApply({
-      force_restart: !!opts.force_restart,
-      restart_if_overlay_hidden: opts.restart_if_overlay_hidden !== false,
-    });
-    timings.prepare_ms = Date.now() - t0;
-    if (!prep.ready) {
-      status("Webbuild not ready yet; wait for load to finish", "warn");
-      try {
-        $("webbuildOut").textContent = JSON.stringify({
-          stage: "prepare_webbuild_not_ready",
-          prep,
-          timings,
-          webbuild_state: String($("webbuildState")?.textContent || ""),
-        }, null, 2);
-      } catch (_e) {}
-      return;
-    }
-    try {
-      const tSave = Date.now();
-      status("Saving current session before skin test...", "warn");
-      const saveRes = await saveSessionState("pre-web-skin-apply", { wait_for_idle: true, timeout_ms: 15000 });
-      if (!saveRes || !saveRes.ok) {
-        timings.save_session_failed = saveRes || { ok: false };
-        $("webbuildOut").textContent = JSON.stringify({
-          stage: "save_session_before_web_skin_apply_failed",
-          save: saveRes,
-          timings,
-        }, null, 2);
-        status("Skin test blocked: session save failed/timed out", "err");
+    await runWebbuildSkinAction("apply skin", async () => {
+      if (!(await ensureRuntimePreflight({ refresh: true }))) return;
+      if (!state.sessionId) {
+        status("Load a workbench session first", "warn");
         return;
       }
-      timings.save_session_ms = Date.now() - tSave;
-      status(prep.restarted ? "Reloaded preview; exporting XP skin payload..." : "Exporting XP skin payload...", "warn");
-      const tPayload = Date.now();
-      const r = await fetch("/api/workbench/web-skin-payload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: state.sessionId }),
+      const t0 = Date.now();
+      const timings = {};
+      status("Preparing flat arena runtime for skin test...", "warn");
+      const prep = await prepareWebbuildForSkinApply({
+        force_restart: !!opts.force_restart,
+        restart_if_overlay_hidden: opts.restart_if_overlay_hidden !== false,
       });
-      timings.fetch_payload_ms = Date.now() - tPayload;
-      const j = await r.json();
-      if (!r.ok) {
-        $("webbuildOut").textContent = JSON.stringify(j, null, 2);
-        status("Web skin payload failed", "err");
+      timings.prepare_ms = Date.now() - t0;
+      if (!prep.ready) {
+        status("Webbuild not ready yet; wait for load to finish", "warn");
+        try {
+          $("webbuildOut").textContent = JSON.stringify({
+            stage: "prepare_webbuild_not_ready",
+            prep,
+            timings,
+            webbuild_state: String($("webbuildState")?.textContent || ""),
+          }, null, 2);
+        } catch (_e) {}
         return;
       }
-      const win = webbuildFrameWindow();
-      status("Injecting XP into flat arena runtime...", "warn");
-      const tInject = Date.now();
-      const inject = await injectXpBytesIntoWebbuild(win, b64ToUint8Array(j.xp_b64 || ""), {
-        override_names: j.override_names,
-        reload_player_name: String(j.reload_player_name || "player"),
-        require_start_game: prep.restarted || prep.overlay_visible,
-        auto_start_game: true,
-      });
-      timings.inject_ms = Date.now() - tInject;
-      timings.total_ms = Date.now() - t0;
-      $("webbuildOut").textContent = JSON.stringify({
-        timings,
-        prep,
-        payload: { ...j, override_names: normalizeWebbuildOverrideNames(j.override_names), xp_b64: `(<${(j.xp_b64 || "").length} base64 chars>)` },
-        inject,
-      }, null, 2);
-      state.webbuild.ready = true;
-      updateWebbuildUI();
-      const injectMode = String(inject?.started_via || "");
-      if (injectMode === "deferred_start") {
-        status(`Applied XP as web skin (${Math.round(timings.total_ms || 0)}ms); waiting for game init...`, "warn");
-        setWebbuildState("Webbuild ready (skin applied; waiting for game init...)", "warn");
-      } else if (injectMode === "play_wait_wasm") {
-        status(`Applied XP as web skin (${Math.round(timings.total_ms || 0)}ms); game init still loading (use PLAY when ready)`, "warn");
-        setWebbuildState("Webbuild ready (skin applied; game init loading...)", "warn");
-      } else if (injectMode === "play_ready") {
-        status(`Applied XP as web skin (${Math.round(timings.total_ms || 0)}ms); click PLAY in the test dock`, "ok");
-        setWebbuildState("Webbuild ready (skin applied; click PLAY)", "ok");
-      } else {
-        status(`Applied XP as web skin (${Math.round(timings.total_ms || 0)}ms)`, "ok");
-        setWebbuildState("Webbuild ready (skin applied)", "ok");
-      }
-    } catch (e) {
       try {
+        const tSave = Date.now();
+        status("Saving current session before skin test...", "warn");
+        const saveRes = await saveSessionState("pre-web-skin-apply", { wait_for_idle: true, timeout_ms: 15000 });
+        if (!saveRes || !saveRes.ok) {
+          timings.save_session_failed = saveRes || { ok: false };
+          $("webbuildOut").textContent = JSON.stringify({
+            stage: "save_session_before_web_skin_apply_failed",
+            save: saveRes,
+            timings,
+          }, null, 2);
+          status("Skin test blocked: session save failed/timed out", "err");
+          return;
+        }
+        timings.save_session_ms = Date.now() - tSave;
+        status(prep.restarted ? "Reloaded preview; exporting XP skin payload..." : "Exporting XP skin payload...", "warn");
+        const tPayload = Date.now();
+        const r = await fetch("/api/workbench/web-skin-payload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: state.sessionId }),
+        });
+        timings.fetch_payload_ms = Date.now() - tPayload;
+        const j = await r.json();
+        if (!r.ok) {
+          $("webbuildOut").textContent = JSON.stringify(j, null, 2);
+          status("Web skin payload failed", "err");
+          return;
+        }
+        const win = webbuildFrameWindow();
+        status("Injecting XP into flat arena runtime...", "warn");
+        const tInject = Date.now();
+        const inject = await injectXpBytesIntoWebbuild(win, b64ToUint8Array(j.xp_b64 || ""), {
+          override_names: j.override_names,
+          reload_player_name: String(j.reload_player_name || "player"),
+          require_start_game: prep.restarted || prep.overlay_visible,
+          auto_start_game: true,
+        });
+        timings.inject_ms = Date.now() - tInject;
         timings.total_ms = Date.now() - t0;
         $("webbuildOut").textContent = JSON.stringify({
-          stage: "apply_current_xp_as_web_skin_exception",
-          error: String(e),
           timings,
-          webbuild_state: String($("webbuildState")?.textContent || ""),
+          prep,
+          payload: { ...j, override_names: normalizeWebbuildOverrideNames(j.override_names), xp_b64: `(<${(j.xp_b64 || "").length} base64 chars>)` },
+          inject,
         }, null, 2);
-      } catch (_e2) {
-        $("webbuildOut").textContent = String(e);
+        state.webbuild.ready = true;
+        updateWebbuildUI();
+        const injectMode = String(inject?.started_via || "");
+        if (injectMode === "deferred_start") {
+          status(`Applied XP as web skin (${Math.round(timings.total_ms || 0)}ms); waiting for game init...`, "warn");
+          setWebbuildState("Webbuild ready (skin applied; waiting for game init...)", "warn");
+        } else if (injectMode === "play_wait_wasm") {
+          status(`Applied XP as web skin (${Math.round(timings.total_ms || 0)}ms); game init still loading (use PLAY when ready)`, "warn");
+          setWebbuildState("Webbuild ready (skin applied; game init loading...)", "warn");
+        } else if (injectMode === "play_ready") {
+          status(`Applied XP as web skin (${Math.round(timings.total_ms || 0)}ms); click PLAY in the test dock`, "ok");
+          setWebbuildState("Webbuild ready (skin applied; click PLAY)", "ok");
+        } else {
+          status(`Applied XP as web skin (${Math.round(timings.total_ms || 0)}ms)`, "ok");
+          setWebbuildState("Webbuild ready (skin applied)", "ok");
+        }
+      } catch (e) {
+        try {
+          timings.total_ms = Date.now() - t0;
+          $("webbuildOut").textContent = JSON.stringify({
+            stage: "apply_current_xp_as_web_skin_exception",
+            error: String(e),
+            timings,
+            webbuild_state: String($("webbuildState")?.textContent || ""),
+          }, null, 2);
+        } catch (_e2) {
+          $("webbuildOut").textContent = String(e);
+        }
+        status("Web skin apply failed", "err");
       }
-      status("Web skin apply failed", "err");
-    }
+    });
   }
 
   async function testCurrentSkinInDock() {
@@ -1010,6 +1043,11 @@
   }
 
   async function onWebbuildUploadTestClick() {
+    if (state.webbuild.actionInFlight) {
+      const active = String(state.webbuild.actionLabel || "skin action");
+      status(`Skin dock busy: ${active} still running`, "warn");
+      return;
+    }
     if (!(await ensureRuntimePreflight({ refresh: true }))) return;
     const input = $("webbuildUploadTestInput");
     if (!input) return;
@@ -1018,46 +1056,48 @@
   }
 
   async function applyUploadedXpBytesToWebbuild(fileName, xpBytes) {
-    if (!(await ensureRuntimePreflight({ refresh: true }))) return;
-    const prep = await prepareWebbuildForSkinApply({ force_restart: true, restart_if_overlay_hidden: true });
-    if (!prep.ready) {
-      status("Webbuild not ready; preview failed to load", "err");
-      return;
-    }
-    try {
-      const win = webbuildFrameWindow();
-      const override_names = WEBBUILD_DEFAULT_OVERRIDE_NAMES;
-      const inject = await injectXpBytesIntoWebbuild(win, xpBytes, {
-        override_names,
-        reload_player_name: "player",
-        require_start_game: prep.restarted || prep.overlay_visible,
-        auto_start_game: true,
-      });
-      state.webbuild.uploadedXpBytes = xpBytes;
-      state.webbuild.uploadedXpName = fileName || "upload.xp";
-      $("webbuildOut").textContent = JSON.stringify({
-        mode: "upload_test_skin",
-        file: state.webbuild.uploadedXpName,
-        prep,
-        inject,
-      }, null, 2);
-      state.webbuild.ready = true;
-      updateWebbuildUI();
-      const injectMode = String(inject?.started_via || "");
-      if (injectMode === "play_wait_wasm") {
-        status(`Uploaded test skin applied: ${state.webbuild.uploadedXpName} (game init loading)`, "warn");
-        setWebbuildState("Webbuild ready (uploaded skin applied; game init loading...)", "warn");
-      } else if (injectMode === "play_ready") {
-        status(`Uploaded test skin applied: ${state.webbuild.uploadedXpName} (click PLAY)`, "ok");
-        setWebbuildState("Webbuild ready (uploaded skin applied; click PLAY)", "ok");
-      } else {
-        status(`Uploaded test skin applied: ${state.webbuild.uploadedXpName}`, "ok");
-        setWebbuildState("Webbuild ready (uploaded skin applied)", "ok");
+    await runWebbuildSkinAction("upload skin", async () => {
+      if (!(await ensureRuntimePreflight({ refresh: true }))) return;
+      const prep = await prepareWebbuildForSkinApply({ force_restart: true, restart_if_overlay_hidden: true });
+      if (!prep.ready) {
+        status("Webbuild not ready; preview failed to load", "err");
+        return;
       }
-    } catch (e) {
-      $("webbuildOut").textContent = String(e);
-      status("Upload test skin failed", "err");
-    }
+      try {
+        const win = webbuildFrameWindow();
+        const override_names = WEBBUILD_DEFAULT_OVERRIDE_NAMES;
+        const inject = await injectXpBytesIntoWebbuild(win, xpBytes, {
+          override_names,
+          reload_player_name: "player",
+          require_start_game: prep.restarted || prep.overlay_visible,
+          auto_start_game: true,
+        });
+        state.webbuild.uploadedXpBytes = xpBytes;
+        state.webbuild.uploadedXpName = fileName || "upload.xp";
+        $("webbuildOut").textContent = JSON.stringify({
+          mode: "upload_test_skin",
+          file: state.webbuild.uploadedXpName,
+          prep,
+          inject,
+        }, null, 2);
+        state.webbuild.ready = true;
+        updateWebbuildUI();
+        const injectMode = String(inject?.started_via || "");
+        if (injectMode === "play_wait_wasm") {
+          status(`Uploaded test skin applied: ${state.webbuild.uploadedXpName} (game init loading)`, "warn");
+          setWebbuildState("Webbuild ready (uploaded skin applied; game init loading...)", "warn");
+        } else if (injectMode === "play_ready") {
+          status(`Uploaded test skin applied: ${state.webbuild.uploadedXpName} (click PLAY)`, "ok");
+          setWebbuildState("Webbuild ready (uploaded skin applied; click PLAY)", "ok");
+        } else {
+          status(`Uploaded test skin applied: ${state.webbuild.uploadedXpName}`, "ok");
+          setWebbuildState("Webbuild ready (uploaded skin applied)", "ok");
+        }
+      } catch (e) {
+        $("webbuildOut").textContent = String(e);
+        status("Upload test skin failed", "err");
+      }
+    });
   }
 
   async function onWebbuildUploadTestInputChange(e) {

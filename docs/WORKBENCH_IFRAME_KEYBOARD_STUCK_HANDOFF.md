@@ -407,3 +407,26 @@ Evidence:
   - current override scope is still a subset of mounted variants; if runtime selects a non-overridden variant file, mixed custom/default visuals can appear.
 - Follow-up requirement:
   - implement mounted-variant-complete override strategy (deterministic full `player/wolfie/wolack` variant set present in runtime), instead of startup-subset targeting.
+
+### 2026-02-27T04:04Z — Full ASCIIID parity override run + action mutex
+- User escalation: requested full parity with ASCIIID logic and reported NPC inheritance + repeated-click instability.
+- Code changes (`web/workbench.js`):
+  - Web override policy switched to match native TERM++ sandbox parity set exactly:
+    - `player-nude.xp`
+    - `(player|attack|plydie|wolfie|wolack)-[0000..1111].xp`
+  - `normalizeWebbuildOverrideNames()` now accepts and normalizes server-provided override set (no longer drops broad list).
+  - Added dock action mutex (`webbuild.actionInFlight/actionLabel`) to prevent overlapping skin actions from repeated clicks.
+  - Dock controls now disable while a skin action is running and show busy tooltip/status.
+- Parity run artifact:
+  - `/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/workbench-png-to-skin-2026-02-27T04-04-05-927Z/result.json`
+- Parity run outcome:
+  - `loaded=true`
+  - `moved=true`
+  - classification=`freeze_world_never_ready`
+  - final status still reports uploaded skin applied.
+  - trace shows main menu clears but `world_ready` stays `0` and classifier reports world-never-ready.
+- Interpretation:
+  - current instability is not explained by click overlap alone (mutex added) and not by load failure (`loaded=true`).
+  - bug remains in gameplay/world readiness path after skin apply/restart sequence.
+- Important scope note:
+  - skin replacement is FS-global; any actor referencing overridden filenames can inherit the custom skin. this is runtime-level behavior, not per-entity assignment.

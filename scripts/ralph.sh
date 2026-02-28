@@ -34,6 +34,10 @@ else
   CYCLE=0
 fi
 
+# Session identity
+SESSION_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+SESSION_CYCLE=0
+
 # Files watched — also used for changes.patch scope
 WATCHED_FILES=(
   "$REPO_ROOT/web/termpp_flat_map_bootstrap.js"
@@ -120,12 +124,14 @@ save_cycle_artifacts() {
   git_head="$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
   jq -n \
     --argjson cycle "$cycle_num" \
+    --arg session_id "$SESSION_ID" \
+    --argjson session_cycle "$SESSION_CYCLE" \
     --arg start_ts "$cycle_ts" \
     --argjson start_epoch "$cycle_start" \
     --argjson end_epoch "$cycle_end" \
     --argjson duration_ms "$cycle_dur_ms" \
     --arg git_head "$git_head" \
-    '{cycle: $cycle, start_ts: $start_ts, start_epoch: $start_epoch, end_epoch: $end_epoch, duration_ms: $duration_ms, git_head: $git_head}' \
+    '{cycle: $cycle, session_id: $session_id, session_cycle: $session_cycle, start_ts: $start_ts, start_epoch: $start_epoch, end_epoch: $end_epoch, duration_ms: $duration_ms, git_head: $git_head}' \
     > "$cycle_dir/meta.json"
 
   # 6. Compute change fingerprint
@@ -157,12 +163,16 @@ append_history() {
   if [[ -n "$extracted" ]]; then
     history_line="$(echo "$extracted" | jq -c \
       --argjson cycle "$cycle_num" \
+      --arg session_id "$SESSION_ID" \
+      --argjson session_cycle "$SESSION_CYCLE" \
       --arg verdict "$verdict" \
       --arg result_path "$result_path" \
       --arg change_fingerprint "$fingerprint" \
       --arg git_head "$git_head" \
       '{
         cycle_id: $cycle,
+        session_id: $session_id,
+        session_cycle: $session_cycle,
         result_path: $result_path,
         status: .status,
         error: .error,
@@ -181,12 +191,16 @@ append_history() {
   else
     history_line="$(jq -nc \
       --argjson cycle "$cycle_num" \
+      --arg session_id "$SESSION_ID" \
+      --argjson session_cycle "$SESSION_CYCLE" \
       --arg verdict "$verdict" \
       --arg result_path "$result_path" \
       --arg change_fingerprint "$fingerprint" \
       --arg git_head "$git_head" \
       '{
         cycle_id: $cycle,
+        session_id: $session_id,
+        session_cycle: $session_cycle,
         result_path: $result_path,
         status: null,
         error: null,
@@ -416,6 +430,7 @@ echo ""
 
 run_one_cycle() {
   local cycle_num="$1"
+  SESSION_CYCLE=$((SESSION_CYCLE + 1))
   local cycle_start
   cycle_start="$(date +%s)"
   echo ""

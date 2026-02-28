@@ -21,6 +21,19 @@ RT_BOOTSTRAP="$REPO_ROOT/runtime/termpp-skin-lab-static/termpp-web-flat/flat_map
 RALPH_OUT="$REPO_ROOT/output/ralph"
 HISTORY_FILE="$RALPH_OUT/history.jsonl"
 
+# Seed cycle counter from history (survives restarts)
+if [[ -f "$HISTORY_FILE" ]] && [[ -s "$HISTORY_FILE" ]]; then
+  _last_id="$(tail -1 "$HISTORY_FILE" | jq -r '.cycle_id // empty' 2>/dev/null)" || _last_id=""
+  if [[ "$_last_id" =~ ^[0-9]+$ ]]; then
+    CYCLE="$_last_id"
+  else
+    echo "WARNING: malformed last history line, seeding cycle_id=0" >&2
+    CYCLE=0
+  fi
+else
+  CYCLE=0
+fi
+
 # Files watched — also used for changes.patch scope
 WATCHED_FILES=(
   "$REPO_ROOT/web/termpp_flat_map_bootstrap.js"
@@ -463,7 +476,6 @@ run_one_cycle() {
 }
 
 # ── Initial run ──
-CYCLE=0
 CYCLE=$((CYCLE + 1))
 run_one_cycle "$CYCLE" || true
 

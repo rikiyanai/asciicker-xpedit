@@ -730,13 +730,50 @@ async function main() {
   };
   const gateAPassed = Object.values(gateA).every(Boolean);
 
+  // ── WASM crash detection (wide scan across all signal sources) ──
+  const wasmCrashPattern = /memory access out of bounds|RuntimeError|RENDER CRASHED/i;
+  const wasmCrash =
+    pageErrors.some(e => wasmCrashPattern.test(String(e.error || ""))) ||
+    consoleLogs.some(e => wasmCrashPattern.test(String(e.text || ""))) ||
+    (moveResult.probes || []).some(p =>
+      /exception thrown/i.test(String(p.statusText || "")) ||
+      !!p.pos_error ||
+      [p.gameMainMenu, p.worldReady, p.renderStage].some(v => typeof v === "string" && /^ERR:/.test(v)));
+
+  // ── Position validity (scan traces + polls + probes) ──
+  const posInvalid = (pos) => !Array.isArray(pos) || pos.length !== 3 || pos.some(v => v === null || !Number.isFinite(Number(v)));
+  const posNaNWhenReady = (() => {
+    // Bootstrap diagnostic traces (37 frames, most complete)
+    for (const trace of (firstMoveDiagnostic?.traces || [])) {
+      const p = trace?.parsed;
+      if (!p) continue;
+      if ((p.world_ready === "1" || p.world_ready === 1) && posInvalid(p.pos)) return true;
+    }
+    // PlayableWait polls
+    for (const poll of (moveResult?.playableWait?.polls || [])) {
+      if ((poll.worldReady === 1 || poll.worldReady === true) && posInvalid(poll.pos)) return true;
+    }
+    // Move probes
+    for (const probe of (moveResult?.probes || [])) {
+      if ((probe.worldReady === 1 || probe.worldReady === true) && (!!probe.pos_error || posInvalid(probe.pos))) return true;
+    }
+    return false;
+  })();
+
   // ── Gate B: gameplay stability (headed-only until viewport issue resolved) ──
-  // World_ready stable, movement successful, no premature clear.
+  // World_ready stable, movement successful, no premature clear,
+  // no WASM crashes, valid position, playable classification.
   const gateB = {
     run_valid: runValid,
     no_zero_viewport: !zeroViewport,
     no_premature_clear: !prematureClear,
     no_move_error: !moveResult.error,
+    // Gameplay quality gates
+    classification_playable: firstMoveDiagnostic.classification === "playable",
+    moved: !!moveResult.moved,
+    no_wasm_crash: !wasmCrash,
+    pos_valid_when_ready: !posNaNWhenReady,
+    no_world_ready_drops: (firstMoveDiagnostic.world_ready_drop_count || 0) === 0,
   };
   const gateBPassed = Object.values(gateB).every(Boolean);
 
@@ -754,13 +791,26 @@ async function main() {
   if (zeroViewport) {
     logEvent("run_validity:invalid_env", { reason: "headless_zero_viewport" });
   }
+  if (wasmCrash) {
+    logEvent("gate:wasm_crash", {
+      page_error_hits: pageErrors.filter(e => wasmCrashPattern.test(String(e.error || ""))).length,
+      console_hits: consoleLogs.filter(e => wasmCrashPattern.test(String(e.text || ""))).length,
+      probe_hits: (moveResult.probes || []).filter(p =>
+        /exception thrown/i.test(String(p.statusText || "")) || !!p.pos_error ||
+        [p.gameMainMenu, p.worldReady, p.renderStage].some(v => typeof v === "string" && /^ERR:/.test(v))).length,
+    });
+  }
+  if (posNaNWhenReady) {
+    logEvent("gate:pos_nan_when_ready");
+  }
 
   // Determine top-level error hierarchy:
-  // invalid_run > invalid_env > premature_clear > moveResult.error > null
+  // invalid_run > invalid_env > wasm_crash > premature_clear > moveResult.error > null
   const topError = !runValid ? "invalid_run"
     : (zeroViewport ? "invalid_env_headless_zero_viewport"
+    : (wasmCrash ? "wasm_crash"
     : (prematureClear ? "premature_menu_clear"
-    : (moveResult.error || null)));
+    : (moveResult.error || null))));
 
   const result = {
     url: targetUrl,

@@ -32,12 +32,12 @@ Exit criteria:
 
 ## Phase D: UI
 
-- Wizard page for upload/analyze/run.
-- Workbench page for load/export.
+- Workbench page for upload/analyze/run/edit/export (primary UI).
+- Legacy wizard page retained temporarily as deprecated fallback only.
 - No deadlock UX: timeouts surface explicit error text.
 
 Exit criteria:
-- Manual golden flow completes in browser.
+- Manual golden flow completes in Workbench direct browser flow.
 
 ## Phase E: Reliability
 

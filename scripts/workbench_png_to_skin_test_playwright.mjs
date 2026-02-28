@@ -10,21 +10,27 @@ function parseArgs(argv) {
   const out = {
     url: "http://127.0.0.1:5071/workbench",
     pngPath: "",
+    xpPath: "",
     headed: false,
     timeoutSec: 240,
     moveSec: 4,
     skipMove: false,
     noAutoFind: false,
+    overrideMode: "",
+    reloadMode: "",
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--url" && argv[i + 1]) out.url = argv[++i];
     else if ((a === "--png" || a === "--png-path") && argv[i + 1]) out.pngPath = argv[++i];
+    else if ((a === "--xp" || a === "--xp-path") && argv[i + 1]) out.xpPath = argv[++i];
     else if (a === "--timeout-sec" && argv[i + 1]) out.timeoutSec = Math.max(30, Number(argv[++i]) || 240);
     else if (a === "--move-sec" && argv[i + 1]) out.moveSec = Math.max(1, Number(argv[++i]) || 4);
     else if (a === "--skip-move") out.skipMove = true;
     else if (a === "--no-auto-find") out.noAutoFind = true;
     else if (a === "--headed") out.headed = true;
+    else if (a === "--override-mode" && argv[i + 1]) out.overrideMode = argv[++i];
+    else if (a === "--reload-mode" && argv[i + 1]) out.reloadMode = argv[++i];
   }
   return out;
 }
@@ -73,10 +79,82 @@ async function fileExists(p) {
   }
 }
 
+function parseFlatMapTraceLine(text) {
+  const s = String(text || "");
+  const m = s.match(/\[TRACE\]\s+frame=(\d+)\s+t=(\d+)\s+pos=([^\s]+)\s+grounded=([^\s]+)\s+water=([^\s]+)\s+menu=([^\s]+)\s+world_ready=([^\s]+)\s+stage=([^\s]+)/);
+  if (!m) return null;
+  const rec = {
+    frame: Number(m[1]),
+    t_ms: Number(m[2]),
+    grounded: m[4],
+    water: m[5],
+    menu: m[6],
+    world_ready: m[7],
+    stage: m[8],
+    pos: null,
+  };
+  try {
+    rec.pos = JSON.parse(m[3]);
+  } catch (_e) {
+    rec.pos = null;
+  }
+  return rec;
+}
+
+function extractFirstMoveDiagnostic(consoleLogs = []) {
+  const flatLogs = Array.isArray(consoleLogs)
+    ? consoleLogs.filter((r) => /\[flat-map-bootstrap\]/.test(String(r?.text || "")))
+    : [];
+  const traceLogs = flatLogs.filter((r) => /\[TRACE\]/.test(String(r?.text || "")));
+  const classifyLogs = flatLogs.filter((r) => /\[CLASSIFY\]/.test(String(r?.text || "")));
+  const traces = traceLogs
+    .map((r) => ({
+      t_ms: Number(r?.t_ms || 0),
+      raw: String(r?.text || ""),
+      parsed: parseFlatMapTraceLine(String(r?.text || "")),
+    }));
+  let classification = "";
+  let classifyRaw = "";
+  let classifyAtMs = null;
+  if (classifyLogs.length) {
+    const last = classifyLogs[classifyLogs.length - 1];
+    classifyRaw = String(last?.text || "");
+    classifyAtMs = Number(last?.t_ms || 0);
+    const m = classifyRaw.match(/\[CLASSIFY\]\s+result=([a-z0-9_]+)/i);
+    if (m) classification = String(m[1] || "").toLowerCase();
+  }
+  const wrEver = /world_ready_ever=(\S+)/.exec(classifyRaw);
+  const wrDrops = /world_ready_drops=(\S+)/.exec(classifyRaw);
+  const menuNotReady = /menu_cleared_while_not_ready=(\S+)/.exec(classifyRaw);
+  const traceDur = /trace_duration_ms=(\S+)/.exec(classifyRaw);
+  const vpZero = /viewport_zero=(\S+)/.exec(classifyRaw);
+  return {
+    classification: classification || "unknown",
+    classify_log_count: classifyLogs.length,
+    classify_log_raw: classifyRaw,
+    classify_at_ms: classifyAtMs,
+    world_ready_ever_true: wrEver ? wrEver[1] === "true" : null,
+    world_ready_drop_count: wrDrops ? Number(wrDrops[1]) : null,
+    menu_cleared_while_not_ready: menuNotReady ? menuNotReady[1] === "true" : null,
+    viewport_zero: vpZero ? vpZero[1] === "true" : null,
+    trace_duration_ms: traceDur ? Number(traceDur[1]) : null,
+    trace_log_count: traces.length,
+    first_trace_at_ms: traces.length ? traces[0].t_ms : null,
+    last_trace_at_ms: traces.length ? traces[traces.length - 1].t_ms : null,
+    traces,
+  };
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const pngPath = pickPngPath(args);
-  if (!pngPath || !(await fileExists(pngPath))) {
+  const xpPath = args.xpPath ? path.resolve(args.xpPath) : "";
+  const useUploadXpMode = !!xpPath;
+  const pngPath = useUploadXpMode ? "" : pickPngPath(args);
+  if (useUploadXpMode) {
+    if (!(await fileExists(xpPath))) {
+      throw new Error(`XP not found: ${xpPath}`);
+    }
+  } else if (!pngPath || !(await fileExists(pngPath))) {
     const cands = args.noAutoFind ? [] : findDaimonPngCandidates();
     throw new Error(
       `PNG not found. Pass --png /absolute/path/to/daimon_sheet.png\n` +
@@ -343,7 +421,7 @@ async function main() {
   async function advancePastMainMenu(frameHandle, pageHandle) {
     const pulses = [];
     const asBool = (v) => v === true || Number(v) === 1;
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 24; i++) {
       const probe = await captureFrameProbe(frameHandle, `newgame_probe_${i + 1}`);
       const overlayVisible = !!probe?.overlayVisible;
       if (overlayVisible) {
@@ -361,6 +439,13 @@ async function main() {
       if (probeShowsWorldStarted(probe)) {
         return { attempted: true, pulses, stopped: "world_started" };
       }
+      // Defer to bootstrap's world-ready gate: only pulse when world is ready
+      const worldReady = asBool(probe?.worldReady);
+      if (!worldReady) {
+        logEvent("iframe:newgame_deferred", { iter: i + 1, worldReady: probe?.worldReady, stage: probe?.renderStage });
+        await pageHandle.waitForTimeout(600);
+        continue;
+      }
       const pulse = await pulseMainMenuAdvance(frameHandle, pageHandle, i + 1);
       pulses.push({ t_ms: nowMs(), probe, pulse });
       logEvent("iframe:newgame_pulse", {
@@ -373,44 +458,67 @@ async function main() {
     return { attempted: true, pulses, stopped: "pulse_budget" };
   }
 
-  logEvent("start", { url: args.url, pngPath });
-  await page.goto(args.url, { waitUntil: "domcontentloaded", timeout: 60000 });
+  // Append override/reload mode query params to workbench URL if specified.
+  let targetUrl = args.url;
+  if (args.overrideMode || args.reloadMode) {
+    const u = new URL(targetUrl);
+    if (args.overrideMode) u.searchParams.set("overridemode", args.overrideMode);
+    if (args.reloadMode) u.searchParams.set("reloadmode", args.reloadMode);
+    targetUrl = u.href;
+  }
+  logEvent("start", { url: targetUrl, mode: useUploadXpMode ? "upload_xp" : "pipeline_png", pngPath, xpPath: useUploadXpMode ? xpPath : "", overrideMode: args.overrideMode || "mounted", reloadMode: args.reloadMode || "src_swap" });
+  await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
   await page.waitForTimeout(500);
   await wbSnapshot("after_goto");
+  if (useUploadXpMode) {
+    await page.waitForFunction(() => {
+      const s = window.__wb_debug && typeof window.__wb_debug.getWebbuildDebugState === "function"
+        ? window.__wb_debug.getWebbuildDebugState()
+        : null;
+      return !!(s && s.runtimePreflight && s.runtimePreflight.checked === true);
+    }, { timeout: 30000 });
+    await waitForEnabled("#webbuildUploadTestBtn", "upload_test_button_enabled", 60000);
+    perf.upload_test_start_ms = nowMs();
+    logEvent("upload_xp:set_file", { xpPath });
+    await page.setInputFiles("#webbuildUploadTestInput", xpPath);
+    perf.upload_test_done_ms = nowMs();
+    await wbSnapshot("after_upload_xp");
+  } else {
+    perf.upload_start_ms = nowMs();
+    logEvent("upload:set_file", { pngPath });
+    await page.setInputFiles("#wbFile", pngPath);
+    await page.click("#wbUpload");
+    await waitForEnabled("#wbAnalyze", "analyze_button_enabled", 60000);
+    perf.upload_done_ms = nowMs();
+    await wbSnapshot("after_upload");
 
-  perf.upload_start_ms = nowMs();
-  logEvent("upload:set_file", { pngPath });
-  await page.setInputFiles("#wbFile", pngPath);
-  await page.click("#wbUpload");
-  await waitForEnabled("#wbAnalyze", "analyze_button_enabled", 60000);
-  perf.upload_done_ms = nowMs();
-  await wbSnapshot("after_upload");
+    perf.analyze_start_ms = nowMs();
+    logEvent("analyze:click");
+    await page.click("#wbAnalyze");
+    await waitForEnabled("#wbRun", "run_button_enabled", 120000);
+    await waitForWbStatus(/Analyze ready/, "analyze_ready", 120000);
+    perf.analyze_done_ms = nowMs();
+    await wbSnapshot("after_analyze");
 
-  perf.analyze_start_ms = nowMs();
-  logEvent("analyze:click");
-  await page.click("#wbAnalyze");
-  await waitForEnabled("#wbRun", "run_button_enabled", 120000);
-  await waitForWbStatus(/Analyze ready/, "analyze_ready", 120000);
-  perf.analyze_done_ms = nowMs();
-  await wbSnapshot("after_analyze");
+    perf.convert_start_ms = nowMs();
+    logEvent("convert:click");
+    await page.click("#wbRun");
+    await waitForWbStatus(/Session active:/, "session_active", 240000);
+    await waitForEnabled("#webbuildQuickTestBtn", "test_skin_button_enabled", 240000);
+    perf.convert_done_ms = nowMs();
+    await wbSnapshot("after_convert");
 
-  perf.convert_start_ms = nowMs();
-  logEvent("convert:click");
-  await page.click("#wbRun");
-  await waitForWbStatus(/Session active:/, "session_active", 240000);
-  await waitForEnabled("#webbuildQuickTestBtn", "test_skin_button_enabled", 240000);
-  perf.convert_done_ms = nowMs();
-  await wbSnapshot("after_convert");
+    const quickBtn = page.locator("#webbuildQuickTestBtn");
+    await quickBtn.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(250);
 
-  const quickBtn = page.locator("#webbuildQuickTestBtn");
-  await quickBtn.scrollIntoViewIfNeeded();
-  await page.waitForTimeout(250);
+    perf.skin_test_click_ms = nowMs();
+    logEvent("skin_test:click");
+    await quickBtn.click();
+    await wbSnapshot("after_test_click");
+  }
 
-  perf.skin_test_click_ms = nowMs();
-  logEvent("skin_test:click");
-  await quickBtn.click();
-  await wbSnapshot("after_test_click");
-
+  if (perf.skin_test_click_ms == null) perf.skin_test_click_ms = nowMs();
   const loadTimeline = [];
   const loadStart = Date.now();
   let finalDebug = null;
@@ -424,7 +532,7 @@ async function main() {
     console.log(`[skin_wait ${String(nowMs()).padStart(6, " ")}] wbStatus="${wbStatus}" webbuildState="${webbuildState}" calledRun=${!!iframe.calledRun} hasLoad=${!!iframe.hasLoad} overlay=${iframe.overlayVisible}`);
     finalDebug = s;
     const success = (
-      /Applied XP as web skin/i.test(wbStatus) &&
+      /(Applied XP as web skin|Uploaded test skin applied)/i.test(wbStatus) &&
       /skin applied|webbuild ready/i.test(webbuildState) &&
       !!s.ready &&
       !!iframe.calledRun &&
@@ -578,9 +686,90 @@ async function main() {
     }
   } catch (_e) {}
 
+  const firstMoveDiagnostic = extractFirstMoveDiagnostic(consoleLogs);
+  const firstMoveDiagnosticPath = path.join(outDir, "first-move-diagnostic.json");
+  await fs.writeFile(firstMoveDiagnosticPath, JSON.stringify(firstMoveDiagnostic, null, 2));
+
+  // ── Run validity gate ──
+  // A run is only valid when bootstrap diagnostic data is present and meaningful.
+  // Runs missing this data cannot be classified as pass or fail — they are invalid_run.
+  const validityChecks = {
+    has_trace_logs: (firstMoveDiagnostic.trace_log_count || 0) > 0,
+    has_classify_log: (firstMoveDiagnostic.classify_log_count || 0) > 0,
+    classification_known: !!firstMoveDiagnostic.classification && firstMoveDiagnostic.classification !== "unknown",
+    truth_fields_present: firstMoveDiagnostic.world_ready_ever_true !== null
+      && firstMoveDiagnostic.world_ready_drop_count !== null
+      && firstMoveDiagnostic.menu_cleared_while_not_ready !== null,
+  };
+  const runValid = Object.values(validityChecks).every(Boolean);
+
+  // ── Environment gate: zero-viewport headless ──
+  // If the WebGL drawing buffer has zero dimensions, the WASM engine cannot advance
+  // render_stage past 1-2 and GameWorldReady() is unreliable. This is a headless
+  // environment limitation (SwiftShader + iframe), not a gameplay regression.
+  const zeroViewport = firstMoveDiagnostic.viewport_zero === true;
+  if (zeroViewport) {
+    logEvent("env_gate:zero_viewport", { viewport_zero: true, headed: args.headed });
+  }
+
+  // ── Safety gate: premature menu clear ──
+  // If menu was cleared while world_ready was false at the moment of clearing,
+  // the bootstrap safety goal is not met. (Post-clear world_ready drops are tracked
+  // separately via world_ready_drop_count.)
+  const prematureClear = runValid && !zeroViewport && firstMoveDiagnostic.menu_cleared_while_not_ready === true;
+  if (prematureClear) {
+    logEvent("safety_gate:premature_clear", { menu_cleared_while_not_ready: true });
+  }
+
+  // ── Gate A: skin-applied visual ──
+  // Did the skin injection succeed and is the canvas rendering?
+  // This can pass even in headless if the WASM loaded and screenshots exist.
+  const gateA = {
+    skin_injected: loaded,
+    screenshots_exist: !!(finalPageShot),
+  };
+  const gateAPassed = Object.values(gateA).every(Boolean);
+
+  // ── Gate B: gameplay stability (headed-only until viewport issue resolved) ──
+  // World_ready stable, movement successful, no premature clear.
+  const gateB = {
+    run_valid: runValid,
+    no_zero_viewport: !zeroViewport,
+    no_premature_clear: !prematureClear,
+    no_move_error: !moveResult.error,
+  };
+  const gateBPassed = Object.values(gateB).every(Boolean);
+
+  const runValidity = {
+    valid: runValid,
+    status: !runValid ? "invalid_run" : (zeroViewport ? "invalid_env_headless_zero_viewport" : (prematureClear ? "safety_fail" : "valid")),
+    checks: validityChecks,
+    passed: gateAPassed && gateBPassed,
+    gateA: { passed: gateAPassed, checks: gateA },
+    gateB: { passed: gateBPassed, checks: gateB },
+  };
+  if (!runValid) {
+    logEvent("run_validity:invalid", { checks: validityChecks });
+  }
+  if (zeroViewport) {
+    logEvent("run_validity:invalid_env", { reason: "headless_zero_viewport" });
+  }
+
+  // Determine top-level error hierarchy:
+  // invalid_run > invalid_env > premature_clear > moveResult.error > null
+  const topError = !runValid ? "invalid_run"
+    : (zeroViewport ? "invalid_env_headless_zero_viewport"
+    : (prematureClear ? "premature_menu_clear"
+    : (moveResult.error || null)));
+
   const result = {
-    url: args.url,
+    url: targetUrl,
+    error: topError,
     pngPath,
+    xpPath: useUploadXpMode ? xpPath : "",
+    mode: useUploadXpMode ? "upload_xp" : "pipeline_png",
+    overrideMode: args.overrideMode || "mounted",
+    reloadMode: args.reloadMode || "src_swap",
     headed: args.headed,
     timeoutSec: args.timeoutSec,
     moveSec: args.moveSec,
@@ -593,17 +782,20 @@ async function main() {
       ...perf,
     },
     loaded,
+    runValidity,
     finalDebug,
     moveResult,
     events,
     pageErrors,
     requestFails,
     consoleLogs,
+    firstMoveDiagnostic,
     loadTimeline,
     artifacts: {
       outDir,
       finalPageShot,
       finalIframeShot: finalIframeShot || null,
+      firstMoveDiagnosticPath,
     },
   };
 
@@ -612,7 +804,12 @@ async function main() {
   console.log(JSON.stringify({
     resultPath,
     loaded,
+    runValidity,
     pngPath,
+    xpPath: useUploadXpMode ? xpPath : "",
+    mode: useUploadXpMode ? "upload_xp" : "pipeline_png",
+    firstMoveDiagnosticPath,
+    classification: firstMoveDiagnostic.classification,
     perf: result.perf,
     final: {
       wbStatus: String(finalDebug?.wbStatus || ""),
@@ -622,6 +819,7 @@ async function main() {
     moveResult,
     artifacts: result.artifacts,
   }, null, 2));
+  console.log(`RESULT_PATH=${resultPath}`);
 
   await context.close();
   await browser.close();

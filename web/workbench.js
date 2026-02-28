@@ -22,18 +22,31 @@
     [128, 0, 255],
     [128, 64, 0],
   ];
-  function buildAsciidParityOverrideNames() {
-    // Match native TERM++ sandbox override policy (see pipeline service):
-    // player-nude + [player|attack|plydie|wolfie|wolack]-[0000..1111]
+  const OVERRIDE_MODE = String(params.get("overridemode") || "mounted").trim().toLowerCase();
+  const WEBBUILD_DEFAULT_OVERRIDE_NAMES = (() => {
+    if (OVERRIDE_MODE === "full_parity") {
+      // Full ASCIIID parity: player-nude + [player|attack|plydie|wolfie|wolack]-[0000..1111]
+      // WARNING: FS-global — NPCs sharing these filenames inherit the custom skin (B1).
+      // Use only for explicit debug via ?overridemode=full_parity.
+      const out = ["player-nude.xp"];
+      for (const prefix of ["player", "attack", "plydie", "wolfie", "wolack"]) {
+        for (let i = 0; i < 16; i++) {
+          out.push(`${prefix}-${i.toString(2).padStart(4, "0")}.xp`);
+        }
+      }
+      return out;
+    }
+    // Default "mounted": player + wolfie + wolack (49 names).
+    // Mounted player spawn loads all three families at startup.
+    // Excludes attack/plydie to avoid destabilizing NPCs that share those.
     const out = ["player-nude.xp"];
-    for (const prefix of ["player", "attack", "plydie", "wolfie", "wolack"]) {
+    for (const prefix of ["player", "wolfie", "wolack"]) {
       for (let i = 0; i < 16; i++) {
         out.push(`${prefix}-${i.toString(2).padStart(4, "0")}.xp`);
       }
     }
     return out;
-  }
-  const WEBBUILD_DEFAULT_OVERRIDE_NAMES = buildAsciidParityOverrideNames();
+  })();
   const WEBBUILD_READY_TIMEOUT_MS = 180000;
   const DEFAULT_FLATMAP_NAME = "game_map_y8_original_game_map.a3d";
   const WEBBUILD_BASE_SRC = (() => {
@@ -777,7 +790,12 @@
     const isSafePlayerOverride = (name) => {
       const s = String(name || "").trim().toLowerCase();
       if (s === "player-nude.xp") return true;
-      if (/^(player|attack|plydie|wolfie|wolack)-[01]{4}\.xp$/.test(s)) return true;
+      if (OVERRIDE_MODE === "full_parity") {
+        if (/^(player|attack|plydie|wolfie|wolack)-[01]{4}\.xp$/.test(s)) return true;
+      } else {
+        // mounted default: player + wolfie + wolack
+        if (/^(player|wolfie|wolack)-[01]{4}\.xp$/.test(s)) return true;
+      }
       return false;
     };
     const add = (name) => {

@@ -58,20 +58,28 @@ def _resolve_xp_tool_repo_root() -> Path:
     env_root = os.environ.get("XP_TOOL_REPO_ROOT", "").strip()
     if env_root:
         return Path(env_root).expanduser().resolve()
-    sibling = ROOT.parent / "asciicker-Y9-2"
-    if sibling.exists():
-        return sibling.resolve()
     return ROOT.resolve()
 
 
 def _xp_tool_command_parts(xp_path: Path) -> tuple[list[str], Path]:
     repo_root = _resolve_xp_tool_repo_root()
+    tool_module = repo_root / "scripts" / "asset_gen" / "xp_tool.py"
+    if not tool_module.exists():
+        raise FileNotFoundError(
+            "xp_tool module not found at "
+            f"{tool_module}. "
+            "Install/add scripts/asset_gen/xp_tool.py in this repo, or set XP_TOOL_REPO_ROOT "
+            "to an external repo that provides it."
+        )
     argv = ["python3", "-m", "scripts.asset_gen.xp_tool", str(xp_path.resolve())]
     return argv, repo_root
 
 
 def _resolve_legacy_repo_root() -> Path:
-    return _resolve_xp_tool_repo_root()
+    env_root = os.environ.get("TERMPP_REPO_ROOT", "").strip()
+    if env_root:
+        return Path(env_root).expanduser().resolve()
+    return ROOT.resolve()
 
 
 def _resolve_termpp_binary(legacy_root: Path, binary_name: str = "game_term") -> Path:
@@ -80,8 +88,20 @@ def _resolve_termpp_binary(legacy_root: Path, binary_name: str = "game_term") ->
         raise ValueError("binary_name must be a bare filename")
     p = legacy_root / ".run" / b
     if not p.exists():
-        raise FileNotFoundError(f"TERM++ binary not found: {p}")
+        raise FileNotFoundError(
+            "TERM++ binary not found: "
+            f"{p}. "
+            "Build/install TERM++ under this repo (.run/<binary>) or set TERMPP_REPO_ROOT "
+            "to an external TERM++ repo."
+        )
     return p.resolve()
+
+
+def _normalize_binary_name(binary_name: str = "game_term") -> str:
+    b = str(binary_name or "game_term").strip() or "game_term"
+    if "/" in b or "\\" in b:
+        raise ValueError("binary_name must be a bare filename")
+    return b
 
 
 def _stream_capture_command(region: dict[str, int], out_path: Path) -> list[str]:
@@ -1560,7 +1580,10 @@ def workbench_xp_tool_command(xp_path: str, req_id: str) -> dict[str, Any]:
         raise ApiError("xp_path not found", "xp_not_found", "workbench", req_id, 404)
     if xp.suffix.lower() != ".xp":
         raise ApiError("xp_path must end with .xp", "invalid_xp_path", "workbench", req_id, 422)
-    argv, cwd = _xp_tool_command_parts(xp.resolve())
+    try:
+        argv, cwd = _xp_tool_command_parts(xp.resolve())
+    except Exception as e:
+        raise ApiError(str(e), "xp_tool_unavailable", "workbench", req_id, 422)
     return {
         "xp_path": str(xp.resolve()),
         "command": " ".join(shlex.quote(x) for x in argv),
@@ -1684,20 +1707,19 @@ def workbench_termpp_skin_command(session_id: str, req_id: str, binary_name: str
         raise ApiError("session not found", "session_not_found", "workbench", req_id, 404)
     export = workbench_export_xp(session_id, req_id)
     xp_path = Path(export["xp_path"]).expanduser().resolve()
-    legacy_root = _resolve_legacy_repo_root()
     try:
-        termpp_bin = _resolve_termpp_binary(legacy_root, binary_name=binary_name)
+        bin_name = _normalize_binary_name(binary_name)
     except Exception as e:
-        raise ApiError(str(e), "termpp_binary_missing", "workbench", req_id, 500)
+        raise ApiError(str(e), "invalid_binary_name", "workbench", req_id, 422)
     run_id = f"{session_id}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}"
     runtime_root = WORKBENCH_TERMPP_DIR / run_id
-    cmd = [str((runtime_root / ".run" / termpp_bin.name).resolve())]
+    cmd = [str((runtime_root / ".run" / bin_name).resolve())]
     return {
         "session_id": session_id,
         "xp_path": str(xp_path),
         "checksum": export["checksum"],
-        "legacy_root": str(legacy_root),
-        "binary_name": termpp_bin.name,
+        "legacy_root": str(_resolve_legacy_repo_root()),
+        "binary_name": bin_name,
         "planned_runtime_root": str(runtime_root.resolve()),
         "planned_command": " ".join(shlex.quote(x) for x in cmd),
         "notes": [
@@ -1714,22 +1736,21 @@ def workbench_open_termpp_skin(session_id: str, req_id: str, binary_name: str = 
         raise ApiError("session not found", "session_not_found", "workbench", req_id, 404)
     export = workbench_export_xp(session_id, req_id)
     xp_path = Path(export["xp_path"]).expanduser().resolve()
-    legacy_root = _resolve_legacy_repo_root()
     try:
-        termpp_bin = _resolve_termpp_binary(legacy_root, binary_name=binary_name)
+        bin_name = _normalize_binary_name(binary_name)
     except Exception as e:
-        raise ApiError(str(e), "termpp_binary_missing", "workbench", req_id, 500)
+        raise ApiError(str(e), "invalid_binary_name", "workbench", req_id, 422)
 
     run_id = f"{session_id}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}"
     planned_runtime_root = WORKBENCH_TERMPP_DIR / run_id
     if dry_run:
-        planned_cmd = [str((planned_runtime_root / ".run" / termpp_bin.name).resolve())]
+        planned_cmd = [str((planned_runtime_root / ".run" / bin_name).resolve())]
         return {
             "session_id": session_id,
             "xp_path": str(xp_path),
             "checksum": export["checksum"],
-            "legacy_root": str(legacy_root),
-            "binary_name": termpp_bin.name,
+            "legacy_root": str(_resolve_legacy_repo_root()),
+            "binary_name": bin_name,
             "runtime_root": str(planned_runtime_root.resolve()),
             "command": " ".join(shlex.quote(x) for x in planned_cmd),
             "dry_run": True,
@@ -1741,6 +1762,8 @@ def workbench_open_termpp_skin(session_id: str, req_id: str, binary_name: str = 
         }
 
     try:
+        legacy_root = _resolve_legacy_repo_root()
+        termpp_bin = _resolve_termpp_binary(legacy_root, binary_name=bin_name)
         stage = _stage_termpp_skin_sandbox(legacy_root, xp_path, run_id, termpp_bin.name)
         argv = [stage["runtime_binary"]]
         proc = subprocess.Popen(
@@ -1760,7 +1783,7 @@ def workbench_open_termpp_skin(session_id: str, req_id: str, binary_name: str = 
         "session_id": session_id,
         "xp_path": str(xp_path),
         "checksum": export["checksum"],
-        "binary_name": termpp_bin.name,
+        "binary_name": bin_name,
         "dry_run": False,
         "launched": True,
         "pid": int(proc.pid),

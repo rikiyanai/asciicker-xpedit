@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import time
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 
-from flask import Flask, jsonify, request, send_from_directory, send_file
+from flask import Flask, Response, jsonify, redirect, request, send_from_directory, send_file
 
 from .config import ensure_dirs, ROOT, EXPORT_DIR
 from .models import ApiError, RunConfig, parse_frames_csv
@@ -29,12 +31,126 @@ from .service import (
 
 
 WEB_DIR = ROOT / "web"
-LEGACY_WEB_DIR = (ROOT.parent / "asciicker-Y9-2" / ".web").resolve()
-STATIC_FLAT_WEB_DIR = (ROOT / "output" / "termpp-skin-lab-static" / "termpp-web-flat").resolve()
+STATIC_WEB_ROOT = (ROOT / "runtime" / "termpp-skin-lab-static").resolve()
+STATIC_WEB_DIR = (STATIC_WEB_ROOT / "termpp-web").resolve()
+STATIC_FLAT_WEB_DIR = (STATIC_WEB_ROOT / "termpp-web-flat").resolve()
+SERVER_BOOT_NONCE = str(int(time.time() * 1000))
 
 
 def _err(e: ApiError):
     return jsonify(e.to_dict()), e.status
+
+
+def _no_cache(resp):
+    resp.headers["Cache-Control"] = "no-store, no-cache, max-age=0, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
+
+
+def _v(path: str) -> str:
+    s = str(path)
+    sep = "&" if "?" in s else "?"
+    return f"{s}{sep}v={SERVER_BOOT_NONCE}"
+
+
+def _serve_web_html(file_name: str):
+    p = (WEB_DIR / file_name).resolve()
+    html = p.read_text(encoding="utf-8")
+    html = html.replace('href="/styles.css"', f'href="{_v("/styles.css")}"')
+    html = html.replace('src="/wizard.js"', f'src="{_v("/wizard.js")}"')
+    html = html.replace('src="/workbench.js"', f'src="{_v("/workbench.js")}"')
+    html = html.replace('src="./termpp_skin_lab.js"', f'src="{_v("./termpp_skin_lab.js")}"')
+    boot_script = f'<script>window.__WB_SERVER_BOOT_NONCE = "{SERVER_BOOT_NONCE}";</script>'
+    if "</head>" in html:
+        html = html.replace("</head>", f"  {boot_script}\n</head>", 1)
+    return _no_cache(Response(html, mimetype="text/html"))
+
+
+def _runtime_unavailable_response(runtime_dir: Path):
+    return jsonify({
+        "error": f"runtime bundle not found: {runtime_dir}",
+        "code": "runtime_bundle_missing",
+    }), 503
+
+
+def _serve_runtime_asset(runtime_dir: Path, file_name: str, *, no_cache: bool = False):
+    if not runtime_dir.exists():
+        return _runtime_unavailable_response(runtime_dir)
+    resp = send_from_directory(runtime_dir, file_name)
+    if no_cache:
+        return _no_cache(resp)
+    return resp
+
+
+def _runtime_preflight_payload() -> dict:
+    runtime_root = STATIC_WEB_ROOT.resolve()
+    required_files = [
+        "termpp-web-flat/index.html",
+        "termpp-web-flat/index.js",
+        "termpp-web-flat/index.wasm",
+        "termpp-web-flat/index.data",
+        "termpp-web-flat/flat_map_bootstrap.js",
+    ]
+    required_map_any_of = [
+        "termpp-web-flat/flatmaps/minimal_2x2.a3d",
+        "termpp-web-flat/flatmaps/game_map_y8_original_game_map.a3d",
+    ]
+    missing_files: list[str] = []
+    invalid_files: list[dict[str, str]] = []
+    maps_found: list[str] = []
+
+    for rel in required_files:
+        p = (runtime_root / rel).resolve()
+        if not p.exists():
+            missing_files.append(rel)
+            continue
+        if not p.is_file():
+            invalid_files.append({"path": rel, "reason": "not_a_file"})
+            continue
+        try:
+            if p.stat().st_size <= 0:
+                invalid_files.append({"path": rel, "reason": "empty_file"})
+        except OSError:
+            invalid_files.append({"path": rel, "reason": "stat_failed"})
+
+    for rel in required_map_any_of:
+        p = (runtime_root / rel).resolve()
+        if not p.exists():
+            continue
+        if not p.is_file():
+            invalid_files.append({"path": rel, "reason": "not_a_file"})
+            continue
+        try:
+            if p.stat().st_size <= 0:
+                invalid_files.append({"path": rel, "reason": "empty_file"})
+                continue
+        except OSError:
+            invalid_files.append({"path": rel, "reason": "stat_failed"})
+            continue
+        maps_found.append(rel)
+
+    if not maps_found:
+        for rel in required_map_any_of:
+            p = (runtime_root / rel).resolve()
+            if not p.exists():
+                missing_files.append(rel)
+
+    missing_files = sorted(set(missing_files))
+    invalid_files = sorted(invalid_files, key=lambda x: (x.get("path", ""), x.get("reason", "")))
+    maps_found = sorted(set(maps_found))
+    ok = (not missing_files) and (not invalid_files) and bool(maps_found)
+
+    return {
+        "ok": ok,
+        "runtime_root": str(runtime_root),
+        "required_files": required_files,
+        "required_map_any_of": required_map_any_of,
+        "maps_found": maps_found,
+        "missing_files": missing_files,
+        "invalid_files": invalid_files,
+        "checked_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+    }
 
 
 def create_app() -> Flask:
@@ -42,36 +158,45 @@ def create_app() -> Flask:
     app = Flask(__name__)
 
     @app.route("/")
+    def index_page():
+        return redirect("/workbench", code=302)
+
+    # Legacy/deprecated UI preserved temporarily for fallback/manual comparison.
+    @app.route("/wizard")
     def wizard_page():
-        return send_from_directory(WEB_DIR, "wizard.html")
+        return _serve_web_html("wizard.html")
 
     @app.route("/workbench")
     def workbench_page():
-        return send_from_directory(WEB_DIR, "workbench.html")
+        return _serve_web_html("workbench.html")
 
     @app.route("/termpp-skin-lab")
     def termpp_skin_lab_page():
-        return send_from_directory(WEB_DIR, "termpp_skin_lab.html")
+        return _serve_web_html("termpp_skin_lab.html")
 
     @app.route("/<path:filename>")
     def web_assets(filename: str):
-        return send_from_directory(WEB_DIR, filename)
+        return _no_cache(send_from_directory(WEB_DIR, filename))
 
     @app.route("/termpp-web")
     def termpp_web_index_alias():
-        return send_from_directory(LEGACY_WEB_DIR, "index.html")
+        return _serve_runtime_asset(STATIC_WEB_DIR, "index.html", no_cache=True)
 
     @app.route("/termpp-web/<path:filename>")
     def termpp_web_assets(filename: str):
-        return send_from_directory(LEGACY_WEB_DIR, filename)
+        return _serve_runtime_asset(STATIC_WEB_DIR, filename, no_cache=True)
 
     @app.route("/termpp-web-flat")
     def termpp_web_flat_index_alias():
-        return send_from_directory(STATIC_FLAT_WEB_DIR, "index.html")
+        return _serve_runtime_asset(STATIC_FLAT_WEB_DIR, "index.html", no_cache=True)
 
     @app.route("/termpp-web-flat/<path:filename>")
     def termpp_web_flat_assets(filename: str):
-        return send_from_directory(STATIC_FLAT_WEB_DIR, filename)
+        return _serve_runtime_asset(STATIC_FLAT_WEB_DIR, filename, no_cache=True)
+
+    @app.get("/api/workbench/runtime-preflight")
+    def api_wb_runtime_preflight():
+        return jsonify(_runtime_preflight_payload()), 200
 
     @app.post("/api/upload")
     def api_upload():

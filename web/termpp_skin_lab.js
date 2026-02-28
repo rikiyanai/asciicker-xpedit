@@ -240,7 +240,12 @@
       if (serverInput) serverInput.value = "";
       if (playBtn) playBtn.disabled = false;
       if (typeof win.StartGame !== "function") return { started: false, reason: "StartGame_missing" };
-      win.StartGame();
+      const startRes = win.StartGame();
+      if (startRes && typeof startRes.then === "function") {
+        startRes.catch((e) => {
+          try { console.warn("[termpp_skin_lab] StartGame rejected:", e); } catch (_e2) {}
+        });
+      }
       return { started: true };
     } catch (e) {
       return { started: false, reason: String(e) };
@@ -264,6 +269,25 @@
     }
   }
 
+  function emfsReplaceFile(M, absPath, bytes) {
+    const path = String(absPath || "");
+    if (!path.startsWith("/")) throw new Error(`invalid emfs path: ${path}`);
+    const slash = path.lastIndexOf("/");
+    const dir = slash > 0 ? path.slice(0, slash) : "/";
+    const name = path.slice(slash + 1);
+    if (!name) throw new Error(`invalid emfs filename: ${path}`);
+    const FS = M && M.FS;
+    if (FS && typeof FS.writeFile === "function") {
+      try {
+        FS.writeFile(path, bytes, { canOwn: true });
+        return { mode: "writeFile" };
+      } catch (_e) {}
+    }
+    try { M.FS_unlink(path); } catch (_e) {}
+    M.FS_createDataFile(dir, name, bytes, true, true, true);
+    return { mode: "createDataFile" };
+  }
+
   async function injectXpBytes(xpBytes) {
     if (!xpBytes || !xpBytes.length) throw new Error("No XP bytes loaded");
     const win = frameWin();
@@ -274,9 +298,10 @@
     }
     ensureSpritesDir(M);
     const names = selectedOverrideNames();
+    let fsWriteMode = "";
     for (const name of names) {
-      try { M.FS_unlink(`/sprites/${name}`); } catch (_e) {}
-      M.FS_createDataFile("/sprites", name, xpBytes, true, true, true);
+      const res = emfsReplaceFile(M, `/sprites/${name}`, xpBytes);
+      if (!fsWriteMode && res && res.mode) fsWriteMode = String(res.mode);
     }
     const playerName = String($("playerName")?.value || "player").trim() || "player";
     let startInfo = { started: false, reason: "auto_start_disabled" };
@@ -290,7 +315,7 @@
       }
     }
     try { win.ak_canvas?.focus?.(); } catch (_e) {}
-    return { files_written: names.length, bytes: xpBytes.length, player_name: playerName, override_names: names, started_via: startInfo.started ? "start_game" : "load", start_info: startInfo };
+    return { files_written: names.length, bytes: xpBytes.length, fs_write_mode: fsWriteMode || "unknown", player_name: playerName, override_names: names, started_via: startInfo.started ? "start_game" : "load", start_info: startInfo };
   }
 
   async function applyLoadedXp() {

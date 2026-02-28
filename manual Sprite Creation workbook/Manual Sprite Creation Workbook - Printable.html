@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Manual Sprite Creation Workbook - Asciicker</title>
+    <style>
+        @page { size: letter; margin: 0.5in; }
+        body { font-family: "Courier New", monospace; font-size: 10pt; max-width: 8.5in; margin: 0 auto; padding: 0.5in; }
+        h1 { text-align: center; font-size: 18pt; border-bottom: 2px solid black; }
+        h2 { font-size: 14pt; border-bottom: 1px solid black; margin-top: 20px; }
+        h3 { font-size: 12pt; margin-top: 15px; }
+        .page-break { page-break-after: always; }
+        .form-field { border-bottom: 1px solid black; min-width: 30px; display: inline-block; }
+        .form-field-wide { border-bottom: 1px solid black; min-width: 100px; display: inline-block; }
+        .cell-box { display: inline-block; width: 18px; height: 18px; border: 1px solid black; text-align: center; font-size: 6pt; }
+        .frame-box { display: inline-block; width: 54px; height: 72px; border: 2px solid black; text-align: center; font-size: 8pt; vertical-align: top; padding: 2px; }
+        .info-box { border: 2px solid black; padding: 10px; margin: 10px 0; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid black; padding: 5px; text-align: center; }
+    </style>
+</head>
+<body>
+
+<!-- PAGE 1: COVER + SPRITE SPEC -->
+<div class="page-break">
+    <h1>ASCIICKER SPRITE WORKBOOK</h1>
+    <p style="text-align: center;">Manual XP Sprite Template</p>
+    
+    <h2>SPRITE SPECIFICATION</h2>
+    <table>
+        <tr><td>Sprite Name:</td><td><span class="form-field-wide"></span></td></tr>
+        <tr><td>Frame Width (cells):</td><td><span class="form-field"></span></td></tr>
+        <tr><td>Frame Height (cells):</td><td><span class="form-field"></span></td></tr>
+        <tr><td>Number of Angles:</td><td><span class="form-field"></span> (1 or 8)</td></tr>
+        <tr><td>Projections:</td><td><span class="form-field"></span> (1 = single, 2 = proj+refl)</td></tr>
+        <tr><td>Animation 1 Name:</td><td><span class="form-field-wide"></span></td></tr>
+        <tr><td>Animation 1 Frames:</td><td><span class="form-field"></span></td></tr>
+        <tr><td>Animation 2 Name:</td><td><span class="form-field-wide"></span></td></tr>
+        <tr><td>Animation 2 Frames:</td><td><span class="form-field"></span></td></tr>
+    </table>
+    
+    <div class="info-box">
+        <strong>ATLAS LAYOUT (how frames are arranged):</strong>
+        <p>Total atlas width = projs × total_frames</p>
+        <p>Total atlas height = angles</p>
+        <p><em>Example: 8 angles, 4 frames, projs=2 → 8 cols × 8 rows of frames</em></p>
+    </div>
+</div>
+
+<!-- PAGE 2: SINGLE FRAME TEMPLATES -->
+<div class="page-break">
+    <h2>SINGLE FRAME TEMPLATES</h2>
+    <p>Draw EACH frame individually on these grids. Each grid = ONE frame (e.g., 7×10 cells).</p>
+    <p><strong>Layer 2 (Visual):</strong> For each cell: write glyph code + foreground RGB + background RGB</p>
+    
+    <h3>FRAME 0 - Angle 0</h3>
+    <p>Frame #: <span class="form-field"></span> | Angle: <span class="form-field"></span> | Animation: <span class="form-field-wide"></span></p>
+    <table style="width: 200px; margin: 0;">
+        <tr><td></td><td>0</td><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td></tr>
+        <tr><td>0</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>1</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>2</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>3</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>4</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>5</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>6</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>7</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>8</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>9</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+    </table>
+    
+    <h3>FRAME 1 - Angle 0</h3>
+    <p>Frame #: <span class="form-field"></span> | Angle: <span class="form-field"></span> | Animation: <span class="form-field-wide"></span></p>
+    <table style="width: 200px; margin: 0;">
+        <tr><td></td><td>0</td><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td></tr>
+        <tr><td>0</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>1</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>2</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>3</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>4</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>5</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>6</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>7</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>8</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>9</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+    </table>
+</div>
+
+<!-- PAGE 3: MORE FRAME TEMPLATES -->
+<div class="page-break">
+    <h2>MORE FRAME TEMPLATES</h2>
+    
+    <h3>FRAME 2</h3>
+    <p>Frame #: <span class="form-field"></span> | Angle: <span class="form-field"></span> | Animation: <span class="form-field-wide"></span></p>
+    <table style="width: 200px; margin: 0; display: inline-block;">
+        <tr><td></td><td>0</td><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td></tr>
+        <tr><td>0</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>1</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>2</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>3</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>4</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>5</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>6</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>7</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>8</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>9</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+    </table>
+    
+    <h3>FRAME 3</h3>
+    <p>Frame #: <span class="form-field"></span> | Angle: <span class="form-field"></span> | Animation: <span class="form-field-wide"></span></p>
+    <table style="width: 200px; margin: 0; display: inline-block;">
+        <tr><td></td><td>0</td><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td></tr>
+        <tr><td>0</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>1</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>2</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>3</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>4</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>5</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>6</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>7</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>8</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>9</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+    </table>
+</div>
+
+<!-- PAGE 4: ATLAS FRAME INDEX -->
+<div class="page-break">
+    <h2>ATLAS FRAME INDEX</h2>
+    <p>Use this to map your drawn frames to their positions in the .xp atlas grid.</p>
+    
+    <div class="info-box">
+        <strong>How to use:</strong>
+        <ul>
+            <li>Each box below = ONE complete frame (from pages 2-3)</li>
+            <li>Write the frame number in each box</li>
+            <li>Rows = angles (0-7 for 8-way, or just 0 for single)</li>
+            <li>Columns = frames × projections</li>
+        </ul>
+    </div>
+    
+    <p><strong>Atlas Grid (write frame# in each box):</strong></p>
+    
+    <table style="margin: 0 auto;">
+        <!-- Header row with column numbers -->
+        <tr>
+            <td style="border: none;"></td>
+            <td style="border: 1px solid black; background: #ddd;">0</td>
+            <td style="border: 1px solid black; background: #ddd;">1</td>
+            <td style="border: 1px solid black; background: #ddd;">2</td>
+            <td style="border: 1px solid black; background: #ddd;">3</td>
+            <td style="border: 1px solid black; background: #ddd;">4</td>
+            <td style="border: 1px solid black; background: #ddd;">5</td>
+            <td style="border: 1px solid black; background: #ddd;">6</td>
+            <td style="border: 1px solid black; background: #ddd;">7</td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid black; background: #ddd; font-weight: bold;">Angle 0</td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid black; background: #ddd; font-weight: bold;">Angle 1</td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid black; background: #ddd; font-weight: bold;">Angle 2</td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid black; background: #ddd; font-weight: bold;">Angle 3</td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid black; background: #ddd; font-weight: bold;">Angle 4</td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid black; background: #ddd; font-weight: bold;">Angle 5</td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid black; background: #ddd; font-weight: bold;">Angle 6</td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid black; background: #ddd; font-weight: bold;">Angle 7</td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+            <td class="frame-box"></td>
+        </tr>
+    </table>
+    
+    <p><em>If projs=2, right half of columns are reflection (flipped horizontally, darker)</em></p>
+</div>
+
+<!-- PAGE 5: LAYER 0 METADATA -->
+<div class="page-break">
+    <h2>LAYER 0 - METADATA</h2>
+    <p>Layer 0 defines transparency and sprite configuration. Fill ONLY column 0.</p>
+    
+    <div class="info-box">
+        <strong>Metadata cells (column 0 only):</strong>
+        <ul>
+            <li>[0,0] = angle count (digit 1-8). If missing = 1 angle.</li>
+            <li>[height×1, 0] = animation 1 frame count</li>
+            <li>[height×2, 0] = animation 2 frame count</li>
+            <li>All OTHER cells = your color key (e.g., magenta)</li>
+        </ul>
+    </div>
+    
+    <h3>Layer 0 - Color Key (write your color in every cell)</h3>
+    <p>Your Color Key: R <span class="form-field"></span> G <span class="form-field"></span> B <span class="form-field"></span></p>
+    
+    <p><em>Draw your color key background in all cells EXCEPT the metadata cells above</em></p>
+    
+    <h3>Layer 1 - Height (write height digit in each cell)</h3>
+    <p>Height glyphs: '0'-'9' = 0-9, 'A'-'Z' = 10-35</p>
+    <p>Reference: 0=ground, 9=head height, above=overhead</p>
+    
+    <table style="width: 200px; margin: 0;">
+        <tr><td></td><td>0</td><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td></tr>
+        <tr><td>0</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>1</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>2</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>3</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>4</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>5</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>6</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>7</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>8</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+        <tr><td>9</td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td><td class="cell-box"></td></tr>
+    </table>
+</div>
+
+<!-- PAGE 6: CELL DATA FORMS -->
+<div class="page-break">
+    <h2>CELL DATA FORMS</h2>
+    <p>For each cell in your frames, record the data here:</p>
+    
+    <h3>Frame ___ - Cell Data</h3>
+    <table>
+        <tr><th>Cell (x,y)</th><th>Glyph</th><th>FG R</th><th>FG G</th><th>FG B</th><th>BG R</th><th>BG G</th><th>BG B</th></tr>
+        <tr><td>[0,0]</td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td></tr>
+        <tr><td>[1,0]</td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td></tr>
+        <tr><td>[2,0]</td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td></tr>
+        <tr><td>[3,0]</td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td></tr>
+        <tr><td>[4,0]</td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td></tr>
+        <tr><td>[5,0]</td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td></tr>
+        <tr><td>[6,0]</td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td></tr>
+        <tr><td>[0,1]</td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td></tr>
+        <tr><td>[1,1]</td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td></tr>
+        <tr><td>[2,1]</td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td></tr>
+        <tr><td>[3,1]</td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td></tr>
+        <tr><td>[4,1]</td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td></tr>
+        <tr><td>[5,1]</td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td></tr>
+        <tr><td>[6,1]</td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td><td><span class="form-field"></span></td></tr>
+    </table>
+    
+    <p style="margin-top: 20px;">(Photocopy this page for more frames)</p>
+</div>
+
+<!-- PAGE 7: REFERENCE -->
+<div class="page-break">
+    <h2>REFERENCE</h2>
+    
+    <h3>Common CP437 Glyphs</h3>
+    <table>
+        <tr><th>Code</th><th>Char</th><th>Name</th><th>Code</th><th>Char</th><th>Name</th><th>Code</th><th>Char</th><th>Name</th></tr>
+        <tr><td>219</td><td>█</td><td>Full block</td><td>220</td><td>▄</td><td>Lower half</td><td>221</td><td>▌</td><td>Left half</td></tr>
+        <tr><td>222</td><td>▐</td><td>Right half</td><td>223</td><td>▀</td><td>Upper half</td><td>176</td><td>░</td><td>Light shade</td></tr>
+        <tr><td>177</td><td>▒</td><td>Med shade</td><td>178</td><td>▓</td><td>Dark shade</td><td>32</td><td>(space)</td><td>Empty</td></tr>
+    </table>
+    
+    <h3>Transparency</h3>
+    <ul>
+        <li>Layer 0 bg color = transparency key</li>
+        <li>In Layer 2: if fg or bg matches Layer 0's key = transparent</li>
+        <li>Magenta (255,0,255) = fully transparent</li>
+    </ul>
+    
+    <h3>Height Encoding (Layer 1)</h3>
+    <ul>
+        <li>'0'-'9' = heights 0-9</li>
+        <li>'A'-'Z' or 'a'-'z' = heights 10-35</li>
+    </ul>
+    
+    <p style="margin-top: 30px; text-align: center;">--- END OF WORKBOOK ---</p>
+</div>
+
+</body>
+</html>

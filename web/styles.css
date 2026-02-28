@@ -30,6 +30,17 @@ body {
   margin-bottom: 14px;
 }
 
+.runtime-preflight-banner {
+  border-color: #7a5a1f;
+  background: linear-gradient(180deg, rgba(122, 90, 31, 0.28), rgba(21, 25, 34, 0.95));
+}
+
+.runtime-preflight-title {
+  color: #ffd98a;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
 .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 
 label { font-size: 12px; color: var(--muted); display: block; }
@@ -54,8 +65,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .grid {
   display: grid;
   gap: 1px;
-  background: #2a3345;
-  border: 1px solid #2a3345;
+  background: rgba(0, 128, 0, 0.35);
+  border: 1px solid rgba(0, 128, 0, 0.7);
   width: fit-content;
   max-width: 100%;
   overflow: auto;
@@ -70,7 +81,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   align-items: center;
   font-size: 14px;
   line-height: 1;
-  border: 1px solid #111826;
+  border: 1px solid rgba(0, 128, 0, 0.65);
 }
 
 pre {
@@ -117,16 +128,104 @@ a { color: #80bdff; }
   border-radius: 8px;
   padding: 8px;
   min-height: 180px;
+  --wb-grid-cell-size: 68px;
+  --wb-grid-label-canvas-size: 64px;
+  --wb-grid-row-header-width: 92px;
+}
+
+.frame-row-header {
+  width: var(--wb-grid-row-header-width);
+  min-height: 68px;
+  border: 1px solid #2a3345;
+  background: #0a1018;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.frame-row-header.selected {
+  outline: 2px solid #6fcf97;
+}
+
+.frame-row-label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.frame-row-label .row-index {
+  font-size: 10px;
+  color: #93a7bc;
+  line-height: 1.1;
+}
+
+.frame-row-label .row-name {
+  font-size: 12px;
+  color: #d7e3ef;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row-drag-handle {
+  width: 14px;
+  height: 24px;
+  border-radius: 4px;
+  border: 1px solid #314055;
+  background:
+    radial-gradient(circle at 4px 5px, #7f93aa 1.4px, transparent 1.6px),
+    radial-gradient(circle at 9px 5px, #7f93aa 1.4px, transparent 1.6px),
+    radial-gradient(circle at 4px 12px, #7f93aa 1.4px, transparent 1.6px),
+    radial-gradient(circle at 9px 12px, #7f93aa 1.4px, transparent 1.6px),
+    radial-gradient(circle at 4px 19px, #7f93aa 1.4px, transparent 1.6px),
+    radial-gradient(circle at 9px 19px, #7f93aa 1.4px, transparent 1.6px),
+    #121a25;
+  flex: 0 0 auto;
+  cursor: grab;
+}
+
+.frame-row-header.drag-target {
+  box-shadow: inset 0 0 0 2px #4ea1ff;
 }
 
 .frame-cell {
-  width: 68px;
-  height: 68px;
+  width: var(--wb-grid-cell-size);
+  height: var(--wb-grid-cell-size);
   border: 1px solid #2a3345;
   background: #070b11;
   border-radius: 4px;
   cursor: pointer;
   position: relative;
+}
+
+.legacy-grid-debug {
+  background: rgba(21, 25, 34, 0.75);
+  border: 1px solid #232937;
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin-bottom: 14px;
+}
+
+.legacy-grid-debug > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.legacy-grid-debug[open] > summary {
+  margin-bottom: 8px;
+}
+
+.legacy-grid-debug:not([open]) #grid {
+  margin-top: 8px;
+  max-height: 24px;
+  overflow: hidden;
 }
 
 .frame-cell.selected {
@@ -139,6 +238,54 @@ a { color: #80bdff; }
 
 .frame-cell.group-selected {
   box-shadow: inset 0 0 0 2px #f3b63f;
+}
+
+.frame-cell.drop-target {
+  outline: 2px solid rgba(210, 218, 228, 0.85);
+}
+
+.grid-drop-choice-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  border-radius: 4px;
+  overflow: hidden;
+  pointer-events: none;
+  background: rgba(15, 20, 32, 0.12);
+}
+
+.grid-drop-choice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #e9f0f7;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.6);
+  background: rgba(80, 88, 100, 0.55);
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.grid-drop-choice.top {
+  border-top: 0;
+}
+
+.frame-cell.drop-mode-replace .grid-drop-choice.top {
+  background: rgba(78, 161, 255, 0.8);
+}
+
+.frame-cell.drop-mode-replace .grid-drop-choice.bottom {
+  background: rgba(80, 88, 100, 0.35);
+}
+
+.frame-cell.drop-mode-swap .grid-drop-choice.top {
+  background: rgba(80, 88, 100, 0.35);
+}
+
+.frame-cell.drop-mode-swap .grid-drop-choice.bottom {
+  background: rgba(111, 207, 151, 0.8);
 }
 
 .frame-label {

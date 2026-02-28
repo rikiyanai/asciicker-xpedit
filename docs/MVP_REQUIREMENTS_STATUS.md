@@ -17,9 +17,9 @@ Verdict vocabulary:
 
 | Requirement | v2 Evidence | Verdict |
 |---|---|---|
-| Upload PNG works | `web/wizard.html:16`, `web/wizard.js:14`, `src/pipeline_v2/app.py:43`, `src/pipeline_v2/service.py:56` | `THRESHOLD_MET` |
+| Upload PNG works | `web/workbench.html` `#wbFile/#wbUpload` (primary), `web/workbench.js` `wbUpload()`, `src/pipeline_v2/service.py:56` | `THRESHOLD_MET` |
 | Analyze returns geometry suggestions | `src/pipeline_v2/app.py:52`, `src/pipeline_v2/service.py:78` | `THRESHOLD_MET` |
-| Run requires explicit geometry inputs | `web/wizard.html:31`, `web/wizard.js:48`, `src/pipeline_v2/app.py:62`, `src/pipeline_v2/models.py:35` | `THRESHOLD_MET` |
+| Run requires explicit geometry inputs | `web/workbench.html` `#wbAngles/#wbFrames/#wbSourceProjs/#wbRenderRes` (primary), `web/workbench.js` `wbRun()`, `src/pipeline_v2/models.py:35` | `THRESHOLD_MET` |
 | Fail-closed invalid geometry path exists | `src/pipeline_v2/service.py:353`, `src/pipeline_v2/service.py:360` | `THRESHOLD_MET` |
 | Analyze→Run compatibility on real-sheet edge cases | `src/pipeline_v2/service.py` geometry-search analyze defaults + `output/evidence/2026-02-23-analyze-run-compat-sweep.json` (`39/39` run-compatible) | `THRESHOLD_MET` |
 | Run returns artifact paths (`xp`, `preview`, `gates`, `trace`) | `src/pipeline_v2/service.py:554` | `THRESHOLD_MET` |

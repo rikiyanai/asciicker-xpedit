@@ -9,7 +9,7 @@ def _upload(client, path: Path):
         return client.post("/api/upload", data={"file": (f, path.name)}, content_type="multipart/form-data")
 
 
-def test_wizard_to_workbench_to_export(client):
+def test_run_to_workbench_to_export(client):
     fixture = Path(__file__).parent / "fixtures" / "known_good" / "cat_sheet.png"
     up = _upload(client, fixture).get_json()
 
@@ -155,3 +155,15 @@ def test_wizard_to_workbench_to_export(client):
     assert web_skin_data["xp_size_bytes"] > 0
     assert len(web_skin_data["xp_b64"]) > 0
     assert "player-0000.xp" in web_skin_data["override_names"]
+
+    runtime_preflight_resp = client.get("/api/workbench/runtime-preflight")
+    assert runtime_preflight_resp.status_code == 200
+    runtime_preflight = runtime_preflight_resp.get_json()
+    assert isinstance(runtime_preflight.get("ok"), bool)
+    assert "termpp-web-flat/index.wasm" in (runtime_preflight.get("required_files") or [])
+    required_any = runtime_preflight.get("required_map_any_of") or []
+    assert "termpp-web-flat/flatmaps/minimal_2x2.a3d" in required_any
+    assert "termpp-web-flat/flatmaps/game_map_y8_original_game_map.a3d" in required_any
+    assert "missing_files" in runtime_preflight
+    assert "invalid_files" in runtime_preflight
+    assert "maps_found" in runtime_preflight

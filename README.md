@@ -65,8 +65,9 @@ PYTHONPATH=src python3 -m pipeline_v2.app
 
 Open:
 
-- Wizard: `http://127.0.0.1:5071/`
-- Workbench: `http://127.0.0.1:5071/workbench`
+- Workbench (default): `http://127.0.0.1:5071/` (redirects to `/workbench`)
+- Workbench (direct): `http://127.0.0.1:5071/workbench`
+- Wizard (legacy, deprecated): `http://127.0.0.1:5071/wizard`
 
 ## Tests
 

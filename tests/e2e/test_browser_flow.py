@@ -50,7 +50,7 @@ def web_server() -> str:
 
 
 @pytest.mark.e2e
-def test_browser_golden_flow_records_video_and_populates_workbench(web_server: str):
+def test_browser_workbench_direct_flow_records_video_and_populates_workbench(web_server: str):
     fixture = Path(__file__).resolve().parents[1] / "fixtures" / "known_good" / "cat_sheet.png"
     assert fixture.exists(), fixture
 
@@ -79,35 +79,32 @@ def test_browser_golden_flow_records_video_and_populates_workbench(web_server: s
             page.screenshot(path=str(art / f"{name}.png"), full_page=True)
 
         try:
-            page.goto(web_server + "/", wait_until="networkidle", timeout=30000)
-            summary["steps"].append("open_wizard")
-            shot("01_open_wizard")
+            page.goto(web_server + "/workbench", wait_until="networkidle", timeout=30000)
+            summary["steps"].append("open_workbench")
+            shot("01_open_workbench")
 
-            page.set_input_files("#file", str(fixture))
-            page.click("#btnUpload")
-            page.wait_for_function("() => document.getElementById('btnRun').disabled === false", timeout=15000)
-            summary["steps"].append("upload_ok")
-            shot("02_upload_ok")
+            page.set_input_files("#wbFile", str(fixture))
+            page.click("#wbUpload")
+            page.wait_for_function("() => document.getElementById('wbRun').disabled === false", timeout=15000)
+            summary["steps"].append("wb_upload_ok")
+            shot("02_wb_upload_ok")
 
-            page.click("#btnAnalyze")
-            page.wait_for_function("() => document.getElementById('analyzeOut').textContent.includes('suggested_angles')", timeout=15000)
-            summary["steps"].append("analyze_ok")
-            shot("03_analyze_ok")
+            page.click("#wbAnalyze")
+            page.wait_for_function("() => document.getElementById('wbRunOut').textContent.includes('suggested_angles')", timeout=15000)
+            summary["steps"].append("wb_analyze_ok")
+            shot("03_wb_analyze_ok")
 
-            page.click("#btnRun")
-            page.wait_for_function("() => document.getElementById('runStatus').textContent.includes('Run complete')", timeout=120000)
-            summary["steps"].append("run_ok")
-            shot("04_run_ok")
-
-            page.click("#btnOpenWorkbench")
-            page.wait_for_url("**/workbench?job_id=**", timeout=30000)
-            summary["steps"].append("workbench_opened")
-            shot("05_workbench_opened")
+            page.click("#wbRun")
+            page.wait_for_function("() => document.getElementById('wbRunOut').textContent.includes('job_id')", timeout=120000)
+            summary["steps"].append("wb_run_ok")
+            shot("04_wb_run_ok")
 
             page.wait_for_function(
                 "() => document.getElementById('wbStatus').textContent.includes('Session active')",
                 timeout=30000,
             )
+            summary["steps"].append("workbench_session_active")
+            shot("05_workbench_session_active")
             cell_count = page.locator("#grid .cell").count()
             session_json = json.loads(page.locator("#sessionOut").inner_text())
             angles = int(session_json.get("angles", 1))

@@ -82,7 +82,7 @@ Status line template:
 
 ## 5) Workbench MVP Requirements
 
-- [ ] Upload-first flow works without wizard dependency.
+- [ ] Upload-first flow works without legacy wizard dependency.
 - [ ] Grid is editable before export.
 - [ ] Required editing controls:
   - [ ] Select one or multiple cells
@@ -106,7 +106,7 @@ Status line template:
 
 Every release candidate must publish a control inventory with:
 - [ ] control id/text
-- [ ] location (wizard/workbench/source-panel/grid-panel/right-panel)
+- [ ] location (workbench/source-panel/grid-panel/right-panel; legacy wizard only if explicitly tested)
 - [ ] expected behavior
 - [ ] observed behavior
 - [ ] verdict (`THRESHOLD_MET` or `THRESHOLD_BREACHED`)

@@ -2,21 +2,35 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LEGACY_WEB_DIR_DEFAULT="$ROOT/../asciicker-Y9-2/.web"
-LEGACY_WEB_DIR="${1:-$LEGACY_WEB_DIR_DEFAULT}"
-OUT_DIR="${2:-$ROOT/output/termpp-skin-lab-static}"
-LEGACY_A3D_DIR_DEFAULT="$ROOT/../asciicker-Y9-2/a3d"
-LEGACY_A3D_DIR="${LEGACY_A3D_DIR:-$LEGACY_A3D_DIR_DEFAULT}"
+SOURCE_WEB_DIR="${1:-}"
+OUT_DIR="${2:-$ROOT/runtime/termpp-skin-lab-static}"
+SOURCE_A3D_DIR="${SOURCE_A3D_DIR:-${3:-}}"
+ORIGINAL_MAP_PATH="${ORIGINAL_MAP_PATH:-${4:-}}"
+LOCAL_A3D_DIR="$ROOT/runtime/flatmap_sources"
 
-if [[ ! -d "$LEGACY_WEB_DIR" ]]; then
-  echo "error: legacy webbuild dir not found: $LEGACY_WEB_DIR" >&2
-  echo "usage: $(basename "$0") [legacy_web_dir] [out_dir]" >&2
+if [[ -z "$SOURCE_WEB_DIR" ]]; then
+  echo "error: source webbuild dir is required (no implicit sibling-repo fallback)." >&2
+  echo "usage: $(basename "$0") <source_web_dir> [out_dir] [source_a3d_dir] [original_map_path]" >&2
+  exit 1
+fi
+
+if [[ -z "$SOURCE_A3D_DIR" && -d "$LOCAL_A3D_DIR" ]]; then
+  SOURCE_A3D_DIR="$LOCAL_A3D_DIR"
+fi
+
+if [[ -z "$SOURCE_A3D_DIR" && -d "$(dirname "$SOURCE_WEB_DIR")/a3d" ]]; then
+  SOURCE_A3D_DIR="$(dirname "$SOURCE_WEB_DIR")/a3d"
+fi
+
+if [[ ! -d "$SOURCE_WEB_DIR" ]]; then
+  echo "error: source webbuild dir not found: $SOURCE_WEB_DIR" >&2
+  echo "usage: $(basename "$0") <source_web_dir> [out_dir] [source_a3d_dir] [original_map_path]" >&2
   exit 1
 fi
 
 for f in index.html index.js index.wasm index.data; do
-  if [[ ! -f "$LEGACY_WEB_DIR/$f" ]]; then
-    echo "error: missing $LEGACY_WEB_DIR/$f" >&2
+  if [[ ! -f "$SOURCE_WEB_DIR/$f" ]]; then
+    echo "error: missing $SOURCE_WEB_DIR/$f" >&2
     exit 1
   fi
 done
@@ -27,13 +41,19 @@ mkdir -p "$OUT_DIR/termpp-web-flat/flatmaps"
 
 cp "$ROOT/web/termpp_skin_lab.html" "$OUT_DIR/index.html"
 cp "$ROOT/web/termpp_skin_lab.js" "$OUT_DIR/termpp_skin_lab.js"
-cp -R "$LEGACY_WEB_DIR"/. "$OUT_DIR/termpp-web/"
-cp -R "$LEGACY_WEB_DIR"/. "$OUT_DIR/termpp-web-flat/"
+cp -R "$SOURCE_WEB_DIR"/. "$OUT_DIR/termpp-web/"
+cp -R "$SOURCE_WEB_DIR"/. "$OUT_DIR/termpp-web-flat/"
 cp "$ROOT/web/termpp_flat_map_bootstrap.js" "$OUT_DIR/termpp-web-flat/flat_map_bootstrap.js"
 
-for mapf in minimal_2x2.a3d minimal_1x1.a3d test_map.a3d test_map_no_terrain.a3d; do
-  if [[ -f "$LEGACY_A3D_DIR/$mapf" ]]; then
-    cp "$LEGACY_A3D_DIR/$mapf" "$OUT_DIR/termpp-web-flat/flatmaps/$mapf"
+for mapf in game_map_y8_original_game_map.a3d minimal_2x2.a3d minimal_1x1.a3d test_map.a3d test_map_no_terrain.a3d; do
+  src_path=""
+  if [[ "$mapf" == "game_map_y8_original_game_map.a3d" && -n "$ORIGINAL_MAP_PATH" && -f "$ORIGINAL_MAP_PATH" ]]; then
+    src_path="$ORIGINAL_MAP_PATH"
+  elif [[ -n "$SOURCE_A3D_DIR" && -f "$SOURCE_A3D_DIR/$mapf" ]]; then
+    src_path="$SOURCE_A3D_DIR/$mapf"
+  fi
+  if [[ -n "$src_path" ]]; then
+    cp "$src_path" "$OUT_DIR/termpp-web-flat/flatmaps/$mapf"
   fi
 done
 
@@ -74,7 +94,7 @@ Usage:
 Notes:
 - This swaps runtime sprite XP files in the browser Emscripten filesystem.
 - Terrain/map comes from termpp-web/index.data.
-- termpp-web-flat overrides /a3d/game_map_y8.a3d before StartGame using flatmaps/minimal_2x2.a3d.
+- termpp-web-flat overrides /a3d/game_map_y8.a3d before StartGame using flatmaps/game_map_y8_original_game_map.a3d.
 - You can choose another bundled test map via query param, e.g. &flatmap=minimal_1x1.a3d
 - No backend is required for previewing an already-generated XP.
 EOF

@@ -15,8 +15,31 @@ For every debug run, record:
 - observed outcome
 - hypothesis impact (`ruled_out`, `supported`, or `inconclusive`)
 - next step
+- runtime mode details:
+  - override scope (exact names/count)
+  - reload mode (`src_swap` vs `iframe_recreate`)
+  - classification truth fields from trace (`world_ready_ever_true`, `world_ready_final`)
 
 Do not replace prior failed attempts with summaries. Keep the chain of evidence.
+
+### Required Per-Run Evidence Block (new)
+
+When a run includes Playwright `result.json`, include this minimal parse in the log entry:
+
+```bash
+jq -r '[
+  .firstMoveDiagnostic.classification,
+  ((.firstMoveDiagnostic.traces // []) | map((.parsed.world_ready // "")|tostring) | any(.=="1")),
+  ((.firstMoveDiagnostic.traces // []) | map((.parsed.world_ready // "")|tostring) | last),
+  (.injectResult.override_names // [] | length)
+] | @tsv' <result.json>
+```
+
+Interpretation contract:
+- if `classification=freeze_world_never_ready` and `world_ready_ever_true=true`, mark it as **label mismatch** and set hypothesis impact to `inconclusive` for \"never-ready\" claims.
+- always include screenshot chain paths:
+  - `workbench-final.png`
+  - `flat-arena-canvas.png`
 
 ## Current Symptom
 
@@ -430,3 +453,348 @@ Evidence:
   - bug remains in gameplay/world readiness path after skin apply/restart sequence.
 - Important scope note:
   - skin replacement is FS-global; any actor referencing overridden filenames can inherit the custom skin. this is runtime-level behavior, not per-entity assignment.
+
+### 2026-02-27T04:33Z — Claim audit + runbook schema correction (Codex)
+- Run:
+  - audited `/tmp/claude-systematic-debug-audit-skin-freeze.md` claims against live code and artifacts.
+  - updated this failure log's \"Logging Discipline\" section with mandatory runtime-mode + classifier-truth fields.
+- Artifacts/evidence reviewed:
+  - `web/workbench.js` (override/reload/injection paths)
+  - `web/termpp_flat_map_bootstrap.js` (world gate + classifier logic)
+  - `src/pipeline_v2/service.py` (`_termpp_skin_override_names`, sandbox staging)
+  - `output/playwright/workbench-png-to-skin-2026-02-27T04-04-05-927Z/result.json`
+- Outcome:
+  - B1 global aliasing claim remains supported by code.
+  - B2 race claim remains supported but not fully root-caused.
+  - corrected interpretation: `freeze_world_never_ready` label can occur even when trace shows `world_ready` became `1` earlier.
+  - B3 stale-state claim downgraded to plausible/unverified pending controlled reload A/B.
+- Hypothesis impact:
+  - H4 `supported` (startup/world-state path still primary).
+  - H2 `supported` (state-gate semantics still inconsistent).
+  - H5 `inconclusive` (reload contamination not yet proven).
+- Next:
+  - implement P0 trace/classifier correction before additional causal claims.
+
+### 2026-02-27T04:41Z — P0 implementation test initially masked by stale served static bundle
+- Run:
+  - implemented P0 code changes in:
+    - `web/termpp_flat_map_bootstrap.js`
+    - `scripts/workbench_png_to_skin_test_playwright.mjs`
+  - executed:
+    - `node --check web/termpp_flat_map_bootstrap.js`
+    - `node --check scripts/workbench_png_to_skin_test_playwright.mjs`
+    - `node scripts/workbench_png_to_skin_test_playwright.mjs --url http://127.0.0.1:5071/workbench --xp /Users/r/Downloads/session-30004ae1-8c48-4778-b625-d78279c96363.xp --timeout-sec 120 --move-sec 2`
+- Artifacts:
+  - `/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/workbench-png-to-skin-2026-02-27T04-41-38-583Z/result.json`
+  - `/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/workbench-png-to-skin-2026-02-27T04-41-38-583Z/workbench-final.png`
+  - `/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/workbench-png-to-skin-2026-02-27T04-41-38-583Z/flat-arena-canvas.png`
+- Runtime mode details:
+  - override scope: full parity web override set (81 names via `_termpp_skin_override_names`)
+  - reload mode: `src_swap` (iframe `about:blank` then fresh `_wb` URL)
+  - classification truth fields from trace: unavailable in this run because stale served bootstrap omitted new fields
+- Outcome:
+  - runtime still emitted old `[CLASSIFY]` line format (no `world_ready_ever/world_ready_drops/trace_duration_ms`).
+  - root cause: Flask served `runtime/termpp-skin-lab-static/termpp-web-flat/flat_map_bootstrap.js` had not been rebuilt after source edit.
+- Hypothesis impact:
+  - H2/H4 `inconclusive` (instrumentation not yet actually deployed).
+- Next:
+  - rebuild static bundle and rerun same XP test to validate P0 observability fields.
+
+### 2026-02-27T04:43Z — P0 observability deployed and verified (including tracelen param)
+- Run:
+  - rebuilt served static runtime:
+    - `./scripts/build_termpp_skin_lab_static.sh /Users/r/Downloads/asciicker-Y9-2/.web`
+  - reran XP test:
+    - `node scripts/workbench_png_to_skin_test_playwright.mjs --url http://127.0.0.1:5071/workbench --xp /Users/r/Downloads/session-30004ae1-8c48-4778-b625-d78279c96363.xp --timeout-sec 120 --move-sec 2`
+  - direct bootstrap tracelen sanity check:
+    - launched `/termpp-web-flat/index.html?...&tracelen=6000` and verified classify emitted `trace_duration_ms=6000`.
+- Artifacts:
+  - `/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/workbench-png-to-skin-2026-02-27T04-42-26-690Z/result.json`
+  - `/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/workbench-png-to-skin-2026-02-27T04-42-26-690Z/first-move-diagnostic.json`
+  - `/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/workbench-png-to-skin-2026-02-27T04-42-26-690Z/workbench-final.png`
+  - `/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/workbench-png-to-skin-2026-02-27T04-42-26-690Z/flat-arena-canvas.png`
+- Runtime mode details:
+  - override scope: full parity web override set (81 names via `_termpp_skin_override_names`)
+  - reload mode: `src_swap`
+  - classification truth fields:
+    - classification=`underwater`
+    - `world_ready_ever_true=true`
+    - `world_ready_drop_count=33`
+    - `menu_cleared_while_not_ready=true`
+    - `trace_duration_ms=5000`
+- Outcome:
+  - P0 parser fields successfully appear in `result.json` under `firstMoveDiagnostic`.
+  - new class label path exists (`freeze_world_ready_dropped`) and is now available when conditions match.
+  - direct `tracelen` query parameter is honored by bootstrap runtime (`trace_duration_ms=6000` observed).
+- Hypothesis impact:
+  - H4 `supported` (non-monotonic readiness is observable; world-ready dropped repeatedly after first true sample in this run).
+  - H2 `supported` (menu cleared while world not ready is now explicitly captured).
+  - H5 `inconclusive` (reload contamination still unproven; unchanged in P0).
+- Next:
+  - proceed to P1 world-gate hardening with these new observability fields as acceptance checks.
+
+### 2026-02-27T05:35Z — Post-P1 user repro still shows NPC inheritance + move-freeze + ineffective reload
+- Run:
+  - user manual repro after accepting P1 edits (real browser), plus Claude validation summary over 5 runs (headless + headed).
+  - observed by user:
+    - custom skin appears on nearby NPCs.
+    - movement freezes after a few frames.
+    - reload path does not reliably return clean state.
+- Artifacts/status:
+  - no new deterministic artifact bundle captured in this specific manual report; symptom report logged immediately per append-only rule.
+  - prior referenced evidence remains:
+    - `/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/workbench-png-to-skin-2026-02-27T04-42-26-690Z/result.json`
+    - `/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/workbench-png-to-skin-2026-02-27T04-42-26-690Z/first-move-diagnostic.json`
+- Runtime mode details:
+  - override scope: full parity web override set (81 names); NPC inheritance remains expected under FS-global replacement.
+  - reload mode: `src_swap` (user reports no reliable clean reset).
+  - classification truth fields: unchanged in latest captured artifact (`world_ready_ever_true=true`, `world_ready_drop_count=33`, `menu_cleared_while_not_ready=true`).
+- Outcome:
+  - P1 gate-hardening alone did not resolve user-visible bug envelope.
+  - two issue families remain active:
+    - B1 aliasing: NPC skin inheritance (architectural/global override behavior).
+    - B2/B3 runtime state: freeze after movement and unreliable reset/reload.
+- Hypothesis impact:
+  - H4 `supported` (movement/runtime-state path still broken).
+  - H5 `partially supported` by symptom (reload ineffectiveness), but still lacks controlled iframe-destroy A/B proof.
+  - B1 remains `supported`/expected with full-parity override scope.
+- Next:
+  - capture a fresh deterministic Playwright artifact set on current P1 branch (5-run batch) and append parsed classifier truth fields for each run.
+  - execute P2 reload A/B (`src_swap` vs full iframe recreate) to prove/disprove runtime contamination.
+  - decide override policy split (default scoped player-only mode vs explicit full-parity mode) to stop NPC inheritance in standard tests.
+
+### 2026-02-27T05:41Z — Deterministic 5-run P1 batch (current branch) captured; gate criterion passes but runtime freezes pre-world
+- Run:
+  - rebuilt runtime bundle:
+    - `./scripts/build_termpp_skin_lab_static.sh /Users/r/Downloads/asciicker-Y9-2/.web`
+  - executed 5 sequential runs:
+    - `node scripts/workbench_png_to_skin_test_playwright.mjs --url http://127.0.0.1:5071/workbench --xp /Users/r/Downloads/session-30004ae1-8c48-4778-b625-d78279c96363.xp --timeout-sec 120 --move-sec 2`
+  - generated batch summary:
+    - `/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/p1-batch-20260227-003727/summary.json`
+- Artifacts:
+  - run1: `/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/workbench-png-to-skin-2026-02-27T05-37-27-270Z/result.json`
+  - run2: `/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/workbench-png-to-skin-2026-02-27T05-38-03-130Z/result.json`
+  - run3: `/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/workbench-png-to-skin-2026-02-27T05-38-38-968Z/result.json`
+  - run4: `/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/workbench-png-to-skin-2026-02-27T05-39-14-813Z/result.json`
+  - run5: `/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/workbench-png-to-skin-2026-02-27T05-39-50-955Z/result.json`
+- Runtime mode details:
+  - override scope: full parity web override set (81 names).
+  - reload mode: `src_swap`.
+  - aggregate parsed diagnostics:
+    - `total_runs=5`
+    - `menu_cleared_while_not_ready_false_count=5` (primary P1 gate criterion passed in all runs)
+    - `hard_timeout_any_count=5` (safety net tripped every run)
+    - classifications: `freeze_no_frames=5`
+    - per-run: `world_ready_ever_true=false`, `world_ready_drop_count=0`, `moved=false`, `playable_wait_ready=false`
+- Outcome:
+  - P1 gate-hold behavior appears effective (no premature menu clear while not ready).
+  - However, runtime did not progress past initial load/frame stage in batch environment (`freeze_no_frames` across all runs), so gameplay remains blocked.
+  - This means current blocker shifted from premature menu advancement to upstream world/frame initialization in this test environment.
+- Hypothesis impact:
+  - H2 `partially ruled_out` as primary cause for this batch (premature menu advance prevented).
+  - H4 `supported` (post-start runtime/world progression still broken).
+  - H5 `supported` in automation context (reload/runtime lifecycle instability remains plausible and now consistent with hard-timeout dependence).
+  - B1 aliasing remains unresolved (separate issue family).
+- Next:
+  - run P2 controlled reload A/B (`src_swap` vs iframe destroy/recreate) with identical harness to isolate lifecycle contamination.
+  - run a fresh manual real-browser session after explicit server restart to test whether `freeze_no_frames` is automation/context-specific.
+  - split override policy so default mode does not repaint NPC families.
+
+### 2026-02-27T05:52Z — Fresh-server single-run discriminator: gate deadlock pattern observed (no pulses emitted)
+- Run:
+  - forced server restart on `:5071`, rebuilt static runtime, ran single XP test.
+  - artifact:
+    - `/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/workbench-png-to-skin-2026-02-27T05-51-42-580Z/result.json`
+- Parsed outcome:
+  - `classification=freeze_no_frames`
+  - `world_ready_ever_true=false`
+  - `menu_cleared_while_not_ready=false`
+  - `moved=false`
+  - `HARD TIMEOUT` logs: 1
+  - `waiting for stable world_ready` logs: 16
+  - critical: `moveResult.newGameAdvance.pulses=[]` (none sent before stop)
+- Interpretation:
+  - this is not just accumulated-session drift; first run after restart still stalls.
+  - current P1 condition (requiring stable world_ready before menu advance) appears over-constrained and can deadlock pre-menu startup in this environment.
+  - likely sequence: menu remains active -> world_ready never rises while in menu -> no pulses -> no world start -> timeout.
+- Hypothesis impact:
+  - H5a (pure accumulated state) `weakened`.
+  - H5b/H4 (logic-level startup deadlock/regression) `supported`.
+  - H2 premature-menu-clear is still improved (`menu_cleared_while_not_ready=false`), but introduced lockup risk.
+- Next:
+  - revise P1 to two-phase startup gating (menu-advance gating decoupled from post-menu world-ready stabilization), then rerun deterministic batch.
+
+### 2026-02-27T08:09Z — Harness false-positive pass detected (no TRACE/CLASSIFY diagnostics)
+- Run:
+  - reviewed latest headed run artifact reported as success:
+    - `/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/workbench-png-to-skin-2026-02-27T08-06-52-773Z/result.json`
+- Parsed findings:
+  - `loaded=true`, `moveResult.moved=true`, `playableWait.ready=true` (harness pass-like values)
+  - but `firstMoveDiagnostic.classify_log_count=0` and `trace_log_count=0` (no `[CLASSIFY]` or `[TRACE]` evidence)
+  - `firstMoveDiagnostic.classification=unknown` with all truth fields `null`
+- Interpretation:
+  - this run is non-diagnostic and must not be counted as gameplay pass.
+  - harness currently allows pass-like outcome without required bootstrap trace/classify evidence.
+- Hypothesis impact:
+  - no change to root-cause ranking; this is a test-harness validity defect.
+- Next:
+  - make TRACE/CLASSIFY presence a required precondition for any pass verdict in automation.
+  - reject/flag runs with `classification=unknown` or missing truth fields as `invalid_run`.
+
+### 2026-02-27T10:02Z — Three-fix deployment: two-phase gate + mounted-default override + invalid_run enforcement
+- Code changes:
+  1. **Two-phase gate** (`web/termpp_flat_map_bootstrap.js`):
+     - Phase A: allow first 3 Enter pulses without requiring world_ready (engine needs them to begin world init).
+     - Phase B: after 3 pulses, enforce `WORLD_READY_REQUIRED_STREAK` (default 4) before more pulses.
+     - Hard timeout at 30s remains as safety net.
+     - Fixes deadlock where zero pulses were emitted because world_ready=0 blocked all pulses.
+  2. **Mounted-default override** (`web/workbench.js`):
+     - Default (`?overridemode=mounted`): player-nude + player/wolfie/wolack-[0000..1111] = 49 names.
+     - Covers mounted player spawn (player + wolf companion families).
+     - Excludes attack/plydie to reduce NPC aliasing (B1) and destabilization risk.
+     - Full parity (81 names incl attack/plydie) only via explicit `?overridemode=full_parity`.
+  3. **invalid_run enforcement** (`scripts/workbench_png_to_skin_test_playwright.mjs`):
+     - Run is `invalid_run` unless: `trace_log_count > 0`, `classify_log_count > 0`, `classification != "unknown"`, truth fields not null.
+     - Top-level `error` field set to `"invalid_run"` when checks fail.
+     - `runValidity` object with per-check breakdown included in result.json.
+- Rebuilt static bundle, killed server, restarted fresh on `:5071`.
+- **Headless run**:
+  - artifact: `/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/workbench-png-to-skin-2026-02-27T10-02-41-434Z/result.json`
+  - `runValidity.status=valid` (all 4 checks pass)
+  - `classification=underwater`
+  - `world_ready_ever_true=true`
+  - `world_ready_drop_count=29`
+  - `menu_cleared_while_not_ready=true`
+  - `trace_log_count=37`, `classify_log_count=1`
+  - `moved=false`
+  - `error=playable_state_timeout`
+  - `headed=false`, `overrideMode=player_only`
+- **Headed run**:
+  - artifact: `/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/workbench-png-to-skin-2026-02-27T10-03-36-149Z/result.json`
+  - `runValidity.status=valid` (all 4 checks pass)
+  - `classification=underwater`
+  - `world_ready_ever_true=true`
+  - `world_ready_drop_count=0`
+  - `menu_cleared_while_not_ready=false`
+  - `trace_log_count=37`, `classify_log_count=1`
+  - `moved=true`
+  - `error=null`
+  - `headed=true`, `overrideMode=player_only`
+  - move probes: start pos=[0,15,331] water=55 grounded=false → after pos=[-6.0,21.2,123.3] water=55 grounded=true
+- Comparison:
+  | Field | Headless | Headed |
+  |---|---|---|
+  | runValidity | valid | valid |
+  | classification | underwater | underwater |
+  | world_ready_ever_true | true | true |
+  | world_ready_drop_count | 29 | 0 |
+  | menu_cleared_while_not_ready | true | false |
+  | moved | false | true |
+  | error | playable_state_timeout | null |
+- Interpretation:
+  - **Two-phase gate fix works**: both runs now advance past stage 2 (was `freeze_no_frames` before). World_ready becomes true in both.
+  - **Headless vs headed divergence**: headless has unstable world_ready (29 drops) and premature menu clear; headed has stable world_ready and no premature clear. This explains why headless fails to reach playable state.
+  - **Underwater classification in both**: water=55 at spawn. This is the pre-existing H4 spawn/water parity bug, separate from the gate deadlock.
+  - **Movement**: headed position changes significantly (player-controlled). Headless never reaches playable state due to world_ready instability.
+- Hypothesis impact:
+  - H4 `supported` (spawn/water path issue persists in both modes).
+  - H5 `partially supported` (headless world_ready instability is environment-specific, not code-only).
+  - P1 deadlock `resolved` (two-phase gate allows initial pulses).
+  - B1 NPC aliasing `tracked separately` (mounted-default reduces but doesn't eliminate FS-global sharing).
+- Next:
+  - investigate headless world_ready instability (29 drops vs 0 in headed) — likely SwiftShader/WebGL timing difference.
+  - address underwater spawn (H4) as the remaining primary gameplay bug.
+  - user visual validation of headed mode skin appearance with mounted-default override set.
+
+### 2026-02-27T10:28Z — Harness anti-false-claim gate verified with fresh run
+- Run:
+  - `node scripts/workbench_png_to_skin_test_playwright.mjs --url http://127.0.0.1:5071/workbench --xp /Users/r/Downloads/session-30004ae1-8c48-4778-b625-d78279c96363.xp --timeout-sec 90 --move-sec 2`
+- Artifact:
+  - `/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/workbench-png-to-skin-2026-02-27T10-28-07-963Z/result.json`
+- Parsed outcome:
+  - `overrideMode=mounted`
+  - `reloadMode=src_swap`
+  - `runValidity.status=safety_fail`
+  - `runValidity.passed=false`
+  - `error=premature_menu_clear`
+  - diagnostic checks all present (`has_trace_logs=true`, `has_classify_log=true`, `classification_known=true`, `truth_fields_present=true`)
+  - `classification=underwater`
+  - `menu_cleared_while_not_ready=true`
+- Interpretation:
+  - anti-false-claim harness changes are active and functioning:
+    - non-clean runs are not passable despite full diagnostic data.
+    - explicit safety failure is surfaced at top-level error/status.
+- Hypothesis impact:
+  - H2 still `supported` in this run (premature clear reproduced).
+  - H4 still `supported` (underwater classification persists).
+- Next:
+  - treat any `runValidity.passed=false` as hard fail for milestone claims.
+  - proceed with focused fix for `menu_cleared_while_not_ready` in both headless and headed paths.
+
+### 2026-02-27T~11:00Z — Deep root-cause analysis: `menuClearedWhileWorldNotReady` is a false positive in headless
+
+**Finding 1: The diagnostic flag is a rolling check, not a point-in-time check.**
+
+`termpp_flat_map_bootstrap.js` lines 332-333:
+```javascript
+if (!inMainMenu && menuClearedAt < 0) menuClearedAt = age;      // one-time: records clear moment
+if (!inMainMenu && !worldReady && menuClearedAt >= 0) ...= true; // ROLLING: fires every tick
+```
+
+In the T10:28 headless run, the menu cleared at frame 5 (t=1997ms) **while `world_ready=1`**.
+`world_ready` then dropped at frame 8 (t=2302ms) — 300ms AFTER the legitimate clear.
+The rolling check on line 333 fires on frame 8, setting `menuClearedWhileWorldNotReady=true`.
+
+**This is a false positive.** The clear itself was not premature — `world_ready` was true at the moment of clearing.
+The flag should record whether `world_ready` was true at the **moment of clearing**, not whether it ever drops afterward.
+The existing `worldReadyDropCount` (28-33 in headless) already tracks post-clear regression separately.
+
+**Finding 2: Headless zero-viewport chain causes `render_stage` freeze at 1.**
+
+Root mechanism traced through the WASM bridge:
+1. Headless Chromium + SwiftShader creates WebGL context but iframe `drawingBufferWidth=0`
+2. `AsciickerLoop` computes `n=floor(0/fontWidth)=0, r=0` → calls `Render(0, 0)`
+3. In C++ `Game::Render()`: sets `g_web_render_stage_code=1`, hits main_menu branch at stage 2, returns early
+4. Stage never reaches 20+ (physics init) or 73 (minimap/full frame)
+5. `GameWorldReady()` depends on `game->physics` being initialized → stays false
+6. Brief `world_ready=1` at frames 5-7 is transient — engine hasn't stabilized with zero-size grid
+
+Headed mode: iframe has real viewport (1440x980), `Render(cols, rows)` advances through full pipeline, stage reaches 73, `world_ready` stays stable.
+
+**Finding 3: Two distinct problems being conflated.**
+
+| Problem | What it is | Where |
+|---------|-----------|-------|
+| False positive detection | Rolling check catches post-clear regression as "premature clear" | `flat_map_bootstrap.js:333` |
+| Headless world_ready instability | Zero-viewport → no physics init → world_ready unreliable | WASM engine + SwiftShader |
+
+The diagnostic fix (point-in-time check) would eliminate false positives for runs where the menu cleared while `world_ready=true`.
+The engine fix (force non-zero viewport before `StartGame`) would address the underlying headless instability.
+
+**Trace evidence comparison (definitive):**
+
+| Metric | Headless T10:28 | Headed T10:03 |
+|--------|----------------|---------------|
+| world_ready at clear moment | **1 (true)** | 1 (true) |
+| world_ready after 300ms | **0 (dropped)** | 1 (stable) |
+| render_stage after clear | **1 (stuck)** | 73 (full frame) |
+| world_ready_drop_count | **28** | 0 |
+| pos z progression | **frozen at 331** | falls 324→131 |
+| grounded | oscillates | stable true |
+
+**Architecture question: "How hard can it possibly be to replicate TERM++ skin?"**
+
+The skin pipeline itself (PNG → XP → Emscripten FS → Load) is straightforward and works correctly.
+ALL complexity is in the **test harness** — verifying the skin renders correctly in a live game session.
+The engine is a full 3D game compiled to WASM; "did the skin apply?" requires the game loop to be running.
+
+Simplification paths to evaluate:
+1. **Headed-only testing**: Eliminate headless entirely. Stage advances to 73, world_ready is stable.
+2. **Force-viewport preflight**: Before StartGame, ensure `drawingBufferWidth > 0` via CSS/layout forcing.
+3. **Visual-only gate**: Screenshot canvas after skin inject + Load(), skip movement test. Verify skin pixels match expected output.
+4. **Separate the concerns**: Skin-applied gate (FS write + Load succeeds) vs gameplay-works gate (world_ready + movement).
+
+- Next:
+  - Evaluate whether headed-only testing is sufficient for the milestone.
+  - If headless is required: implement force-viewport preflight in bootstrap.
+  - Fix the rolling-check false positive in line 333 regardless (it's a correctness bug).

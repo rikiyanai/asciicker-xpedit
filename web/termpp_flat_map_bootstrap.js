@@ -20,6 +20,7 @@
   var autoMenuTimer = 0;
   var autoMenuStartedAt = 0;
   var loadingUiCleared = false;
+  var diagnosticTraceTimer = 0;
 
   function boolParam(name, fallback) {
     var v = String(qs(name) || "").trim().toLowerCase();
@@ -30,6 +31,10 @@
   }
 
   var AUTO_NEW_GAME = boolParam("autonewgame", true);
+  var ENABLE_KEYB_DIAG = boolParam("keybdiag", false);
+  var TRACE_DURATION_MS = Math.max(5000, Math.min(60000, Number(qs("tracelen")) || 5000));
+  var WORLD_READY_REQUIRED_STREAK = Math.max(1, Math.min(20, parseInt(qs("wrstreak"), 10) || 4));  // 4 polls at 500ms ≈ 1.5s stable
+  var WORLD_GATE_HARD_TIMEOUT = Math.max(5000, Math.min(120000, parseInt(qs("wrtimeout"), 10) || 30000));  // 30s safety net
 
   function nowMs() { return Date.now ? Date.now() : +new Date(); }
 
@@ -293,6 +298,107 @@
     return false;
   }
 
+  function startDiagnosticTrace() {
+    if (diagnosticTraceTimer) {
+      clearInterval(diagnosticTraceTimer);
+      diagnosticTraceTimer = 0;
+    }
+    var t0 = nowMs();
+    var frameCount = 0;
+    var initialStage = -1;
+    var posChanged = false;
+    var waterDetected = false;
+    var waterDetectedAt = -1;
+    var groundedOnce = false;
+    var firstPos = null;
+    var worldReadyEverTrue = false;
+    var worldReadyDropCount = 0;
+    var menuClearedWhileWorldNotReady = false;
+    var menuClearedAt = -1;
+    var viewportZero = false;
+    try {
+      var cvs = document.getElementById("asciicker_canvas");
+      if (cvs) {
+        var gl = cvs.getContext("webgl") || cvs.getContext("webgl2") || cvs.getContext("experimental-webgl");
+        var cw = cvs.width || 0;
+        var ch = cvs.height || 0;
+        var dbw = gl ? (gl.drawingBufferWidth || 0) : 0;
+        var dbh = gl ? (gl.drawingBufferHeight || 0) : 0;
+        viewportZero = (cw === 0 || ch === 0 || dbw === 0 || dbh === 0);
+        log("[VIEWPORT] canvas=" + cw + "x" + ch + " drawingBuffer=" + dbw + "x" + dbh + " zero=" + String(viewportZero));
+      }
+    } catch (_ve) {}
+
+    diagnosticTraceTimer = setInterval(function () {
+      var age = nowMs() - t0;
+      frameCount++;
+      var probe = menuProbe();
+      var stage = Number(probe.render_stage);
+      if (initialStage < 0 && isFinite(stage)) initialStage = stage;
+      var inMainMenu = (probe.main_menu === true || Number(probe.main_menu) === 1);
+      var worldReady = (probe.world_ready === true || Number(probe.world_ready) === 1);
+      var grounded = (probe.grounded === true);
+      var water = Number(probe.water);
+      if (grounded) groundedOnce = true;
+      if (worldReady) worldReadyEverTrue = true;
+      if (worldReadyEverTrue && !worldReady) worldReadyDropCount++;
+      if (!inMainMenu && menuClearedAt < 0) {
+        menuClearedAt = age;
+        if (!worldReady) menuClearedWhileWorldNotReady = true;
+      }
+      if (isFinite(water) && water > 0) {
+        waterDetected = true;
+        if (waterDetectedAt < 0) waterDetectedAt = age;
+      }
+      if (Array.isArray(probe.pos) && probe.pos.length === 3) {
+        if (!firstPos) firstPos = [Number(probe.pos[0]), Number(probe.pos[1]), Number(probe.pos[2])];
+        for (var i = 0; i < 3; i++) {
+          if (Math.abs(Number(probe.pos[i]) - firstPos[i]) > 0.01) {
+            posChanged = true;
+            break;
+          }
+        }
+      }
+
+      log("[TRACE] frame=" + frameCount + " t=" + age + " pos=" + JSON.stringify(probe.pos) +
+          " grounded=" + String(probe.grounded) + " water=" + String(probe.water) +
+          " menu=" + String(probe.main_menu) + " world_ready=" + String(probe.world_ready) +
+          " stage=" + String(probe.render_stage));
+
+      if (age >= TRACE_DURATION_MS) {
+        clearInterval(diagnosticTraceTimer);
+        diagnosticTraceTimer = 0;
+        var result = "unknown";
+        if (worldReady && groundedOnce && posChanged && !waterDetected) {
+          result = "playable";
+        } else if (isFinite(stage) && stage === initialStage && initialStage < 70) {
+          result = "freeze_no_frames";
+        } else if (waterDetected && waterDetectedAt >= 0 && waterDetectedAt <= 3000) {
+          result = "underwater";
+        } else if (!groundedOnce && Array.isArray(probe.pos) && probe.pos.length === 3 && firstPos) {
+          var zNow = Number(probe.pos[2]);
+          var zStart = firstPos[2];
+          if (isFinite(zNow) && isFinite(zStart) && zNow < zStart - 1) result = "falling";
+        } else if (inMainMenu) {
+          result = "stuck_menu";
+        } else if (!worldReady && worldReadyEverTrue) {
+          result = "freeze_world_ready_dropped";
+        } else if (!worldReady) {
+          result = "freeze_world_never_ready";
+        }
+        log("[CLASSIFY] result=" + result + " frames=" + frameCount +
+            " pos_changed=" + String(posChanged) + " water_detected=" + String(waterDetected) +
+            " grounded_once=" + String(groundedOnce) + " final_stage=" + String(stage) +
+            " world_ready=" + String(worldReady) + " menu=" + String(inMainMenu) +
+            " world_ready_ever=" + String(worldReadyEverTrue) +
+            " world_ready_drops=" + String(worldReadyDropCount) +
+            " menu_cleared_while_not_ready=" + String(menuClearedWhileWorldNotReady) +
+            " viewport_zero=" + String(viewportZero) +
+            " trace_duration_ms=" + String(TRACE_DURATION_MS));
+      }
+    }, 100);
+  }
+
   function scheduleAutoNewGameAdvance() {
     if (!AUTO_NEW_GAME) return;
     if (autoMenuTimer) {
@@ -303,6 +409,10 @@
     log("auto-newgame schedule armed");
     var pulsesSent = 0;
     var overlayWaitTicks = 0;
+    var worldWaitTicks = 0;
+    var worldReadyStreak = 0;
+    var hardTimeoutTripped = false;
+    var firstPulseAt = -1;
     autoMenuTimer = setInterval(function () {
       var age = nowMs() - autoMenuStartedAt;
       // Wait until login overlay is gone (i.e., runtime accepted PLAY).
@@ -321,6 +431,7 @@
       clearLoadingUi("overlay_hidden");
       var probe = menuProbe();
       var inMainMenu = (probe.main_menu === true || Number(probe.main_menu) === 1);
+      var worldReady = (probe.world_ready === true || Number(probe.world_ready) === 1);
       if (!inMainMenu) {
         clearLoadingUi("main_menu_cleared");
         log("auto-newgame stopped (main menu cleared)");
@@ -328,17 +439,45 @@
         autoMenuTimer = 0;
         return;
       }
-      if (gameplayLikelyStarted(probe) || (probe.world_ready === true && probe.main_menu === false)) {
+      if (gameplayLikelyStarted(probe)) {
         clearLoadingUi("world_ready");
         log("auto-newgame stopped (world ready)");
         clearInterval(autoMenuTimer);
         autoMenuTimer = 0;
         return;
       }
+      // Two-phase gate to avoid deadlock where engine needs Enter pulse to advance.
+      // Phase A (pulsesSent < 3): allow initial pulses without requiring world_ready.
+      //   The engine may need menu advance before world_ready can become true.
+      // Phase B (pulsesSent >= 3): require stable world_ready streak before more pulses.
+      //   Prevents spamming Enter into a not-yet-ready world.
+      var PHASE_A_PULSE_BUDGET = 3;
+      if (worldReady) {
+        worldReadyStreak++;
+      } else {
+        worldReadyStreak = 0;
+      }
+      if (pulsesSent >= PHASE_A_PULSE_BUDGET && worldReadyStreak < WORLD_READY_REQUIRED_STREAK) {
+        worldWaitTicks++;
+        if (age > WORLD_GATE_HARD_TIMEOUT) {
+          if (!hardTimeoutTripped) {
+            hardTimeoutTripped = true;
+            log("auto-newgame HARD TIMEOUT (" + WORLD_GATE_HARD_TIMEOUT + "ms) — forcing menu advance despite world_ready not stable (streak=" + worldReadyStreak + " stage=" + String(probe.render_stage) + ")");
+          }
+          // Fall through to pulse
+        } else {
+          if (worldWaitTicks <= 2 || (worldWaitTicks % 4) === 0) {
+            log("auto-newgame phase-B waiting for stable world_ready... streak=" + worldReadyStreak + "/" + WORLD_READY_REQUIRED_STREAK + " age_ms=" + age + " stage=" + String(probe.render_stage));
+          }
+          return;
+        }
+      }
+      if (firstPulseAt < 0) firstPulseAt = age;
       pulsesSent++;
       var mode = sendEnterPulse();
-      log("auto-newgame pulse #" + pulsesSent + " (" + mode + ") age_ms=" + age + " menu=" + String(probe.main_menu) + " world=" + String(probe.world_ready) + " stage=" + String(probe.render_stage) + " pos=" + String(probe.pos) + " water=" + String(probe.water) + " grounded=" + String(probe.grounded));
-      if (pulsesSent >= 24 || age > 20000) {
+      log("auto-newgame pulse #" + pulsesSent + " (" + mode + ") age_ms=" + age + " streak=" + worldReadyStreak + " menu=" + String(probe.main_menu) + " world=" + String(probe.world_ready) + " stage=" + String(probe.render_stage) + " pos=" + String(probe.pos) + " water=" + String(probe.water) + " grounded=" + String(probe.grounded));
+      var pulseDuration = (firstPulseAt >= 0) ? (age - firstPulseAt) : 0;
+      if (pulsesSent >= 24 || pulseDuration > 20000) {
         log("auto-newgame pulse budget exhausted");
         clearInterval(autoMenuTimer);
         autoMenuTimer = 0;
@@ -396,10 +535,14 @@
         disablePlayUi(false, "PLAY");
       }
       var ret = original.apply(this, arguments);
+      if (ret && typeof ret.then === "function") {
+        try { await ret; } catch (_e) { log("original StartGame rejected: " + _e); }
+      }
       // Do not leave the Emscripten loading label pinned forever once startup transitions.
       setTimeout(function () { clearLoadingUi("post_startgame"); }, 1200);
       setTimeout(function () { clearLoadingUi("post_startgame_fallback"); }, 5000);
       scheduleAutoNewGameAdvance();
+      startDiagnosticTrace();
       return ret;
     };
     wrapInstalled = true;
@@ -422,9 +565,13 @@
           if (appliedStamp) {
             return originalLoad.apply(window, args);
           }
+          log("[DIAG] Load wrapper async path hit (appliedStamp=0) — map override deferred before originalLoad");
           applyFlatMapOverride(false)
             .catch(function (e) { log("pre-Load override failed: " + e); })
-            .finally(function () { originalLoad.apply(window, args); });
+            .finally(function () {
+              log("[DIAG] Load wrapper async path complete — calling originalLoad now");
+              originalLoad.apply(window, args);
+            });
         };
         wrapped.__flatWrapped = true;
         window.Load = wrapped;
@@ -477,4 +624,67 @@
   installBenignErrnoSuppression();
   prefetchSoon();
   log("bootstrap active (flatmap=" + selectedMapName() + ")");
+
+  // ── Keyboard/Focus diagnostic instrumentation ──
+  // Wraps Keyb and Focus to log every call; monitors focus/blur events.
+  // Remove this block once the stuck-keys bug is resolved.
+  (function installKeybDiag() {
+    if (!ENABLE_KEYB_DIAG) {
+      log("keyb-diag disabled (set ?keybdiag=1 to enable)");
+      return;
+    }
+    var DIAG_PREFIX = "[keyb-diag] ";
+    function dlog(msg) {
+      try { console.log(DIAG_PREFIX + msg); } catch (_e) {}
+    }
+    function activeTag() {
+      try {
+        var el = document.activeElement;
+        if (!el) return "null";
+        var tag = el.tagName || "?";
+        var id = el.id ? "#" + el.id : "";
+        return tag + id;
+      } catch (_e) { return "err"; }
+    }
+
+    // Wrap Keyb (cwrap'd C function) once it exists
+    var keybWrapTimer = setInterval(function () {
+      if (typeof window.Keyb !== "function") return;
+      if (window.Keyb.__diagWrapped) { clearInterval(keybWrapTimer); return; }
+      var origKeyb = window.Keyb;
+      window.Keyb = function (dir, code) {
+        dlog("Keyb(" + dir + "," + code + ") ae=" + activeTag() +
+             " t=" + (performance.now() | 0));
+        return origKeyb.apply(this, arguments);
+      };
+      window.Keyb.__diagWrapped = true;
+      clearInterval(keybWrapTimer);
+      dlog("Keyb wrapper installed");
+    }, 100);
+
+    // Wrap Focus (cwrap'd C function) once it exists
+    var focusWrapTimer = setInterval(function () {
+      if (typeof window.Focus !== "function") return;
+      if (window.Focus.__diagWrapped) { clearInterval(focusWrapTimer); return; }
+      var origFocus = window.Focus;
+      window.Focus = function (state) {
+        dlog("Focus(" + state + ") ae=" + activeTag() +
+             " t=" + (performance.now() | 0));
+        return origFocus.apply(this, arguments);
+      };
+      window.Focus.__diagWrapped = true;
+      clearInterval(focusWrapTimer);
+      dlog("Focus wrapper installed");
+    }, 100);
+
+    // Log window focus/blur events
+    window.addEventListener("focus", function () {
+      dlog("window.focus ae=" + activeTag() + " t=" + (performance.now() | 0));
+    }, true);
+    window.addEventListener("blur", function () {
+      dlog("window.blur ae=" + activeTag() + " t=" + (performance.now() | 0));
+    }, true);
+
+    dlog("diagnostic hooks armed");
+  })();
 })();

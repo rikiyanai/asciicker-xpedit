@@ -9,6 +9,10 @@
 <body>
 <div class="wrap">
   <h1>Workbench <span id="sessionDirtyBadge" class="small" style="margin-left:8px; font-weight:normal;">Session: idle</span></h1>
+  <div id="runtimePreflightBanner" class="panel runtime-preflight-banner hidden">
+    <div class="runtime-preflight-title">Runtime preflight failed for Skin Test Dock</div>
+    <div id="runtimePreflightBannerText" class="small warn">Checking runtime bundle...</div>
+  </div>
 
   <div class="panel">
     <div class="row">
@@ -16,7 +20,6 @@
       <button id="btnExport" disabled>Export XP</button>
       <button id="undoBtn" disabled>Undo</button>
       <button id="redoBtn" disabled>Redo</button>
-      <a href="/">Back to Wizard</a>
     </div>
     <div id="wbStatus" class="small warn">No active session</div>
   </div>
@@ -54,6 +57,11 @@
         <label>Threshold</label><input id="threshold" type="number" value="48" min="0" max="255">
         <label>Min Size</label><input id="minSize" type="number" value="8" min="1">
       </div>
+      <div class="row">
+        <label for="sourceZoomInput">Source Zoom</label>
+        <input id="sourceZoomInput" type="range" min="1" max="6" step="0.5" value="1">
+        <span id="sourceZoomValue" class="small">1x</span>
+      </div>
       <div id="sourceModeHint" class="small">Mode: Select. Click a sprite box to select, drag to move, drag handles to resize.</div>
       <div class="canvas-wrap">
         <canvas id="sourceCanvas" width="576" height="320"></canvas>
@@ -75,22 +83,35 @@
         <button id="rowDownBtn" disabled>Row Down</button>
         <button id="colLeftBtn" disabled>Col Left</button>
         <button id="colRightBtn" disabled>Col Right</button>
+        <button id="addFrameBtn" disabled>Add Frame</button>
         <button id="deleteCellBtn" disabled>Delete Selected</button>
+        <button id="openInspectorBtn" disabled>Open XP Editor</button>
       </div>
       <div class="row">
         <label>Active Layer</label>
         <select id="layerSelect"></select>
-        <span id="layerHint" class="small">Double-click frame to inspect and zoom.</span>
+        <span id="layerHint" class="small">Select a frame tile, then click `Open XP Editor` (or double-click a frame tile).</span>
+      </div>
+      <div class="row">
+        <label for="gridZoomInput">Grid Zoom</label>
+        <input id="gridZoomInput" type="range" min="0.75" max="2.5" step="0.25" value="1">
+        <span id="gridZoomValue" class="small">1x</span>
       </div>
       <div id="layerVisibility" class="row small"></div>
       <div id="gridPanel" class="frame-grid"></div>
       <div id="gridContextMenu" class="context-menu hidden">
+        <button id="ctxCopy">Copy Frame</button>
+        <button id="ctxPaste">Paste Frame</button>
+        <button id="ctxOpenInspector">Open XP Editor</button>
         <button id="ctxDelete">Delete</button>
       </div>
-      <h4>Legacy Char Grid (debug)</h4>
-      <div id="grid" class="grid"></div>
     </div>
   </div>
+
+  <details id="legacyGridDetails" class="legacy-grid-debug">
+    <summary>Legacy Char Grid (debug)</summary>
+    <div id="grid" class="grid"></div>
+  </details>
 
   <div class="panel">
     <h3>Animation + Metadata</h3>
@@ -132,6 +153,8 @@
       <button id="autoAlignRowBtn" disabled>Auto Align Row</button>
     </div>
     <div class="row">
+      <label>Row</label>
+      <input id="jitterRow" type="number" value="0" min="0" style="width:72px">
       <label>Step</label>
       <input id="jitterStep" type="number" value="1" min="1" max="16">
       <button id="jitterLeftBtn" disabled>&larr;</button>
@@ -166,15 +189,15 @@
     <h3>Skin Test Dock (Flat Arena)</h3>
     <div class="row">
       <button id="webbuildQuickTestBtn" class="success" disabled>Test This Skin</button>
-      <button id="webbuildApplyInPlaceBtn" disabled title="Requires an active session and a ready webbuild runtime">Apply In Place</button>
-      <button id="webbuildApplyRestartBtn" disabled title="Requires an active session">Apply + Restart</button>
-      <button id="webbuildUploadTestBtn">Upload Test Skin</button>
+      <button id="webbuildApplyInPlaceBtn" class="hidden" disabled title="Requires an active session and a ready webbuild runtime">Apply In Place</button>
+      <button id="webbuildApplyRestartBtn" class="hidden" disabled title="Requires an active session">Apply + Restart</button>
+      <button id="webbuildUploadTestBtn" title="Requires a valid flat runtime bundle">Upload Skin</button>
       <input id="webbuildUploadTestInput" type="file" accept=".xp,application/octet-stream" class="hidden">
       <span id="webbuildState" class="small">Webbuild not loaded</span>
     </div>
-    <div id="webbuildHint" class="small">Persistent browser test runtime (flat arena webbuild). `Apply In Place` is faster but may reuse a bad runtime state; `Apply + Restart` is deterministic; `Test This Skin` uses the deterministic test path. `Upload Test Skin` injects an external `.xp` directly.</div>
+    <div id="webbuildHint" class="small">`Test This Skin` exports the current Workbench XP and loads it into the flat test arena. `Upload Skin` loads an external `.xp` into the same flat test arena. Both use the deterministic test path.</div>
     <iframe id="webbuildFrame" title="Asciicker Webbuild" class="hidden" style="width:100%; height:360px; border:1px solid #334; background:#000;"></iframe>
-    <details>
+    <details class="hidden">
       <summary class="small">Advanced Skin Dock Controls</summary>
       <div class="row" style="margin-top:8px;">
         <button id="webbuildOpenBtn">Open Preview</button>
@@ -182,7 +205,7 @@
         <button id="webbuildApplySkinBtn" disabled>Apply Current XP (Advanced)</button>
       </div>
     </details>
-    <details>
+    <details class="hidden">
       <summary class="small">Advanced debug output</summary>
       <pre id="webbuildOut"></pre>
     </details>
@@ -310,7 +333,7 @@
       <button id="inspectorBgTransparentBtn">BG = Transparent</button>
     </div>
     <div class="row">
-      <span class="small">Palette (click = FG, right-click = BG)</span>
+      <span class="small">Palette (click = Paint color + Glyph FG, right-click = Glyph BG)</span>
       <div id="inspectorPaletteSwatches" style="display:flex; gap:4px; flex-wrap:wrap;"></div>
     </div>
     <div id="inspectorMatchSourceInfo" class="small">Match source: none (use Inspect or Dropper on a cell)</div>

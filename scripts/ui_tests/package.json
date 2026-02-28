@@ -1,0 +1,9 @@
+{
+  "name": "asciicker-pipeline-v2-ui-tests",
+  "private": true,
+  "type": "module",
+  "description": "Codex-native UI test framework runtime deps",
+  "dependencies": {
+    "playwright": "^1.58.2"
+  }
+}

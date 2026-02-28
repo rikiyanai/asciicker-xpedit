@@ -133,6 +133,68 @@ save_cycle_artifacts() {
     web/workbench.html 2>/dev/null | sed 's/^ //' || echo "no changes")"
 }
 
+# ── Append-only history ──
+append_history() {
+  local cycle_num="$1" result_path="$2" verdict="$3" extracted="$4" fingerprint="$5" git_head="$6"
+
+  mkdir -p "$RALPH_OUT"
+
+  # Build history line from extracted fields (or defaults for INVALID_RUN)
+  local history_line
+  if [[ -n "$extracted" ]]; then
+    history_line="$(echo "$extracted" | jq -c \
+      --argjson cycle "$cycle_num" \
+      --arg verdict "$verdict" \
+      --arg result_path "$result_path" \
+      --arg change_fingerprint "$fingerprint" \
+      --arg git_head "$git_head" \
+      '{
+        cycle_id: $cycle,
+        result_path: $result_path,
+        status: .status,
+        error: .error,
+        classification: .classification,
+        passed: .passed,
+        gateA_passed: .gateA_passed,
+        gateB_passed: .gateB_passed,
+        menu_cleared_while_not_ready: .menu_cleared_while_not_ready,
+        world_ready_drop_count: .world_ready_drop_count,
+        viewport_zero: .viewport_zero,
+        moved: .moved,
+        verdict: $verdict,
+        change_fingerprint: $change_fingerprint,
+        git_head: $git_head
+      }')"
+  else
+    history_line="$(jq -nc \
+      --argjson cycle "$cycle_num" \
+      --arg verdict "$verdict" \
+      --arg result_path "$result_path" \
+      --arg change_fingerprint "$fingerprint" \
+      --arg git_head "$git_head" \
+      '{
+        cycle_id: $cycle,
+        result_path: $result_path,
+        status: null,
+        error: null,
+        classification: null,
+        passed: null,
+        gateA_passed: null,
+        gateB_passed: null,
+        menu_cleared_while_not_ready: null,
+        world_ready_drop_count: null,
+        viewport_zero: null,
+        moved: null,
+        verdict: $verdict,
+        change_fingerprint: $change_fingerprint,
+        git_head: $git_head
+      }')"
+  fi
+
+  # Append — never overwrite
+  echo "$history_line" >> "$HISTORY_FILE"
+}
+
 # ── Verdict extraction ──
 # Required jq fields — if any is null/missing, the run is INVALID_RUN.
 JQ_EXTRACT='{

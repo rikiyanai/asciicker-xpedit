@@ -499,6 +499,8 @@ echo ""
 echo "Watching for changes..."
 fswatch -o --latency 1 "${WATCHED_FILES[@]}" |
 while read -r _; do
+  # Debounce: drain events that queued during the previous cycle
+  while read -t 1 -r _; do :; done
   CYCLE=$((CYCLE + 1))
   run_one_cycle "$CYCLE" || true
   echo ""

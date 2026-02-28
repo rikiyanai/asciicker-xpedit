@@ -121,8 +121,18 @@ print_verdict() {
     fi
   done
 
-  # Determine verdict — PASS requires consistency: passed=true AND status=valid AND error=null
+  # Determine verdict — PASS requires consistency: passed=true AND status=valid AND error=null AND known classification
   local verdict
+  if [[ "$f_class" == "unknown" ]]; then
+    echo "$sep"
+    echo "CLAIM: Classification unknown — runner could not determine state"
+    echo "EVIDENCE: $result_path"
+    echo "  (raw): $(echo "$extracted" | jq -c .)"
+    echo "VERDICT: INVALID_RUN"
+    echo "NEXT: watching for changes..."
+    echo "$sep"
+    return 1
+  fi
   if [[ "$f_passed" == "true" ]]; then
     if [[ "$f_status" != "valid" || "$f_error" != "null" ]]; then
       # Schema contradiction: passed=true but status/error disagree

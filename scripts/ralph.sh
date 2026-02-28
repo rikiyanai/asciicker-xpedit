@@ -17,6 +17,17 @@ MOVE_SEC="${RALPH_MOVE_SEC:-2}"
 SRC_BOOTSTRAP="$REPO_ROOT/web/termpp_flat_map_bootstrap.js"
 RT_BOOTSTRAP="$REPO_ROOT/runtime/termpp-skin-lab-static/termpp-web-flat/flat_map_bootstrap.js"
 
+# Artifact output
+RALPH_OUT="$REPO_ROOT/output/ralph"
+HISTORY_FILE="$RALPH_OUT/history.jsonl"
+
+# Files watched — also used for changes.patch scope
+WATCHED_FILES=(
+  "$REPO_ROOT/web/termpp_flat_map_bootstrap.js"
+  "$REPO_ROOT/web/workbench.js"
+  "$REPO_ROOT/web/workbench.html"
+)
+
 # ── Arg parsing ──
 PNG="${1:-}"
 if [[ -z "$PNG" ]]; then
@@ -52,6 +63,75 @@ sync_bootstrap() {
   fi
 }
 sync_bootstrap
+
+# ── Cycle artifacts ──
+save_cycle_artifacts() {
+  local cycle_num="$1" cycle_start="$2" result_path="$3" verdict="$4" extracted="$5"
+  local cycle_end cycle_dur_ms cycle_ts cycle_dir
+
+  cycle_end="$(date +%s)"
+  cycle_dur_ms=$(( (cycle_end - cycle_start) * 1000 ))
+  cycle_ts="$(date -u -r "$cycle_start" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)"
+  cycle_dir="$RALPH_OUT/cycle-${cycle_ts}-${cycle_num}"
+
+  mkdir -p "$cycle_dir"
+
+  # 1. Copy result.json (if it exists)
+  if [[ -f "$result_path" ]]; then
+    cp "$result_path" "$cycle_dir/result.json"
+  fi
+
+  # 2. Write verdict.json (normalized fields from extracted, plus verdict)
+  if [[ -n "$extracted" ]]; then
+    echo "$extracted" | jq --arg v "$verdict" '. + {verdict: $v}' > "$cycle_dir/verdict.json"
+  else
+    printf '{"verdict":"%s"}\n' "$verdict" > "$cycle_dir/verdict.json"
+  fi
+
+  # 3. changes.patch — git diff of watched files
+  local patch_content
+  patch_content="$(git -C "$REPO_ROOT" diff -- \
+    web/termpp_flat_map_bootstrap.js \
+    web/workbench.js \
+    web/workbench.html 2>/dev/null)" || true
+  printf '%s' "$patch_content" > "$cycle_dir/changes.patch"
+
+  # 4. changes.stat
+  git -C "$REPO_ROOT" diff --stat -- \
+    web/termpp_flat_map_bootstrap.js \
+    web/workbench.js \
+    web/workbench.html > "$cycle_dir/changes.stat" 2>/dev/null || true
+
+  # 5. meta.json
+  local git_head
+  git_head="$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+  jq -n \
+    --argjson cycle "$cycle_num" \
+    --arg start_ts "$cycle_ts" \
+    --argjson start_epoch "$cycle_start" \
+    --argjson end_epoch "$cycle_end" \
+    --argjson duration_ms "$cycle_dur_ms" \
+    --arg git_head "$git_head" \
+    '{cycle: $cycle, start_ts: $start_ts, start_epoch: $start_epoch, end_epoch: $end_epoch, duration_ms: $duration_ms, git_head: $git_head}' \
+    > "$cycle_dir/meta.json"
+
+  # 6. Compute change fingerprint
+  local fingerprint
+  if [[ -z "$patch_content" ]]; then
+    fingerprint="no_change"
+  else
+    fingerprint="$(printf '%s' "$patch_content" | shasum -a 256 | cut -d' ' -f1)"
+  fi
+
+  # Return values via globals (bash limitation)
+  _CYCLE_DIR="$cycle_dir"
+  _FINGERPRINT="$fingerprint"
+  _GIT_HEAD="$git_head"
+  _SHORTSTAT="$(git -C "$REPO_ROOT" diff --shortstat -- \
+    web/termpp_flat_map_bootstrap.js \
+    web/workbench.js \
+    web/workbench.html 2>/dev/null | sed 's/^ //' || echo "no changes")"
+}
 
 # ── Verdict extraction ──
 # Required jq fields — if any is null/missing, the run is INVALID_RUN.

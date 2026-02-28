@@ -300,106 +300,97 @@ JQ_EXTRACT='{
   moved: .moveResult.moved
 }'
 
-print_verdict() {
+# extract_verdict sets: _VERDICT, _EXTRACTED, _VERDICT_REASON, _F_* field globals
+# Returns 0 on valid extraction, 1 on INVALID_RUN (still sets _VERDICT)
+extract_verdict() {
   local result_path="$1"
-  local sep="══════════════════════════════════════════"
+
+  _VERDICT="INVALID_RUN"
+  _EXTRACTED=""
+  _VERDICT_REASON=""
 
   if [[ ! -f "$result_path" ]]; then
-    echo "$sep"
-    echo "CLAIM: Test run produced no result.json"
-    echo "EVIDENCE: (none)"
-    echo "VERDICT: INVALID_RUN"
-    echo "NEXT: watching for changes..."
-    echo "$sep"
+    _VERDICT_REASON="Test run produced no result.json"
     return 1
   fi
 
-  # Extract all fields in one jq call
   local extracted
   extracted="$(jq -e "$JQ_EXTRACT" "$result_path" 2>/dev/null)" || {
-    echo "$sep"
-    echo "CLAIM: Result JSON missing required fields"
-    echo "EVIDENCE: $result_path"
-    echo "VERDICT: INVALID_RUN"
-    echo "NEXT: watching for changes..."
-    echo "$sep"
+    _VERDICT_REASON="Result JSON missing required fields"
     return 1
   }
+  _EXTRACTED="$extracted"
 
-  # Read individual fields — use `tostring` not `//` to avoid jq treating false as null
-  local f_error f_status f_passed f_gateA f_gateB f_class f_menu_clear f_wr_drops f_vp_zero f_moved
-  f_error="$(echo "$extracted" | jq -r '.error | tostring')"
-  f_status="$(echo "$extracted" | jq -r '.status | tostring')"
-  f_passed="$(echo "$extracted" | jq -r '.passed | tostring')"
-  f_gateA="$(echo "$extracted" | jq -r '.gateA_passed | tostring')"
-  f_gateB="$(echo "$extracted" | jq -r '.gateB_passed | tostring')"
-  f_class="$(echo "$extracted" | jq -r '.classification | tostring')"
-  f_menu_clear="$(echo "$extracted" | jq -r '.menu_cleared_while_not_ready | tostring')"
-  f_wr_drops="$(echo "$extracted" | jq -r '.world_ready_drop_count | tostring')"
-  f_vp_zero="$(echo "$extracted" | jq -r '.viewport_zero | tostring')"
-  f_moved="$(echo "$extracted" | jq -r '.moved | tostring')"
+  # Read individual fields
+  _F_ERROR="$(echo "$extracted" | jq -r '.error | tostring')"
+  _F_STATUS="$(echo "$extracted" | jq -r '.status | tostring')"
+  _F_PASSED="$(echo "$extracted" | jq -r '.passed | tostring')"
+  _F_GATEA="$(echo "$extracted" | jq -r '.gateA_passed | tostring')"
+  _F_GATEB="$(echo "$extracted" | jq -r '.gateB_passed | tostring')"
+  _F_CLASS="$(echo "$extracted" | jq -r '.classification | tostring')"
+  _F_MENU_CLEAR="$(echo "$extracted" | jq -r '.menu_cleared_while_not_ready | tostring')"
+  _F_WR_DROPS="$(echo "$extracted" | jq -r '.world_ready_drop_count | tostring')"
+  _F_VP_ZERO="$(echo "$extracted" | jq -r '.viewport_zero | tostring')"
+  _F_MOVED="$(echo "$extracted" | jq -r '.moved | tostring')"
 
-  # Check for null fields → INVALID_RUN
-  for field in "$f_status" "$f_passed" "$f_gateA" "$f_gateB" "$f_class" "$f_menu_clear" "$f_wr_drops" "$f_vp_zero" "$f_moved"; do
+  # Null check
+  for field in "$_F_STATUS" "$_F_PASSED" "$_F_GATEA" "$_F_GATEB" "$_F_CLASS" "$_F_MENU_CLEAR" "$_F_WR_DROPS" "$_F_VP_ZERO" "$_F_MOVED"; do
     if [[ "$field" == "null" ]]; then
-      echo "$sep"
-      echo "CLAIM: Result has null required fields"
-      echo "EVIDENCE: $result_path"
-      echo "  (raw): $(echo "$extracted" | jq -c .)"
-      echo "VERDICT: INVALID_RUN"
-      echo "NEXT: watching for changes..."
-      echo "$sep"
+      _VERDICT_REASON="Result has null required fields"
       return 1
     fi
   done
 
-  # Determine verdict — PASS requires consistency: passed=true AND status=valid AND error=null AND known classification
-  local verdict
-  if [[ "$f_class" == "unknown" ]]; then
-    echo "$sep"
-    echo "CLAIM: Classification unknown — runner could not determine state"
-    echo "EVIDENCE: $result_path"
-    echo "  (raw): $(echo "$extracted" | jq -c .)"
-    echo "VERDICT: INVALID_RUN"
-    echo "NEXT: watching for changes..."
-    echo "$sep"
+  # Classification unknown
+  if [[ "$_F_CLASS" == "unknown" ]]; then
+    _VERDICT_REASON="Classification unknown — runner could not determine state"
     return 1
   fi
-  if [[ "$f_passed" == "true" ]]; then
-    if [[ "$f_status" != "valid" || "$f_error" != "null" ]]; then
-      # Schema contradiction: passed=true but status/error disagree
-      echo "$sep"
-      echo "CLAIM: Schema contradiction — passed=true but status=$f_status, error=$f_error"
-      echo "EVIDENCE: $result_path"
-      echo "  (raw): $(echo "$extracted" | jq -c .)"
-      echo "VERDICT: INVALID_RUN"
-      echo "NEXT: watching for changes..."
-      echo "$sep"
+
+  # Consistency check
+  if [[ "$_F_PASSED" == "true" ]]; then
+    if [[ "$_F_STATUS" != "valid" || "$_F_ERROR" != "null" ]]; then
+      _VERDICT_REASON="Schema contradiction — passed=true but status=$_F_STATUS, error=$_F_ERROR"
       return 1
     fi
-    verdict="PASS"
+    _VERDICT="PASS"
   else
-    verdict="FAIL"
+    _VERDICT="FAIL"
   fi
 
+  return 0
+}
+
+print_verdict_block() {
+  local result_path="$1" delta="$2" shortstat="$3" fingerprint="$4"
+  local sep="══════════════════════════════════════════"
+
   echo "$sep"
-  echo "CLAIM: Skin test run completed"
-  echo "EVIDENCE: $result_path"
-  printf "  %-35s %s\n" "error:" "$f_error"
-  printf "  %-35s %s\n" "status:" "$f_status"
-  printf "  %-35s %s\n" "classification:" "$f_class"
-  printf "  %-35s %s\n" "gateA.passed:" "$f_gateA"
-  printf "  %-35s %s\n" "gateB.passed:" "$f_gateB"
-  printf "  %-35s %s\n" "passed:" "$f_passed"
-  printf "  %-35s %s\n" "menu_cleared_while_not_ready:" "$f_menu_clear"
-  printf "  %-35s %s\n" "world_ready_drop_count:" "$f_wr_drops"
-  printf "  %-35s %s\n" "viewport_zero:" "$f_vp_zero"
-  printf "  %-35s %s\n" "moved:" "$f_moved"
-  echo "VERDICT: $verdict"
+  if [[ "$_VERDICT" == "INVALID_RUN" ]]; then
+    echo "CLAIM: $_VERDICT_REASON"
+    echo "EVIDENCE: $result_path"
+    if [[ -n "$_EXTRACTED" ]]; then
+      echo "  (raw): $(echo "$_EXTRACTED" | jq -c .)"
+    fi
+  else
+    echo "CLAIM: Skin test run completed"
+    echo "EVIDENCE: $result_path"
+    printf "  %-35s %s\n" "error:" "$_F_ERROR"
+    printf "  %-35s %s\n" "status:" "$_F_STATUS"
+    printf "  %-35s %s\n" "classification:" "$_F_CLASS"
+    printf "  %-35s %s\n" "gateA.passed:" "$_F_GATEA"
+    printf "  %-35s %s\n" "gateB.passed:" "$_F_GATEB"
+    printf "  %-35s %s\n" "passed:" "$_F_PASSED"
+    printf "  %-35s %s\n" "menu_cleared_while_not_ready:" "$_F_MENU_CLEAR"
+    printf "  %-35s %s\n" "world_ready_drop_count:" "$_F_WR_DROPS"
+    printf "  %-35s %s\n" "viewport_zero:" "$_F_VP_ZERO"
+    printf "  %-35s %s\n" "moved:" "$_F_MOVED"
+  fi
+  echo "VERDICT: $_VERDICT"
+  echo "DELTA: $delta"
+  echo "CHANGE: ${shortstat:-no changes} | fingerprint=${fingerprint:0:8}"
   echo "NEXT: watching for changes..."
   echo "$sep"
-
-  [[ "$verdict" == "PASS" ]]
 }
 
 echo "Ralph loop ready."
@@ -410,7 +401,6 @@ echo "  Watch: web/termpp_flat_map_bootstrap.js, web/workbench.js, web/workbench
 echo "  Press Ctrl-C to stop."
 echo ""
 
-# ── Run one test cycle ──
 run_one_cycle() {
   local cycle_num="$1"
   local cycle_start
@@ -432,30 +422,44 @@ run_one_cycle() {
     --override-mode "$OVERRIDE_MODE" \
     --reload-mode "$RELOAD_MODE" 2>&1)" || true
 
-  # Extract RESULT_PATH from the test output — no fallback to avoid stale-result false-pass
+  # Extract RESULT_PATH — no fallback to avoid stale-result false-pass
   result_path="$(echo "$test_output" | grep '^RESULT_PATH=' | tail -1 | cut -d= -f2-)"
 
   if [[ -z "$result_path" ]]; then
-    print_verdict "/dev/null" || true  # triggers "no result.json" verdict; don't exit on FAIL
-    return
+    result_path="/dev/null"
   fi
 
-  # Guard: result.json must have been written during this cycle (mtime >= cycle start)
-  local result_mtime
-  result_mtime="$(stat -f %m "$result_path" 2>/dev/null || echo 0)"
-  if (( result_mtime < cycle_start )); then
-    local sep="══════════════════════════════════════════"
-    echo "$sep"
-    echo "CLAIM: result.json is stale (written before this cycle)"
-    echo "EVIDENCE: $result_path (mtime=$result_mtime, cycle_start=$cycle_start)"
-    echo "VERDICT: INVALID_RUN"
-    echo "NEXT: watching for changes..."
-    echo "$sep"
-    return
+  # Staleness guard (skip for /dev/null)
+  if [[ "$result_path" != "/dev/null" ]]; then
+    local result_mtime
+    result_mtime="$(stat -f %m "$result_path" 2>/dev/null || echo 0)"
+    if (( result_mtime < cycle_start )); then
+      _VERDICT="INVALID_RUN"
+      _VERDICT_REASON="result.json is stale (mtime=$result_mtime, cycle_start=$cycle_start)"
+      _EXTRACTED=""
+
+      save_cycle_artifacts "$cycle_num" "$cycle_start" "$result_path" "$_VERDICT" "$_EXTRACTED"
+      append_history "$cycle_num" "$result_path" "$_VERDICT" "$_EXTRACTED" "$_FINGERPRINT" "$_GIT_HEAD"
+      local delta
+      delta="$(classify_delta "$cycle_num" "$_VERDICT" "$_EXTRACTED")"
+      print_verdict_block "$result_path" "$delta" "$_SHORTSTAT" "$_FINGERPRINT"
+      return
+    fi
   fi
 
-  # || true: print_verdict returns non-zero on FAIL/INVALID — don't let set -e kill the loop
-  print_verdict "$result_path" || true
+  # Extract verdict
+  extract_verdict "$result_path" || true
+
+  # Save artifacts and append history
+  save_cycle_artifacts "$cycle_num" "$cycle_start" "$result_path" "$_VERDICT" "$_EXTRACTED"
+  append_history "$cycle_num" "$result_path" "$_VERDICT" "$_EXTRACTED" "$_FINGERPRINT" "$_GIT_HEAD"
+
+  # Classify delta
+  local delta
+  delta="$(classify_delta "$cycle_num" "$_VERDICT" "$_EXTRACTED")"
+
+  # Print verdict block with delta and change info
+  print_verdict_block "$result_path" "$delta" "$_SHORTSTAT" "$_FINGERPRINT"
 }
 
 # ── Initial run ──
@@ -466,10 +470,7 @@ run_one_cycle "$CYCLE" || true
 # ── Watch loop ──
 echo ""
 echo "Watching for changes..."
-fswatch -o --latency 1 \
-  "$REPO_ROOT/web/termpp_flat_map_bootstrap.js" \
-  "$REPO_ROOT/web/workbench.js" \
-  "$REPO_ROOT/web/workbench.html" |
+fswatch -o --latency 1 "${WATCHED_FILES[@]}" |
 while read -r _; do
   CYCLE=$((CYCLE + 1))
   run_one_cycle "$CYCLE" || true

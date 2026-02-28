@@ -195,6 +195,96 @@ append_history() {
   echo "$history_line" >> "$HISTORY_FILE"
 }
 
+# ── Delta classifier (N vs N-1) ──
+classify_delta() {
+  local cycle_num="$1" verdict="$2" extracted="$3"
+
+  # First cycle — no comparison possible
+  if (( cycle_num <= 1 )) || [[ ! -f "$HISTORY_FILE" ]]; then
+    echo "first_cycle"
+    return
+  fi
+
+  # Read previous cycle's history line (second-to-last line, since current was just appended)
+  local prev_line line_count
+  line_count="$(wc -l < "$HISTORY_FILE" | tr -d ' ')"
+  if (( line_count < 2 )); then
+    echo "first_cycle"
+    return
+  fi
+  prev_line="$(tail -2 "$HISTORY_FILE" | head -1)"
+
+  local prev_verdict prev_error prev_drops prev_menu_clear
+  prev_verdict="$(echo "$prev_line" | jq -r '.verdict')"
+  prev_error="$(echo "$prev_line" | jq -r '.error | tostring')"
+  prev_drops="$(echo "$prev_line" | jq -r '.world_ready_drop_count | tostring')"
+  prev_menu_clear="$(echo "$prev_line" | jq -r '.menu_cleared_while_not_ready | tostring')"
+
+  local curr_drops curr_menu_clear
+  if [[ -n "$extracted" ]]; then
+    curr_drops="$(echo "$extracted" | jq -r '.world_ready_drop_count | tostring')"
+    curr_menu_clear="$(echo "$extracted" | jq -r '.menu_cleared_while_not_ready | tostring')"
+  else
+    curr_drops="null"
+    curr_menu_clear="null"
+  fi
+
+  # Either side invalid → limited comparison
+  if [[ "$verdict" == "INVALID_RUN" && "$prev_verdict" == "INVALID_RUN" ]]; then
+    local curr_error
+    if [[ -n "$extracted" ]]; then
+      curr_error="$(echo "$extracted" | jq -r '.error | tostring')"
+    else
+      curr_error="null"
+    fi
+    if [[ "$curr_error" != "$prev_error" ]]; then
+      echo "regressed"
+      return
+    fi
+    echo "unchanged"
+    return
+  fi
+
+  # PASS → FAIL/INVALID = regressed
+  if [[ "$prev_verdict" == "PASS" && "$verdict" != "PASS" ]]; then
+    echo "regressed"
+    return
+  fi
+
+  # FAIL/INVALID → PASS = improved
+  if [[ "$prev_verdict" != "PASS" && "$verdict" == "PASS" ]]; then
+    echo "improved"
+    return
+  fi
+
+  # Both PASS
+  if [[ "$prev_verdict" == "PASS" && "$verdict" == "PASS" ]]; then
+    echo "unchanged"
+    return
+  fi
+
+  # Both non-PASS: check minor signals
+  # New premature menu clear = regressed_minor
+  if [[ "$prev_menu_clear" == "false" && "$curr_menu_clear" == "true" ]]; then
+    echo "regressed_minor"
+    return
+  fi
+
+  # Higher drops = regressed_minor
+  if [[ "$prev_drops" != "null" && "$curr_drops" != "null" ]]; then
+    if (( curr_drops > prev_drops )); then
+      echo "regressed_minor"
+      return
+    fi
+    if (( curr_drops < prev_drops )); then
+      echo "improved_minor"
+      return
+    fi
+  fi
+
+  echo "unchanged"
+}
+
 # ── Verdict extraction ──
 # Required jq fields — if any is null/missing, the run is INVALID_RUN.
 JQ_EXTRACT='{

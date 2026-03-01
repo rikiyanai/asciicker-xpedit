@@ -867,7 +867,7 @@ Case: Pipeline XP (reliability, 252x160) + game_map_y8:
 | H2 (overlay race) | partially supported — unchanged |
 | H3 (XP format globally incompatible) | **UPGRADED → SUPPORTED as dimensional mismatch**: pipeline XP is 2x native dimensions (4x cells), causing WASM sprite loader OOB. Not format-level but size-level incompatibility. |
 | H4 (map/spawn init bug) | remains open for pos=[None,None,None] classification regression (separate from crash) |
-| H5 (runtime sandbox instability) | **RULED OUT**: native XP never crashes in same sandbox; crash is deterministic to pipeline XP content |
+| H5 (runtime sandbox instability) | **RULED OUT**: native XP never crashes in same sandbox; crash strongly correlated with pipeline XP dimensional mismatch (7/10 wasm_crash vs 0/10 native; native baseline not yet fully valid) |
 | H_NEW: pos reporting regression | **NEW/OPEN**: both native and pipeline show pos=[None,None,None], causing classification=unknown. Separate issue from WASM crash. |
 
 **Evidence files:**

@@ -993,14 +993,39 @@ def _digit_to_glyph(v: int) -> int:
 
 
 def _build_metadata_layer(cols: int, rows: int, angles: int, anims: list[int]) -> list[tuple[int, tuple[int, int, int], tuple[int, int, int]]]:
-    layer = [_transparent_cell() for _ in range(cols * rows)]
-    # Layer-0 contract: (0,0)=angles, (a,0)=animation length digits.
+    # Native XP contract: layer 0 is fully populated (no transparent cells).
+    # Metadata values in the first few cells of row 0; rest are space(32).
+    # bg=(255,255,85) matches native player-0100.xp layer 0.
+    META_BG = (255, 255, 85)
+    META_FG = (0, 0, 0)
+    space_cell = (32, META_FG, META_BG)
+    layer = [space_cell for _ in range(cols * rows)]
     if cols > 0 and rows > 0:
-        layer[0] = (_digit_to_glyph(int(angles)), (255, 255, 255), (0, 0, 0))
+        layer[0] = (_digit_to_glyph(int(angles)), META_FG, META_BG)
     for i, val in enumerate(anims, start=1):
         if i >= cols:
             break
-        layer[i] = (_digit_to_glyph(int(val)), (255, 255, 255), (0, 0, 0))
+        layer[i] = (_digit_to_glyph(int(val)), META_FG, META_BG)
+    return layer
+
+
+def _build_animation_index_layer(cols: int, rows: int, cell_h_chars: int) -> list[tuple[int, tuple[int, int, int], tuple[int, int, int]]]:
+    """Build layer 1: per-row animation index countdown within each angle block.
+
+    Native XP contract: every cell on row r has glyph = digit(cell_h_chars - 1 - (r % cell_h_chars)),
+    counting down within each angle's block of rows. bg=(255,255,255), fg=(0,0,0).
+    This layer must be fully populated — the engine reads it for animation frame indexing.
+    """
+    ANIM_BG = (255, 255, 255)
+    ANIM_FG = (0, 0, 0)
+    layer = []
+    for y in range(rows):
+        row_in_block = y % cell_h_chars
+        index_val = cell_h_chars - 1 - row_in_block
+        glyph = _digit_to_glyph(index_val)
+        cell = (glyph, ANIM_FG, ANIM_BG)
+        for _x in range(cols):
+            layer.append(cell)
     return layer
 
 
@@ -1404,7 +1429,8 @@ def run_pipeline(cfg: RunConfig, req_id: str) -> dict[str, Any]:
 
     blank_layer = [_transparent_cell() for _ in range(cols * rows)]
     layer0 = _build_metadata_layer(cols, rows, cfg.angles, cfg.frames)
-    layers = [layer0, blank_layer, cells_layer2, blank_layer]
+    layer1 = _build_animation_index_layer(cols, rows, cell_h_chars)
+    layers = [layer0, layer1, cells_layer2, blank_layer]
 
     xp_path = EXPORT_DIR / f"{job_id}.xp"
     write_xp(xp_path, cols, rows, layers)
@@ -1561,8 +1587,11 @@ def workbench_export_xp(session_id: str, req_id: str) -> dict[str, Any]:
         raise ApiError("session cell geometry mismatch", "session_geometry_invalid", "workbench", req_id, 422)
 
     blank = [_transparent_cell() for _ in range(cols * rows)]
-    layer0 = _build_metadata_layer(cols, rows, int(sess["angles"]), [int(x) for x in sess["anims"]])
-    layers = [layer0, blank, cells, blank]
+    angles = max(1, int(sess["angles"]))
+    cell_h = max(1, rows // angles) if angles > 0 else rows
+    layer0 = _build_metadata_layer(cols, rows, angles, [int(x) for x in sess["anims"]])
+    layer1 = _build_animation_index_layer(cols, rows, cell_h)
+    layers = [layer0, layer1, cells, blank]
 
     out = EXPORT_DIR / f"session-{session_id}.xp"
     write_xp(out, cols, rows, layers)

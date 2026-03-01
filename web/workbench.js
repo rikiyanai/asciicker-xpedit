@@ -56,6 +56,8 @@
     u.searchParams.set("flatmap", flatmapParam || DEFAULT_FLATMAP_NAME);
     const autoNewGameParam = String(params.get("autonewgame") || "1").trim();
     if (autoNewGameParam) u.searchParams.set("autonewgame", autoNewGameParam);
+    const rendergateParam = String(params.get("rendergate_ms") || "").trim();
+    if (rendergateParam && /^\d+$/.test(rendergateParam)) u.searchParams.set("rendergate_ms", rendergateParam);
     return `${u.pathname}${u.search}`;
   })();
 

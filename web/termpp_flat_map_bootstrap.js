@@ -21,6 +21,10 @@
   var autoMenuStartedAt = 0;
   var loadingUiCleared = false;
   var diagnosticTraceTimer = 0;
+  var renderGateUntil = 0;
+  var renderGateBlockedCount = 0;
+  var renderGateFirstRealMs = 0;
+  var renderGateInstalled = false;
 
   function boolParam(name, fallback) {
     var v = String(qs(name) || "").trim().toLowerCase();
@@ -35,6 +39,7 @@
   var TRACE_DURATION_MS = Math.max(5000, Math.min(60000, Number(qs("tracelen")) || 5000));
   var WORLD_READY_REQUIRED_STREAK = Math.max(1, Math.min(20, parseInt(qs("wrstreak"), 10) || 4));  // 4 polls at 500ms ≈ 1.5s stable
   var WORLD_GATE_HARD_TIMEOUT = Math.max(5000, Math.min(120000, parseInt(qs("wrtimeout"), 10) || 30000));  // 30s safety net
+  var RENDER_GATE_MS = Math.max(0, Math.min(10000, parseInt(qs("rendergate_ms"), 10) || 0));  // 0 = disabled
 
   function nowMs() { return Date.now ? Date.now() : +new Date(); }
 
@@ -394,7 +399,9 @@
             " world_ready_drops=" + String(worldReadyDropCount) +
             " menu_cleared_while_not_ready=" + String(menuClearedWhileWorldNotReady) +
             " viewport_zero=" + String(viewportZero) +
-            " trace_duration_ms=" + String(TRACE_DURATION_MS));
+            " trace_duration_ms=" + String(TRACE_DURATION_MS) +
+            " render_gate_blocked=" + String(renderGateBlockedCount) +
+            " render_gate_first_real_ms=" + String(renderGateFirstRealMs));
       }
     }, 100);
   }
@@ -515,6 +522,26 @@
     }, 200);
   }
 
+  function installRenderGate() {
+    if (renderGateInstalled || RENDER_GATE_MS <= 0) return;
+    if (typeof window.Render !== "function") return;
+    var originalRender = window.Render;
+    window.Render = function (w, h) {
+      if (renderGateUntil > 0 && nowMs() < renderGateUntil) {
+        renderGateBlockedCount++;
+        return 0;
+      }
+      if (renderGateUntil > 0 && !renderGateFirstRealMs) {
+        renderGateFirstRealMs = nowMs();
+        log("render gate opened: blocked_count=" + renderGateBlockedCount +
+            " first_real_render_ms=" + (renderGateFirstRealMs - (renderGateUntil - RENDER_GATE_MS)));
+      }
+      return originalRender.apply(this, arguments);
+    };
+    renderGateInstalled = true;
+    log("render gate wrapper installed (gate_ms=" + RENDER_GATE_MS + ")");
+  }
+
   function installStartGameWrapper() {
     if (wrapInstalled) return true;
     if (typeof window.StartGame !== "function") return false;
@@ -533,6 +560,12 @@
         log("flat map apply failed before StartGame: " + e);
       } finally {
         disablePlayUi(false, "PLAY");
+      }
+      if (RENDER_GATE_MS > 0) {
+        renderGateUntil = nowMs() + RENDER_GATE_MS;
+        renderGateBlockedCount = 0;
+        renderGateFirstRealMs = 0;
+        log("render gate armed: " + RENDER_GATE_MS + "ms BEFORE original StartGame");
       }
       var ret = original.apply(this, arguments);
       if (ret && typeof ret.then === "function") {
@@ -595,6 +628,7 @@
         log("Resize wrapper installed");
       }
       installStartGameWrapper();
+      installRenderGate();
       if (attempts > 400 || (wrapInstalled && window.Load && window.Load.__flatWrapped && window.Resize && window.Resize.__flatWrapped)) clearInterval(timer);
     }, 100);
   }
@@ -616,6 +650,10 @@
         cached: !!cachedMapBytes,
         cached_bytes: cachedMapBytes ? cachedMapBytes.length : 0,
         applied_stamp: appliedStamp || 0,
+        render_gate_ms: RENDER_GATE_MS,
+        render_gate_blocked: renderGateBlockedCount,
+        render_gate_first_real_ms: renderGateFirstRealMs,
+        render_gate_armed: renderGateUntil > 0,
       };
     }
   };

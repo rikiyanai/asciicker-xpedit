@@ -878,3 +878,68 @@ Case: Pipeline XP (reliability, 252x160) + game_map_y8:
 **Next steps:**
 1. Fix pipeline XP output to match native dimensions (126x80 for player sprites)
 2. Investigate pos=[None,None,None] classification regression (separate PR)
+
+### 2026-03-01T22:46Z — Crash signal exposure, A/A/B causal check, layer fix, and isolation testing
+
+**Phase 1: Crash signal exposure (cf54797)**
+- Patched `scripts/workbench_png_to_skin_test_playwright.mjs` to expose crash signals (`remainder_by_zero`, `mem_oob`) independently of `runValidity` status
+- Added `invalid_run_with_crash_signals` flag to detect hidden crashes behind `invalid_run`
+- This prevents `invalid_run` from masking crash evidence in future experiments
+
+**Phase 2: A/A/B causal dimension check (15 runs)**
+- Created resized pipeline XP at 126x80 (cropped top-left quadrant of 252x160)
+- Ran A/A/B: A=native 126x80, A2=pipeline-resized 126x80, B=pipeline 252x160
+- Results:
+  - A (native 126x80): 0/5 crashes, 5/5 moved — clean
+  - A2 (pipeline 126x80): **5/5 wasm_crash** — identical crash profile to B
+  - B (pipeline 252x160): 4/5 wasm_crash + 1 invalid_run_with_crash_signals
+- **FINDING: Dimensions alone do NOT explain the crash.** A2 has same dimensions as A but crashes identically to B.
+- Evidence: `docs/research/ascii/verification/aab-causal-check-2026-03-01.md`
+
+**Phase 3: Layer structure fix (b196f39)**
+- Analyzed native XP layer contract:
+  - Layer 0: metadata (angle/frame info), bg=(255,255,85), all cells populated
+  - Layer 1: animation frame indices (per-row countdown 9→0), bg=(255,255,255), all cells populated
+  - Layer 2: visual sprite content
+  - Layer 3: additional visual content
+- Pipeline had: sparse layer 0, blank layer 1
+- Fixed `_build_metadata_layer()` and added `_build_animation_index_layer()` in `src/pipeline_v2/service.py`
+- **Post-fix matrix (5 runs at 252x160): 4/5 wasm_crash — layer fix did NOT reduce crashes**
+
+**Phase 4: Isolation testing (systematic hypothesis elimination)**
+- Hybrid test: native content + blank layer 1 → **0/5 crashes** (layer structure not the cause)
+- Dimension variations (126x40, 126x80, 252x160): identical crash patterns (size not the cause)
+- Content isolation:
+  - Uniform glyph 219 at 126x80: 0/5 crashes in first run
+  - Same uniform-219 file retested: **1/5 crashes** (stochastic!)
+  - Fill density gradient (1%, 10%, 50%, 100%): all show crashes
+- **CRITICAL FINDING: Identical XP files produce different results across runs — crash is stochastic**
+- Native XP: consistently 0/5 crashes across repeated tests (small file, fast injection)
+- Pipeline XP: 4-5/5 crashes (large file, slow injection)
+
+**Phase 5: Root cause identification**
+- The crash is a **race condition** in `override_mode=mounted`:
+  - Mounted mode writes XP bytes to Emscripten FS **while WASM is already running**
+  - Larger files (pipeline 18KB+) take longer to write, widening the race window
+  - Smaller files (native 4.2KB) inject fast, rarely triggering the race
+  - This explains the file-size correlation and stochastic behavior
+- The geometry contract improvement (b196f39) is valid for XP format correctness but does not fix the crash
+
+**Hypothesis impact:**
+| Hypothesis | Status |
+|-----------|--------|
+| H1 (focus theft) | ruled_out — unchanged |
+| H2 (overlay race → injection race) | **UPGRADED → STRONGLY SUPPORTED**: crash is stochastic, correlates with file size / injection duration |
+| H3 (XP format incompatible) | **REJECTED**: dimensions, layers, cell content all eliminated by isolation tests |
+| H4 (map/spawn init bug) | remains open for pos=[None,None,None] (separate from crash) |
+| H5 (runtime sandbox instability) | **SUBSUMED BY H2**: instability is the injection race, not ambient sandbox drift |
+
+**Evidence files:**
+- A/A/B check: `docs/research/ascii/verification/aab-causal-check-2026-03-01.md`
+- Updated A/B matrix: `docs/research/ascii/verification/ab-matrix-2026-03-01.md`
+- Layer fix commit: `b196f39`
+- Crash signal exposure commit: `cf54797`
+
+**Next steps:**
+1. Fix the injection race: gate WASM startup until XP injection completes, or use pre-boot injection mode
+2. Investigate pos=[None,None,None] classification regression (separate PR)

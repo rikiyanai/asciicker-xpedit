@@ -740,6 +740,15 @@ async function main() {
       !!p.pos_error ||
       [p.gameMainMenu, p.worldReady, p.renderStage].some(v => typeof v === "string" && /^ERR:/.test(v)));
 
+  // ── Crash signal counters (always computed, never hidden by invalid_run) ──
+  const crashSignalRemainderByZero = consoleLogs.filter(e => /remainder by zero/i.test(String(e.text || ""))).length;
+  const crashSignalMemOob = consoleLogs.filter(e => /memory access out of bounds/i.test(String(e.text || ""))).length;
+  const crashSignals = {
+    remainder_by_zero: crashSignalRemainderByZero,
+    mem_oob: crashSignalMemOob,
+    any: crashSignalRemainderByZero > 0 || crashSignalMemOob > 0,
+  };
+
   // ── Position validity (scan traces + polls + probes) ──
   const posInvalid = (pos) => !Array.isArray(pos) || pos.length !== 3 || pos.some(v => v === null || !Number.isFinite(Number(v)));
   const posNaNWhenReady = (() => {
@@ -777,6 +786,7 @@ async function main() {
   };
   const gateBPassed = Object.values(gateB).every(Boolean);
 
+  const invalidRunWithCrashSignals = !runValid && crashSignals.any;
   const runValidity = {
     valid: runValid,
     status: !runValid ? "invalid_run" : (zeroViewport ? "invalid_env_headless_zero_viewport" : (prematureClear ? "safety_fail" : "valid")),
@@ -784,6 +794,7 @@ async function main() {
     passed: gateAPassed && gateBPassed,
     gateA: { passed: gateAPassed, checks: gateA },
     gateB: { passed: gateBPassed, checks: gateB },
+    invalid_run_with_crash_signals: invalidRunWithCrashSignals,
   };
   if (!runValid) {
     logEvent("run_validity:invalid", { checks: validityChecks });
@@ -832,6 +843,7 @@ async function main() {
       ...perf,
     },
     loaded,
+    crashSignals,
     runValidity,
     finalDebug,
     moveResult,
@@ -854,6 +866,7 @@ async function main() {
   console.log(JSON.stringify({
     resultPath,
     loaded,
+    crashSignals,
     runValidity,
     pngPath,
     xpPath: useUploadXpMode ? xpPath : "",

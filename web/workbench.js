@@ -847,77 +847,18 @@
     }
     const names = normalizeWebbuildOverrideNames(opts.override_names);
     const playerName = String(opts.reload_player_name || "player");
-    const requireStartGame = !!opts.require_start_game;
+    // Solo-only load contract: StartGame is never used in skin test automation.
+    // The iframe uses Load() + Resize() and auto-newgame pulses from the bootstrap.
     let fsWriteMode = "";
     for (const name of names) {
       const res = emfsReplaceFile(M, `/sprites/${name}`, xpBytes);
       if (!fsWriteMode && res && res.mode) fsWriteMode = String(res.mode);
     }
-    const autoStartGame = !!opts.auto_start_game;
-    let startedVia = "load";
-    let overlayVisible = false;
-    let startDeferred = false;
-    try {
-      const loginOverlay = win.document && win.document.getElementById ? win.document.getElementById("login-overlay") : null;
-      const playBtn = win.document && win.document.getElementById ? win.document.getElementById("play-btn") : null;
-      const playerInput = win.document && win.document.getElementById ? win.document.getElementById("player-name") : null;
-      const serverInput = win.document && win.document.getElementById ? win.document.getElementById("server-addr") : null;
-      overlayVisible = webbuildLoginOverlayVisible(win);
-      if (overlayVisible && typeof win.StartGame === "function") {
-        if (playerInput && !String(playerInput.value || "").trim()) playerInput.value = playerName;
-        if (serverInput) serverInput.value = "";
-        if (autoStartGame) {
-          if (webbuildStartGameReady(win)) {
-            if (playBtn) playBtn.disabled = false;
-            try {
-              const startRes = win.StartGame();
-              if (startRes && typeof startRes.then === "function") {
-                startRes.catch((e) => {
-                  try { console.warn("[workbench] webbuild StartGame rejected:", e); } catch (_e2) {}
-                });
-              }
-            } catch (_e) {
-              throw _e;
-            }
-            startedVia = "start_game";
-          } else {
-            startDeferred = true;
-            scheduleDeferredWebbuildStart(win, {
-              expected_src: String(state.webbuild.expectedSrc || ""),
-              player_name: playerName,
-            });
-            if (playBtn) {
-              // Keep UI in a user-clickable state while wasm init finishes.
-              playBtn.disabled = false;
-              if (String(playBtn.textContent || "").trim().toUpperCase() === "LOADING...") {
-                playBtn.textContent = "PLAY";
-              }
-            }
-          }
-        } else {
-          startedVia = webbuildStartGameReady(win) ? "play_ready" : "play_wait_wasm";
-          if (playBtn && webbuildStartGameReady(win)) {
-            playBtn.disabled = false;
-            if (String(playBtn.textContent || "").trim().toUpperCase() === "LOADING...") {
-              playBtn.textContent = "PLAY";
-            }
-          }
-        }
-      }
-    } catch (_e) {}
-    const manualPlayPending = (startedVia === "play_ready" || startedVia === "play_wait_wasm");
-    if (startedVia !== "start_game" && !manualPlayPending) {
-      if (startDeferred) {
-        startedVia = "deferred_start";
-      } else if (requireStartGame) {
-        throw new Error("webbuild did not expose login overlay for StartGame path (preview needs restart)");
-      }
-      if (!startDeferred) {
-        if (typeof win.Load === "function") win.Load(playerName);
-        if (typeof win.Resize === "function") {
-          try { win.Resize(null); } catch (_e) {}
-        }
-      }
+    // Solo-only load contract: always use Load() + Resize().
+    // Auto-newgame pulses from the bootstrap handle menu advance.
+    if (typeof win.Load === "function") win.Load(playerName);
+    if (typeof win.Resize === "function") {
+      try { win.Resize(null); } catch (_e) {}
     }
     if (typeof win.ak_canvas !== "undefined" && win.ak_canvas && typeof win.ak_canvas.focus === "function") {
       try { win.ak_canvas.focus(); } catch (_e) {}
@@ -928,8 +869,7 @@
       override_names: [...names],
       fs_write_mode: fsWriteMode || "unknown",
       player_name: playerName,
-      started_via: startedVia,
-      overlay_visible: overlayVisible ? 1 : 0,
+      started_via: "load",
     };
   }
 
@@ -1003,8 +943,6 @@
         const inject = await injectXpBytesIntoWebbuild(win, b64ToUint8Array(j.xp_b64 || ""), {
           override_names: j.override_names,
           reload_player_name: String(j.reload_player_name || "player"),
-          require_start_game: prep.restarted || prep.overlay_visible,
-          auto_start_game: true,
         });
         timings.inject_ms = Date.now() - tInject;
         timings.total_ms = Date.now() - t0;
@@ -1016,20 +954,8 @@
         }, null, 2);
         state.webbuild.ready = true;
         updateWebbuildUI();
-        const injectMode = String(inject?.started_via || "");
-        if (injectMode === "deferred_start") {
-          status(`Applied XP as web skin (${Math.round(timings.total_ms || 0)}ms); waiting for game init...`, "warn");
-          setWebbuildState("Webbuild ready (skin applied; waiting for game init...)", "warn");
-        } else if (injectMode === "play_wait_wasm") {
-          status(`Applied XP as web skin (${Math.round(timings.total_ms || 0)}ms); game init still loading (use PLAY when ready)`, "warn");
-          setWebbuildState("Webbuild ready (skin applied; game init loading...)", "warn");
-        } else if (injectMode === "play_ready") {
-          status(`Applied XP as web skin (${Math.round(timings.total_ms || 0)}ms); click PLAY in the test dock`, "ok");
-          setWebbuildState("Webbuild ready (skin applied; click PLAY)", "ok");
-        } else {
-          status(`Applied XP as web skin (${Math.round(timings.total_ms || 0)}ms)`, "ok");
-          setWebbuildState("Webbuild ready (skin applied)", "ok");
-        }
+        status(`Applied XP as web skin (${Math.round(timings.total_ms || 0)}ms)`, "ok");
+        setWebbuildState("Webbuild ready (skin applied)", "ok");
       } catch (e) {
         try {
           timings.total_ms = Date.now() - t0;
@@ -1087,8 +1013,6 @@
         const inject = await injectXpBytesIntoWebbuild(win, xpBytes, {
           override_names,
           reload_player_name: "player",
-          require_start_game: prep.restarted || prep.overlay_visible,
-          auto_start_game: true,
         });
         state.webbuild.uploadedXpBytes = xpBytes;
         state.webbuild.uploadedXpName = fileName || "upload.xp";
@@ -1100,17 +1024,8 @@
         }, null, 2);
         state.webbuild.ready = true;
         updateWebbuildUI();
-        const injectMode = String(inject?.started_via || "");
-        if (injectMode === "play_wait_wasm") {
-          status(`Uploaded test skin applied: ${state.webbuild.uploadedXpName} (game init loading)`, "warn");
-          setWebbuildState("Webbuild ready (uploaded skin applied; game init loading...)", "warn");
-        } else if (injectMode === "play_ready") {
-          status(`Uploaded test skin applied: ${state.webbuild.uploadedXpName} (click PLAY)`, "ok");
-          setWebbuildState("Webbuild ready (uploaded skin applied; click PLAY)", "ok");
-        } else {
-          status(`Uploaded test skin applied: ${state.webbuild.uploadedXpName}`, "ok");
-          setWebbuildState("Webbuild ready (uploaded skin applied)", "ok");
-        }
+        status(`Uploaded test skin applied: ${state.webbuild.uploadedXpName}`, "ok");
+        setWebbuildState("Webbuild ready (uploaded skin applied)", "ok");
       } catch (e) {
         $("webbuildOut").textContent = String(e);
         status("Upload test skin failed", "err");

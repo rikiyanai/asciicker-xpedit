@@ -860,24 +860,25 @@ Case: Pipeline XP (reliability, 252x160) + game_map_y8:
 - Native control: 0/10 wasm_crash, 0/10 passed, 10/10 moved=True, 0 total WASM crashes
 - Pipeline case: 7/10 wasm_crash, 0/10 passed, 3/10 moved=True (all with crashes), 539 rem + 9,937 mem OOB total
 
-**Hypothesis impact:**
-| Hypothesis | Impact |
-|-----------|--------|
-| H1 (focus theft) | mostly ruled_out — unchanged |
-| H2 (overlay race) | partially supported — unchanged |
-| H3 (XP format globally incompatible) | **UPGRADED → SUPPORTED as dimensional mismatch**: pipeline XP is 2x native dimensions (4x cells), causing WASM sprite loader OOB. Not format-level but size-level incompatibility. |
-| H4 (map/spawn init bug) | remains open for pos=[None,None,None] classification regression (separate from crash) |
-| H5 (runtime sandbox instability) | **RULED OUT**: native XP never crashes in same sandbox; crash strongly correlated with pipeline XP dimensional mismatch (7/10 wasm_crash vs 0/10 native; native baseline not yet fully valid) |
-| H_NEW: pos reporting regression | **NEW/OPEN**: both native and pipeline show pos=[None,None,None], causing classification=unknown. Separate issue from WASM crash. |
+**Hypothesis impact (as of T21:05Z — SUPERSEDED by T22:46Z below):**
+
+> **NOTE:** The following hypothesis assessments were based on the initial A/B matrix
+> (20 runs) before the A/A/B causal check and isolation testing. The T22:46Z entry
+> below revises H3 from SUPPORTED to REJECTED and H5 from RULED OUT to SUBSUMED BY H2.
+
+| Hypothesis | Impact (T21:05Z) | Revised (T22:46Z) |
+|-----------|-------------------|-------------------|
+| H1 (focus theft) | mostly ruled_out | unchanged |
+| H2 (overlay race) | partially supported | **STRONGLY SUPPORTED** (injection race) |
+| H3 (XP format / dimensions) | SUPPORTED as dimensional mismatch | **REJECTED** (A/A/B: same dims still crash) |
+| H4 (map/spawn init bug) | open (pos regression) | unchanged |
+| H5 (runtime sandbox instability) | RULED OUT | **SUBSUMED BY H2** (instability IS the race) |
+| H_NEW: pos reporting regression | NEW/OPEN | unchanged |
 
 **Evidence files:**
 - `docs/research/ascii/verification/ab-matrix-2026-03-01.json` (20 runs, full data)
 - `docs/research/ascii/verification/ab-matrix-2026-03-01.md` (formatted report)
 - Raw: `output/playwright/workbench-png-to-skin-2026-03-01T21-*`
-
-**Next steps:**
-1. Fix pipeline XP output to match native dimensions (126x80 for player sprites)
-2. Investigate pos=[None,None,None] classification regression (separate PR)
 
 ### 2026-03-01T22:46Z — Crash signal exposure, A/A/B causal check, layer fix, and isolation testing
 

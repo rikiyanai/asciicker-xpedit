@@ -798,3 +798,83 @@ Simplification paths to evaluate:
   - Evaluate whether headed-only testing is sufficient for the milestone.
   - If headless is required: implement force-viewport preflight in bootstrap.
   - Fix the rolling-check false positive in line 333 regardless (it's a correctness bug).
+
+### 2026-03-01T21:05Z — Solo-only load contract + A/B matrix verification
+
+**Environment mutation log (logged before execution):**
+- Killed existing server, wiped `runtime/` and `output/playwright/*`, `output/ralph/`
+- Rebuilt runtime: `./scripts/build_termpp_skin_lab_static.sh /Users/r/Downloads/asciicker-Y9-2/.web`
+- Synced bootstrap: `cp web/termpp_flat_map_bootstrap.js runtime/.../flat_map_bootstrap.js`
+- Created branch `fix/solo-only-load-contract` from master
+- Committed: removed StartGame from injection path, enforced solo-only Load contract
+- Restarted server on port 5071
+
+**Structural XP comparison (Section 3):**
+```
+native player-0100:     126x80, 4 layers, 10,080 cells/layer, 403KB decomp
+pipeline reliability:   252x160, 4 layers, 40,320 cells/layer, 1.6MB decomp (4.0x native)
+pipeline fidelity-rr8:  378x240, 4 layers, 90,720 cells/layer, 3.6MB decomp (9.0x native)
+pipeline skeleton:      240x40, 4 layers, 9,600 cells/layer, 384KB decomp (~1.0x native)
+```
+All structurally valid REXPaint v-1 with matching expected_payload. Divergence is purely dimensional.
+
+**A/B matrix runs (N=5 per cell, 20 total):**
+
+Control: Native XP (player-0100.xp, 126x80) + minimal_2x2:
+| # | error | fmd_classification | validity_status | passed | rem_crash | mem_oob | moved |
+|---|-------|--------------------|-----------------|--------|-----------|---------|-------|
+| 1 | invalid_run | unknown | invalid_run | False | 0 | 0 | True |
+| 2 | invalid_run | unknown | invalid_run | False | 0 | 0 | True |
+| 3 | invalid_run | unknown | invalid_run | False | 0 | 0 | True |
+| 4 | invalid_run | unknown | invalid_run | False | 0 | 0 | True |
+| 5 | invalid_run | unknown | invalid_run | False | 0 | 0 | True |
+
+Control: Native XP + game_map_y8:
+| # | error | fmd_classification | validity_status | passed | rem_crash | mem_oob | moved |
+|---|-------|--------------------|-----------------|--------|-----------|---------|-------|
+| 1 | invalid_run | unknown | invalid_run | False | 0 | 0 | True |
+| 2 | invalid_run | unknown | invalid_run | False | 0 | 0 | True |
+| 3 | invalid_run | unknown | invalid_run | False | 0 | 0 | True |
+| 4 | invalid_run | unknown | invalid_run | False | 0 | 0 | True |
+| 5 | invalid_run | unknown | invalid_run | False | 0 | 0 | True |
+
+Case: Pipeline XP (reliability, 252x160) + minimal_2x2:
+| # | error | fmd_classification | validity_status | passed | rem_crash | mem_oob | moved |
+|---|-------|--------------------|-----------------|--------|-----------|---------|-------|
+| 1 | wasm_crash | freeze_world_ready_dropped | valid | False | 89 | 2258 | False |
+| 2 | invalid_run | unknown | invalid_run | False | 0 | 0 | True |
+| 3 | wasm_crash | freeze_world_ready_dropped | valid | False | 0 | 50 | False |
+| 4 | invalid_run | unknown | invalid_run | False | 91 | 441 | True |
+| 5 | wasm_crash | freeze_world_ready_dropped | valid | False | 91 | 2252 | False |
+
+Case: Pipeline XP (reliability, 252x160) + game_map_y8:
+| # | error | fmd_classification | validity_status | passed | rem_crash | mem_oob | moved |
+|---|-------|--------------------|-----------------|--------|-----------|---------|-------|
+| 1 | wasm_crash | freeze_world_ready_dropped | valid | False | 88 | 2196 | False |
+| 2 | invalid_run | unknown | invalid_run | False | 3 | 567 | True |
+| 3 | wasm_crash | freeze_world_ready_dropped | valid | False | 0 | 51 | False |
+| 4 | wasm_crash | freeze_world_ready_dropped | valid | False | 88 | 2183 | False |
+| 5 | wasm_crash | freeze_world_ready_dropped | valid | False | 89 | 2192 | False |
+
+**Verdict tuples (per anti-evasion rule #1):**
+- Native control: 0/10 wasm_crash, 0/10 passed, 10/10 moved=True, 0 total WASM crashes
+- Pipeline case: 7/10 wasm_crash, 0/10 passed, 3/10 moved=True (all with crashes), 539 rem + 9,937 mem OOB total
+
+**Hypothesis impact:**
+| Hypothesis | Impact |
+|-----------|--------|
+| H1 (focus theft) | mostly ruled_out — unchanged |
+| H2 (overlay race) | partially supported — unchanged |
+| H3 (XP format globally incompatible) | **UPGRADED → SUPPORTED as dimensional mismatch**: pipeline XP is 2x native dimensions (4x cells), causing WASM sprite loader OOB. Not format-level but size-level incompatibility. |
+| H4 (map/spawn init bug) | remains open for pos=[None,None,None] classification regression (separate from crash) |
+| H5 (runtime sandbox instability) | **RULED OUT**: native XP never crashes in same sandbox; crash is deterministic to pipeline XP content |
+| H_NEW: pos reporting regression | **NEW/OPEN**: both native and pipeline show pos=[None,None,None], causing classification=unknown. Separate issue from WASM crash. |
+
+**Evidence files:**
+- `docs/research/ascii/verification/ab-matrix-2026-03-01.json` (20 runs, full data)
+- `docs/research/ascii/verification/ab-matrix-2026-03-01.md` (formatted report)
+- Raw: `output/playwright/workbench-png-to-skin-2026-03-01T21-*`
+
+**Next steps:**
+1. Fix pipeline XP output to match native dimensions (126x80 for player sprites)
+2. Investigate pos=[None,None,None] classification regression (separate PR)

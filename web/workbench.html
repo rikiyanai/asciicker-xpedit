@@ -14,6 +14,22 @@
     <div id="runtimePreflightBannerText" class="small warn">Checking runtime bundle...</div>
   </div>
 
+  <div class="panel" id="templatePanel">
+    <div class="row">
+      <label for="templateSelect">Template</label>
+      <select id="templateSelect">
+        <option value="player_native_idle_only">Player Skin (Idle Only)</option>
+        <option value="player_native_full">Player Skin (Full Bundle)</option>
+      </select>
+      <button id="templateApplyBtn" class="primary">Apply Template</button>
+      <span id="templateStatus" class="small">Classic (single XP)</span>
+    </div>
+    <div id="bundleActionTabs" class="row hidden" style="gap:0; margin-top:6px;">
+      <!-- Populated dynamically by JS -->
+    </div>
+    <div id="bundleStatus" class="small hidden"></div>
+  </div>
+
   <div class="panel">
     <div class="row">
       <button id="btnLoad">Load From Job</button>
@@ -25,7 +41,7 @@
   </div>
 
   <div class="panel">
-    <h3>Upload + Convert (Workbench Direct)</h3>
+    <h3>Upload + Convert (<span id="uploadPanelLabel">Workbench Direct</span>)</h3>
     <div class="row">
       <input id="wbFile" type="file" accept=".png">
       <button id="wbUpload" class="primary">Upload PNG</button>

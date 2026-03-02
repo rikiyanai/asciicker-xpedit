@@ -166,6 +166,12 @@
     gridCellDrag: null, // {fromRow,fromCol,startX,startY,dragging,hover:{row,col,mode}}
     gridCellDragSuppressClick: false,
     gridPanelZoom: 1,
+    // ── Bundle state ──
+    bundleId: null,
+    templateSetKey: "player_native_idle_only",
+    activeActionKey: "idle",
+    actionStates: {},       // { idle: {sessionId, jobId, status}, attack: {...}, ... }
+    templateRegistry: null, // cached from GET /api/workbench/templates
   };
 
   function status(text, cls) {
@@ -897,10 +903,53 @@
     });
   }
 
+  async function injectBundleIntoWebbuild(win, bundlePayload) {
+    if (!win || !win.Module) throw new Error("webbuild iframe is not ready");
+    const M = win.Module;
+    if (typeof M.FS_createPath === "function") {
+      try { M.FS_createPath("/", "sprites", true, true); } catch (_e) {}
+    }
+    const results = {};
+    for (const [actionKey, actionData] of Object.entries(bundlePayload.actions || {})) {
+      const xpBytes = b64ToUint8Array(actionData.xp_b64 || "");
+      const names = normalizeWebbuildOverrideNames(actionData.override_names);
+      for (const name of names) {
+        emfsReplaceFile(M, `/sprites/${name}`, xpBytes);
+      }
+      results[actionKey] = { bytes: xpBytes.length, files: names.length };
+    }
+    // Unmapped families: no writes — WASM keeps native defaults
+    const playerName = String(bundlePayload.reload_player_name || "player");
+    if (typeof win.Load === "function") win.Load(playerName);
+    if (typeof win.Resize === "function") {
+      try { win.Resize(null); } catch (_e) {}
+    }
+    if (typeof win.ak_canvas !== "undefined" && win.ak_canvas && typeof win.ak_canvas.focus === "function") {
+      try { win.ak_canvas.focus(); } catch (_e) {}
+    }
+    return {
+      actions: results,
+      unmapped_families: bundlePayload.unmapped_families || [],
+      player_name: playerName,
+      started_via: "load",
+    };
+  }
+
   async function applyCurrentXpAsWebSkin(opts = {}) {
     await runWebbuildSkinAction("apply skin", async () => {
       if (!(await ensureRuntimePreflight({ refresh: true }))) return;
-      if (!state.sessionId) {
+      // Guard: need a session (classic) or a bundle with required actions (bundle mode)
+      if (isBundleMode()) {
+        const ts = getActiveTemplateSet();
+        if (ts) {
+          for (const [key, spec] of Object.entries(ts.actions)) {
+            if (spec.required && (!state.actionStates[key] || state.actionStates[key].status !== "converted")) {
+              status(`Required action "${key}" not converted yet`, "warn");
+              return;
+            }
+          }
+        }
+      } else if (!state.sessionId) {
         status("Load a workbench session first", "warn");
         return;
       }
@@ -934,22 +983,34 @@
         status("Saving current session before skin test...", "warn");
         const saveRes = await saveSessionState("pre-web-skin-apply", { wait_for_idle: true, timeout_ms: 15000 });
         if (!saveRes || !saveRes.ok) {
-          timings.save_session_failed = saveRes || { ok: false };
-          $("webbuildOut").textContent = JSON.stringify({
-            stage: "save_session_before_web_skin_apply_failed",
-            save: saveRes,
-            timings,
-          }, null, 2);
-          status("Skin test blocked: session save failed/timed out", "err");
-          return;
+          // In bundle mode, save may fail if active tab has no session — that's OK
+          if (isBundleMode() && saveRes && saveRes.skipped === "no_session") {
+            timings.save_session_skipped = "bundle_no_active_session";
+          } else {
+            timings.save_session_failed = saveRes || { ok: false };
+            $("webbuildOut").textContent = JSON.stringify({
+              stage: "save_session_before_web_skin_apply_failed",
+              save: saveRes,
+              timings,
+            }, null, 2);
+            status("Skin test blocked: session save failed/timed out", "err");
+            return;
+          }
         }
         timings.save_session_ms = Date.now() - tSave;
         status(prep && prep.restarted ? "Reloaded preview; exporting XP skin payload..." : "Exporting XP skin payload...", "warn");
         const tPayload = Date.now();
-        const r = await fetch("/api/workbench/web-skin-payload", {
+        const useBundlePayload = isBundleMode();
+        const payloadUrl = useBundlePayload
+          ? "/api/workbench/web-skin-bundle-payload"
+          : "/api/workbench/web-skin-payload";
+        const payloadBody = useBundlePayload
+          ? { bundle_id: state.bundleId }
+          : { session_id: state.sessionId };
+        const r = await fetch(payloadUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ session_id: state.sessionId }),
+          body: JSON.stringify(payloadBody),
         });
         timings.fetch_payload_ms = Date.now() - tPayload;
         const j = await r.json();
@@ -960,39 +1021,57 @@
         }
         status("Injecting XP into flat arena runtime...", "warn");
         const tInject = Date.now();
-        const xpBytes = b64ToUint8Array(j.xp_b64 || "");
         let inject;
-        if (OVERRIDE_MODE === "preboot") {
-          // Preboot: reset iframe, wait for fresh WASM, inject BEFORE Load().
-          if (!(await resetWebbuildForPreboot())) {
-            status("Webbuild not ready after preboot reload", "err");
-            return;
+        if (useBundlePayload) {
+          // Bundle injection: per-action XP bytes
+          if (OVERRIDE_MODE === "preboot") {
+            if (!(await resetWebbuildForPreboot())) {
+              status("Webbuild not ready after preboot reload", "err");
+              return;
+            }
           }
           const win = webbuildFrameWindow();
-          inject = await injectXpBytesIntoWebbuild(win, xpBytes, {
-            override_names: j.override_names,
-            reload_player_name: String(j.reload_player_name || "player"),
-          });
-          inject.preboot = true;
+          inject = await injectBundleIntoWebbuild(win, j);
+          if (OVERRIDE_MODE === "preboot") inject.preboot = true;
         } else {
-          const win = webbuildFrameWindow();
-          inject = await injectXpBytesIntoWebbuild(win, xpBytes, {
-            override_names: j.override_names,
-            reload_player_name: String(j.reload_player_name || "player"),
-          });
+          // Classic single-XP injection
+          const xpBytes = b64ToUint8Array(j.xp_b64 || "");
+          if (OVERRIDE_MODE === "preboot") {
+            if (!(await resetWebbuildForPreboot())) {
+              status("Webbuild not ready after preboot reload", "err");
+              return;
+            }
+            const win = webbuildFrameWindow();
+            inject = await injectXpBytesIntoWebbuild(win, xpBytes, {
+              override_names: j.override_names,
+              reload_player_name: String(j.reload_player_name || "player"),
+            });
+            inject.preboot = true;
+          } else {
+            const win = webbuildFrameWindow();
+            inject = await injectXpBytesIntoWebbuild(win, xpBytes, {
+              override_names: j.override_names,
+              reload_player_name: String(j.reload_player_name || "player"),
+            });
+          }
         }
         timings.inject_ms = Date.now() - tInject;
         timings.total_ms = Date.now() - t0;
+        const payloadSummary = useBundlePayload
+          ? { actions: Object.fromEntries(Object.entries(j.actions || {}).map(([k, v]) => [k, { files: (v.override_names || []).length, bytes: v.xp_size_bytes }])), unmapped: j.unmapped_families }
+          : { override_names: normalizeWebbuildOverrideNames(j.override_names), xp_b64: `(<${(j.xp_b64 || "").length} base64 chars>)` };
         $("webbuildOut").textContent = JSON.stringify({
           timings,
           prep,
-          payload: { ...j, override_names: normalizeWebbuildOverrideNames(j.override_names), xp_b64: `(<${(j.xp_b64 || "").length} base64 chars>)` },
+          payload: payloadSummary,
           inject,
+          bundle_mode: useBundlePayload,
         }, null, 2);
         state.webbuild.ready = true;
         updateWebbuildUI();
-        status(`Applied XP as web skin (${Math.round(timings.total_ms || 0)}ms)`, "ok");
-        setWebbuildState("Webbuild ready (skin applied)", "ok");
+        const modeLabel = useBundlePayload ? "bundle skin" : "web skin";
+        status(`Applied ${modeLabel} (${Math.round(timings.total_ms || 0)}ms)`, "ok");
+        setWebbuildState(`Webbuild ready (${modeLabel} applied)`, "ok");
       } catch (e) {
         try {
           timings.total_ms = Date.now() - t0;
@@ -1012,7 +1091,18 @@
 
   async function testCurrentSkinInDock() {
     if (!(await ensureRuntimePreflight({ refresh: true }))) return;
-    if (!state.sessionId) {
+    if (isBundleMode()) {
+      // Bundle mode: need at least the required actions converted
+      const ts = getActiveTemplateSet();
+      if (ts) {
+        for (const [key, spec] of Object.entries(ts.actions)) {
+          if (spec.required && (!state.actionStates[key] || state.actionStates[key].status !== "converted")) {
+            status(`Required action "${key}" not converted yet`, "warn");
+            return;
+          }
+        }
+      }
+    } else if (!state.sessionId) {
       status("Load a workbench session first", "warn");
       return;
     }
@@ -5336,8 +5426,194 @@
     status("Analyze ready", "ok");
   }
 
+  // ── Bundle / Template helpers ──
+
+  function isBundleMode() {
+    return !!state.bundleId;
+  }
+
+  async function fetchTemplateRegistry() {
+    if (state.templateRegistry) return state.templateRegistry;
+    try {
+      const r = await fetch("/api/workbench/templates");
+      if (r.ok) {
+        state.templateRegistry = await r.json();
+      }
+    } catch (_e) { /* ignore */ }
+    return state.templateRegistry;
+  }
+
+  function getActiveTemplateSet() {
+    if (!state.templateRegistry) return null;
+    return state.templateRegistry.template_sets?.[state.templateSetKey] || null;
+  }
+
+  function renderBundleActionTabs() {
+    const container = $("bundleActionTabs");
+    if (!container) return;
+    const ts = getActiveTemplateSet();
+    if (!ts || !isBundleMode()) {
+      container.classList.add("hidden");
+      return;
+    }
+    container.classList.remove("hidden");
+    container.innerHTML = "";
+    for (const [key, spec] of Object.entries(ts.actions)) {
+      const btn = document.createElement("button");
+      const actState = state.actionStates[key];
+      const isActive = key === state.activeActionKey;
+      const isDone = actState && actState.status === "converted";
+      btn.textContent = `${spec.label} ${isDone ? "✓" : "○"}`;
+      btn.className = isActive ? "primary" : "";
+      btn.style.cssText = "border-radius:0; margin:0; min-width:120px;";
+      if (isActive) btn.style.borderBottom = "2px solid #6cf";
+      btn.addEventListener("click", () => switchBundleAction(key));
+      container.appendChild(btn);
+    }
+  }
+
+  async function switchBundleAction(actionKey) {
+    if (actionKey === state.activeActionKey) return;
+    state.activeActionKey = actionKey;
+    const actState = state.actionStates[actionKey];
+    if (actState && actState.sessionId) {
+      // Swap the backing session
+      state.sessionId = actState.sessionId;
+      state.jobId = actState.jobId || "";
+      // Reload session data from server
+      await loadFromJob();
+    } else {
+      // Empty action — clear session
+      state.sessionId = null;
+      state.jobId = "";
+      state.cells = [];
+      state.gridCols = 0;
+      state.gridRows = 0;
+      renderGrid();
+      status(`Action "${actionKey}" — upload a source image`, "warn");
+    }
+    renderBundleActionTabs();
+    updateBundleUI();
+  }
+
+  function updateBundleUI() {
+    const bundleStatus = $("bundleStatus");
+    const templateStatus = $("templateStatus");
+    const uploadLabel = $("uploadPanelLabel");
+    const quickBtn = $("webbuildQuickTestBtn");
+    if (isBundleMode()) {
+      if (bundleStatus) {
+        const ts = getActiveTemplateSet();
+        const total = ts ? Object.keys(ts.actions).length : 0;
+        const done = Object.values(state.actionStates).filter(a => a.status === "converted").length;
+        bundleStatus.textContent = `Bundle: ${done}/${total} actions converted`;
+        bundleStatus.classList.remove("hidden");
+      }
+      if (templateStatus) templateStatus.textContent = "Bundle mode";
+      if (uploadLabel) uploadLabel.textContent = `Upload for ${state.activeActionKey}`;
+      if (quickBtn) quickBtn.textContent = "Test Bundle Skin";
+    } else {
+      if (bundleStatus) bundleStatus.classList.add("hidden");
+      if (templateStatus) templateStatus.textContent = "Classic (single XP)";
+      if (uploadLabel) uploadLabel.textContent = "Workbench Direct";
+      if (quickBtn) quickBtn.textContent = "Test This Skin";
+    }
+  }
+
+  async function applyTemplate() {
+    const key = $("templateSelect")?.value || "player_native_idle_only";
+    state.templateSetKey = key;
+    const reg = await fetchTemplateRegistry();
+    if (!reg) {
+      status("Failed to load template registry", "err");
+      return;
+    }
+    const ts = reg.template_sets?.[key];
+    if (!ts) {
+      status(`Unknown template: ${key}`, "err");
+      return;
+    }
+    const actionKeys = Object.keys(ts.actions);
+    if (actionKeys.length <= 1) {
+      // Single-action template: classic mode, no bundle
+      state.bundleId = null;
+      state.activeActionKey = "idle";
+      state.actionStates = {};
+      renderBundleActionTabs();
+      updateBundleUI();
+      status(`Template: ${ts.label} (classic single-XP mode)`, "ok");
+      return;
+    }
+    // Multi-action: create bundle
+    status("Creating bundle session...", "warn");
+    try {
+      const r = await fetch("/api/workbench/bundle/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ template_set_key: key }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        status(`Bundle creation failed: ${j.error || "unknown"}`, "err");
+        return;
+      }
+      state.bundleId = j.bundle_id;
+      state.activeActionKey = actionKeys[0];
+      state.actionStates = {};
+      for (const ak of actionKeys) {
+        state.actionStates[ak] = { sessionId: null, jobId: null, status: "empty" };
+      }
+      renderBundleActionTabs();
+      updateBundleUI();
+      status(`Bundle created: ${ts.label} — upload sources per action tab`, "ok");
+    } catch (e) {
+      status(`Bundle creation error: ${e}`, "err");
+    }
+  }
+
+  async function wbRunBundleAction() {
+    if (!isBundleMode() || !state.sourcePath) return;
+    const actionKey = state.activeActionKey;
+    status(`Running ${actionKey} conversion...`, "warn");
+    try {
+      const r = await fetch("/api/workbench/action-grid/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bundle_id: state.bundleId,
+          action_key: actionKey,
+          source_path: state.sourcePath,
+        }),
+      });
+      const j = await r.json();
+      $("wbRunOut").textContent = JSON.stringify(j, null, 2);
+      if (!r.ok) {
+        status(`${actionKey} conversion failed: ${j.error || "unknown"}`, "err");
+        return;
+      }
+      state.actionStates[actionKey] = {
+        sessionId: j.session_id,
+        jobId: j.job_id,
+        status: "converted",
+      };
+      state.sessionId = j.session_id;
+      state.jobId = j.job_id;
+      await loadFromJob();
+      renderBundleActionTabs();
+      updateBundleUI();
+      status(`${actionKey} converted: ${j.grid_cols}x${j.grid_rows}`, "ok");
+    } catch (e) {
+      status(`${actionKey} conversion error: ${e}`, "err");
+    }
+  }
+
   async function wbRun() {
     if (!state.sourcePath) return;
+    // Bundle mode: route through action-grid/apply
+    if (isBundleMode()) {
+      await wbRunBundleAction();
+      return;
+    }
     status("Running conversion...", "warn");
     const payload = {
       source_path: state.sourcePath,
@@ -5419,6 +5695,7 @@
     $("undoBtn").addEventListener("click", undo);
     $("redoBtn").addEventListener("click", redo);
 
+    $("templateApplyBtn")?.addEventListener("click", applyTemplate);
     $("wbUpload").addEventListener("click", wbUpload);
     $("wbAnalyze").addEventListener("click", wbAnalyze);
     $("wbRun").addEventListener("click", wbRun);

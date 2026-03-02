@@ -31,6 +31,7 @@ class RunConfig:
     render_resolution: int = 12
     bg_mode: str = "key_color"
     bg_tolerance: int = 8
+    native_compat: bool = True
 
     def validate(self, request_id: str) -> None:
         if not self.source_path:

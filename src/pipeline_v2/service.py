@@ -35,6 +35,12 @@ from .storage import save_json, load_json
 from .xp_codec import write_xp, read_xp
 
 MAGENTA_BG = (255, 0, 255)
+
+# Native player skin contract: the WASM engine expects exactly these dimensions.
+NATIVE_COLS = 126
+NATIVE_ROWS = 80
+NATIVE_ANGLES = 8
+NATIVE_CELL_H = 10  # rows per angle block (80 / 8)
 WORKBENCH_VERIFY_DIR = ROOT / "output" / "workbench_verify"
 WORKBENCH_TERMPP_DIR = ROOT / "output" / "termpp_skin_runs"
 WORKBENCH_STREAM_DIR = ROOT / "output" / "termpp_stream"
@@ -992,20 +998,30 @@ def _digit_to_glyph(v: int) -> int:
     return 0
 
 
-def _build_metadata_layer(cols: int, rows: int, angles: int, anims: list[int]) -> list[tuple[int, tuple[int, int, int], tuple[int, int, int]]]:
+def _build_metadata_layer(cols: int, rows: int, angles: int, anims: list[int],
+                          native_compat: bool = False) -> list[tuple[int, tuple[int, int, int], tuple[int, int, int]]]:
     # Native XP contract: layer 0 is fully populated (no transparent cells).
-    # Metadata values in the first few cells of row 0; rest are space(32).
     # bg=(255,255,85) matches native player-0100.xp layer 0.
     META_BG = (255, 255, 85)
     META_FG = (0, 0, 0)
     space_cell = (32, META_FG, META_BG)
     layer = [space_cell for _ in range(cols * rows)]
-    if cols > 0 and rows > 0:
-        layer[0] = (_digit_to_glyph(int(angles)), META_FG, META_BG)
-    for i, val in enumerate(anims, start=1):
-        if i >= cols:
-            break
-        layer[i] = (_digit_to_glyph(int(val)), META_FG, META_BG)
+
+    if native_compat and cols >= 3 and rows >= 3:
+        # Exact native player-0100.xp L0 metadata template.
+        # Row 0: '8','1','8'  Row 1: '2','4'  Row 2: '1','F'
+        def _set(r, c, ch):
+            layer[r * cols + c] = (ord(ch), META_FG, META_BG)
+        _set(0, 0, '8'); _set(0, 1, '1'); _set(0, 2, '8')
+        _set(1, 0, '2'); _set(1, 1, '4')
+        _set(2, 0, '1'); _set(2, 1, 'F')
+    else:
+        if cols > 0 and rows > 0:
+            layer[0] = (_digit_to_glyph(int(angles)), META_FG, META_BG)
+        for i, val in enumerate(anims, start=1):
+            if i >= cols:
+                break
+            layer[i] = (_digit_to_glyph(int(val)), META_FG, META_BG)
     return layer
 
 
@@ -1272,8 +1288,9 @@ def run_pipeline(cfg: RunConfig, req_id: str) -> dict[str, Any]:
             frame_px_w = max(1, src_w // source_frame_cols)
             angle_px_h = max(1, src_h // cfg.angles)
             # Fail closed on obviously wrong row slicing (prevents half-row splits).
+            # Skip aspect check when native_compat forces output dimensions.
             aspect = frame_px_w / max(1, angle_px_h)
-            if aspect < 0.35 or aspect > 1.2:
+            if not cfg.native_compat and (aspect < 0.35 or aspect > 1.2):
                 suggested_angles = None
                 suggested_source_projs = cfg.source_projs
                 candidates: list[tuple[float, int, int]] = []
@@ -1307,12 +1324,34 @@ def run_pipeline(cfg: RunConfig, req_id: str) -> dict[str, Any]:
                     req_id,
                     422,
                 )
-            cell_w_chars = max(1, int(math.ceil(frame_px_w / max(1, cfg.render_resolution))))
-            cell_h_chars = max(1, int(math.ceil(angle_px_h / max(1, cfg.render_resolution))))
-            # Enforce a minimum visual resolution per frame so silhouettes/animation survive.
-            # Keep aspect close to source frame ratio (48x32 => 1.5) with 12x8 minimum.
-            cell_w_chars = max(cell_w_chars, 12)
-            cell_h_chars = max(cell_h_chars, 8)
+            if cfg.native_compat:
+                # Lock to native WASM engine contract: 126x80 player skin.
+                cell_h_chars = NATIVE_CELL_H
+                total_tile_cols = semantic_frames * cfg.projs
+                cell_w_chars = NATIVE_COLS // max(1, total_tile_cols)
+                if cell_w_chars < 1 or cell_w_chars * total_tile_cols != NATIVE_COLS:
+                    raise ApiError(
+                        f"native_compat: frames={semantic_frames} projs={cfg.projs} "
+                        f"cannot tile evenly into {NATIVE_COLS} cols",
+                        "native_compat_geometry",
+                        "run",
+                        req_id,
+                        422,
+                    )
+                if cfg.angles != NATIVE_ANGLES:
+                    raise ApiError(
+                        f"native_compat requires angles={NATIVE_ANGLES}, got {cfg.angles}",
+                        "native_compat_angles",
+                        "run",
+                        req_id,
+                        422,
+                    )
+            else:
+                cell_w_chars = max(1, int(math.ceil(frame_px_w / max(1, cfg.render_resolution))))
+                cell_h_chars = max(1, int(math.ceil(angle_px_h / max(1, cfg.render_resolution))))
+                # Enforce a minimum visual resolution per frame so silhouettes/animation survive.
+                cell_w_chars = max(cell_w_chars, 12)
+                cell_h_chars = max(cell_h_chars, 8)
 
             cols = semantic_frames * cfg.projs * cell_w_chars
             rows = cfg.angles * cell_h_chars
@@ -1428,9 +1467,20 @@ def run_pipeline(cfg: RunConfig, req_id: str) -> dict[str, Any]:
         raise ApiError(f"pipeline failed reading image: {e}", "pipeline_image_error", "run", req_id, 500)
 
     blank_layer = [_transparent_cell() for _ in range(cols * rows)]
-    layer0 = _build_metadata_layer(cols, rows, cfg.angles, cfg.frames)
+    layer0 = _build_metadata_layer(cols, rows, cfg.angles, cfg.frames,
+                                    native_compat=cfg.native_compat)
     layer1 = _build_animation_index_layer(cols, rows, cell_h_chars)
     layers = [layer0, layer1, cells_layer2, blank_layer]
+
+    # Hard gate: native compat requires exact dimensions (before writing).
+    if cfg.native_compat and (cols != NATIVE_COLS or rows != NATIVE_ROWS):
+        raise ApiError(
+            f"native_compat gate failed: got {cols}x{rows}, expected {NATIVE_COLS}x{NATIVE_ROWS}",
+            "native_compat_dims_gate",
+            "run",
+            req_id,
+            500,
+        )
 
     xp_path = EXPORT_DIR / f"{job_id}.xp"
     write_xp(xp_path, cols, rows, layers)
@@ -1592,6 +1642,16 @@ def workbench_export_xp(session_id: str, req_id: str) -> dict[str, Any]:
     layer0 = _build_metadata_layer(cols, rows, angles, [int(x) for x in sess["anims"]])
     layer1 = _build_animation_index_layer(cols, rows, cell_h)
     layers = [layer0, layer1, cells, blank]
+
+    # Hard gate: reject non-native dimensions (before writing).
+    if cols != NATIVE_COLS or rows != NATIVE_ROWS:
+        raise ApiError(
+            f"export gate failed: got {cols}x{rows}, expected {NATIVE_COLS}x{NATIVE_ROWS}",
+            "native_compat_dims_gate",
+            "workbench",
+            req_id,
+            422,
+        )
 
     out = EXPORT_DIR / f"session-{session_id}.xp"
     write_xp(out, cols, rows, layers)

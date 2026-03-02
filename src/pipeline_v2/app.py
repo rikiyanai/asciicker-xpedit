@@ -231,6 +231,7 @@ def create_app() -> Flask:
                 render_resolution=int(payload.get("render_resolution", 12)),
                 bg_mode=str(payload.get("bg_mode", "key_color")),
                 bg_tolerance=int(payload.get("bg_tolerance", 8)),
+                native_compat=bool(payload.get("native_compat", True)),
             )
             return jsonify(run_pipeline(cfg, req_id)), 200
         except ApiError as e:

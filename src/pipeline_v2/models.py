@@ -32,6 +32,9 @@ class RunConfig:
     bg_mode: str = "key_color"
     bg_tolerance: int = 8
     native_compat: bool = True
+    target_cols: int | None = None
+    target_rows: int | None = None
+    family: str = "player"
 
     def validate(self, request_id: str) -> None:
         if not self.source_path:
@@ -50,6 +53,12 @@ class RunConfig:
             raise ApiError("bg_mode must be key_color|alpha|none", "invalid_bg_mode", "run", request_id, 422)
         if self.bg_tolerance < 0:
             raise ApiError("bg_tolerance must be >= 0", "invalid_bg_tolerance", "run", request_id, 422)
+        if self.target_cols is not None and self.target_cols < 1:
+            raise ApiError("target_cols must be >= 1", "invalid_target_cols", "run", request_id, 422)
+        if self.target_rows is not None and self.target_rows < 1:
+            raise ApiError("target_rows must be >= 1", "invalid_target_rows", "run", request_id, 422)
+        if self.family not in ("player", "attack", "plydie"):
+            raise ApiError(f"unknown family: {self.family}", "invalid_family", "run", request_id, 422)
 
     @property
     def projs(self) -> int:
@@ -96,6 +105,48 @@ class WorkbenchSession:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+@dataclass(slots=True)
+class BundleActionState:
+    action_key: str
+    session_id: str | None = None
+    job_id: str | None = None
+    source_path: str | None = None
+    status: str = "empty"
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class BundleSession:
+    bundle_id: str
+    template_set_key: str
+    actions: dict[str, BundleActionState]
+    created_at: str = ""
+    updated_at: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        d = asdict(self)
+        d["actions"] = {k: v.to_dict() if isinstance(v, BundleActionState) else v for k, v in self.actions.items()}
+        return d
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "BundleSession":
+        actions = {}
+        for k, v in d.get("actions", {}).items():
+            if isinstance(v, dict):
+                actions[k] = BundleActionState(**v)
+            else:
+                actions[k] = v
+        return cls(
+            bundle_id=d["bundle_id"],
+            template_set_key=d["template_set_key"],
+            actions=actions,
+            created_at=d.get("created_at", ""),
+            updated_at=d.get("updated_at", ""),
+        )
 
 
 def parse_frames_csv(frames_raw: Any, request_id: str, stage: str) -> list[int]:

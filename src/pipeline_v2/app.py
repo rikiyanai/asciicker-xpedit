@@ -7,7 +7,7 @@ from pathlib import Path
 
 from flask import Flask, Response, jsonify, redirect, request, send_from_directory, send_file
 
-from .config import ensure_dirs, ROOT, EXPORT_DIR
+from .config import ensure_dirs, ROOT, EXPORT_DIR, ENABLED_FAMILIES
 from .models import ApiError, RunConfig, parse_frames_csv
 
 
@@ -38,6 +38,13 @@ from .service import (
     workbench_termpp_stream_status,
     workbench_termpp_stream_frame_path,
     workbench_web_skin_payload,
+    load_template_registry,
+    create_bundle,
+    load_bundle,
+    _is_bundle_session,
+    bundle_action_run,
+    workbench_export_bundle,
+    workbench_web_skin_bundle_payload,
 )
 
 
@@ -209,6 +216,65 @@ def create_app() -> Flask:
     def api_wb_runtime_preflight():
         return jsonify(_runtime_preflight_payload()), 200
 
+    @app.get("/api/workbench/templates")
+    def api_wb_templates():
+        reg = load_template_registry()
+        return jsonify(reg), 200
+
+    @app.post("/api/workbench/bundle/create")
+    def api_wb_bundle_create():
+        req_id = str(uuid.uuid4())
+        try:
+            payload = request.get_json(silent=True) or {}
+            template_set_key = str(payload.get("template_set_key", "")).strip()
+            if not template_set_key:
+                raise ApiError("template_set_key is required", "missing_template_set_key", "workbench", req_id, 400)
+            return jsonify(create_bundle(template_set_key, req_id)), 201
+        except ApiError as e:
+            return _err(e)
+
+    @app.post("/api/workbench/action-grid/apply")
+    def api_wb_action_grid_apply():
+        req_id = str(uuid.uuid4())
+        try:
+            payload = request.get_json(silent=True) or {}
+            bundle_id = str(payload.get("bundle_id", "")).strip()
+            action_key = str(payload.get("action_key", "")).strip()
+            source_path = str(payload.get("source_path", "")).strip()
+            if not bundle_id:
+                raise ApiError("bundle_id is required", "missing_bundle_id", "workbench", req_id, 400)
+            if not action_key:
+                raise ApiError("action_key is required", "missing_action_key", "workbench", req_id, 400)
+            if not source_path:
+                raise ApiError("source_path is required", "missing_source_path", "workbench", req_id, 400)
+            return jsonify(bundle_action_run(bundle_id, action_key, source_path, req_id)), 200
+        except ApiError as e:
+            return _err(e)
+
+    @app.post("/api/workbench/export-bundle")
+    def api_wb_export_bundle():
+        req_id = str(uuid.uuid4())
+        try:
+            payload = request.get_json(silent=True) or {}
+            bundle_id = str(payload.get("bundle_id", "")).strip()
+            if not bundle_id:
+                raise ApiError("bundle_id is required", "missing_bundle_id", "workbench", req_id, 400)
+            return jsonify(workbench_export_bundle(bundle_id, req_id)), 200
+        except ApiError as e:
+            return _err(e)
+
+    @app.post("/api/workbench/web-skin-bundle-payload")
+    def api_wb_web_skin_bundle_payload():
+        req_id = str(uuid.uuid4())
+        try:
+            payload = request.get_json(silent=True) or {}
+            bundle_id = str(payload.get("bundle_id", "")).strip()
+            if not bundle_id:
+                raise ApiError("bundle_id is required", "missing_bundle_id", "workbench", req_id, 400)
+            return jsonify(workbench_web_skin_bundle_payload(bundle_id, req_id)), 200
+        except ApiError as e:
+            return _err(e)
+
     @app.post("/api/upload")
     def api_upload():
         req_id = str(uuid.uuid4())
@@ -366,6 +432,14 @@ def create_app() -> Flask:
             session_id = str(payload.get("session_id", "")).strip()
             if not session_id:
                 raise ApiError("session_id is required", "missing_session_id", "workbench", req_id, 400)
+            if _is_bundle_session(session_id):
+                raise ApiError(
+                    "use /api/workbench/web-skin-bundle-payload for bundle sessions",
+                    "bundle_session_classic_rejected",
+                    "workbench",
+                    req_id,
+                    409,
+                )
             return jsonify(workbench_web_skin_payload(session_id, req_id)), 200
         except ApiError as e:
             return _err(e)

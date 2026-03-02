@@ -11,6 +11,11 @@ EXPORT_DIR = DATA_DIR / "exports"
 PREVIEWS_DIR = DATA_DIR / "previews"
 GATES_DIR = DATA_DIR / "gates"
 TRACES_DIR = DATA_DIR / "traces"
+BUNDLES_DIR = DATA_DIR / "bundles"
+CONFIG_DIR = ROOT / "config"
+SPRITES_DIR = ROOT / "sprites"
+
+ENABLED_FAMILIES: set[str] = {"player", "attack"}
 
 
 def ensure_dirs() -> None:
@@ -23,5 +28,6 @@ def ensure_dirs() -> None:
         PREVIEWS_DIR,
         GATES_DIR,
         TRACES_DIR,
+        BUNDLES_DIR,
     ]:
         path.mkdir(parents=True, exist_ok=True)

@@ -27,9 +27,13 @@ from .config import (
     TRACES_DIR,
     SESSIONS_DIR,
     EXPORT_DIR,
+    BUNDLES_DIR,
+    CONFIG_DIR,
+    SPRITES_DIR,
+    ENABLED_FAMILIES,
 )
 from .gates import gate_g7_geometry, gate_g8_nonempty, gate_g9_handoff
-from .models import ApiError, RunConfig, JobRecord, WorkbenchSession
+from .models import ApiError, RunConfig, JobRecord, WorkbenchSession, BundleSession, BundleActionState
 from .renderer import render_preview_png
 from .storage import save_json, load_json
 from .xp_codec import write_xp, read_xp
@@ -912,6 +916,150 @@ def _sha256(path: Path) -> str:
                 break
             h.update(chunk)
     return h.hexdigest()
+
+
+_template_registry: dict[str, Any] | None = None
+_l0_reference_cache: dict[str, list[Cell]] = {}
+_l0_reference_status: dict[str, str] = {}
+
+
+def load_template_registry() -> dict[str, Any]:
+    global _template_registry
+    if _template_registry is not None:
+        return _template_registry
+    reg_path = CONFIG_DIR / "template_registry.json"
+    if not reg_path.exists():
+        _template_registry = {"template_sets": {}}
+        return _template_registry
+    import json
+    _template_registry = json.loads(reg_path.read_text(encoding="utf-8"))
+    # Validate L0 reference checksums at load time
+    for ts_key, ts in _template_registry.get("template_sets", {}).items():
+        for act_key, act in ts.get("actions", {}).items():
+            family = act.get("family", "")
+            if family not in _l0_reference_status:
+                _load_reference_l0(family)
+    return _template_registry
+
+
+def _load_reference_l0(family: str) -> list[Cell] | None:
+    if family in _l0_reference_cache:
+        return _l0_reference_cache[family]
+    # Find the L0 ref path from registry
+    reg = load_template_registry() if _template_registry is not None else None
+    l0_ref_path: str | None = None
+    l0_ref_sha256: str | None = None
+    if reg:
+        for ts in reg.get("template_sets", {}).values():
+            for act in ts.get("actions", {}).values():
+                if act.get("family") == family:
+                    l0_ref_path = act.get("l0_ref")
+                    l0_ref_sha256 = act.get("l0_ref_sha256")
+                    break
+            if l0_ref_path:
+                break
+    if not l0_ref_path:
+        _l0_reference_status[family] = "no_ref_path"
+        return None
+    full_path = ROOT / l0_ref_path
+    if not full_path.exists():
+        _l0_reference_status[family] = "file_missing"
+        return None
+    actual_sha = _sha256(full_path)
+    if l0_ref_sha256 and actual_sha != l0_ref_sha256:
+        import logging
+        logging.warning(
+            "L0 reference checksum mismatch for family '%s': expected %s, got %s",
+            family, l0_ref_sha256, actual_sha,
+        )
+        _l0_reference_status[family] = "checksum_mismatch"
+        return None
+    parsed = read_xp(full_path)
+    l0_cells = parsed["cells"][0]
+    _l0_reference_cache[family] = l0_cells
+    _l0_reference_status[family] = "ok"
+    return l0_cells
+
+
+def _assert_l0_reference_available(family: str, req_id: str) -> list[Cell]:
+    cells = _load_reference_l0(family)
+    if cells is None:
+        status = _l0_reference_status.get(family, "unknown")
+        if status == "checksum_mismatch":
+            raise ApiError(
+                f"L0 reference checksum mismatch for family '{family}'. "
+                "Update l0_ref_sha256 in template_registry.json.",
+                "invalid_template_reference",
+                "workbench",
+                req_id,
+                422,
+            )
+        raise ApiError(
+            f"L0 reference not available for family '{family}': {status}",
+            "template_reference_unavailable",
+            "workbench",
+            req_id,
+            422,
+        )
+    return cells
+
+
+def _bundle_path(bundle_id: str) -> Path:
+    return BUNDLES_DIR / f"{bundle_id}.json"
+
+
+def create_bundle(template_set_key: str, req_id: str) -> dict[str, Any]:
+    ensure_dirs()
+    reg = load_template_registry()
+    ts = reg.get("template_sets", {}).get(template_set_key)
+    if ts is None:
+        raise ApiError(
+            f"unknown template_set_key: {template_set_key}",
+            "invalid_template_set", "workbench", req_id, 422,
+        )
+    from datetime import UTC, datetime
+    bundle_id = f"b-{uuid.uuid4()}"
+    now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    actions: dict[str, BundleActionState] = {}
+    for act_key in ts["actions"]:
+        actions[act_key] = BundleActionState(action_key=act_key)
+    bundle = BundleSession(
+        bundle_id=bundle_id,
+        template_set_key=template_set_key,
+        actions=actions,
+        created_at=now,
+        updated_at=now,
+    )
+    save_json(_bundle_path(bundle_id), bundle.to_dict())
+    return bundle.to_dict()
+
+
+def load_bundle(bundle_id: str, req_id: str) -> BundleSession:
+    p = _bundle_path(bundle_id)
+    if not p.exists():
+        raise ApiError("bundle not found", "bundle_not_found", "workbench", req_id, 404)
+    return BundleSession.from_dict(load_json(p))
+
+
+def save_bundle(bundle: BundleSession) -> None:
+    from datetime import UTC, datetime
+    bundle.updated_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    save_json(_bundle_path(bundle.bundle_id), bundle.to_dict())
+
+
+def _is_bundle_session(session_id: str) -> bool:
+    """Check if a session_id belongs to any bundle."""
+    if not BUNDLES_DIR.exists():
+        return False
+    for bp in BUNDLES_DIR.glob("*.json"):
+        try:
+            data = load_json(bp)
+            for act in data.get("actions", {}).values():
+                if isinstance(act, dict) and act.get("session_id") == session_id:
+                    return True
+        except Exception:
+            continue
+    return False
 
 
 def _job_path(job_id: str) -> Path:

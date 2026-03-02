@@ -998,51 +998,75 @@ def _digit_to_glyph(v: int) -> int:
     return 0
 
 
-def _build_metadata_layer(cols: int, rows: int, angles: int, anims: list[int],
-                          native_compat: bool = False) -> list[tuple[int, tuple[int, int, int], tuple[int, int, int]]]:
-    # Native XP contract: layer 0 is fully populated (no transparent cells).
-    # bg=(255,255,85) matches native player-0100.xp layer 0.
+Cell = tuple[int, tuple[int, int, int], tuple[int, int, int]]
+
+
+def _assert_native_contract_dims(cols: int, rows: int, stage: str, req_id: str) -> None:
+    """Fail fast if dimensions don't match native 126x80 contract."""
+    if cols != NATIVE_COLS or rows != NATIVE_ROWS:
+        raise ApiError(
+            f"native contract violated: got {cols}x{rows}, expected {NATIVE_COLS}x{NATIVE_ROWS}",
+            "native_compat_dims_gate",
+            stage,
+            req_id,
+            422,
+        )
+
+
+def _build_native_l0_layer(cols: int, rows: int) -> list[Cell]:
+    """Build layer 0: exact native player-0100.xp metadata template.
+
+    Full space fill with bg=(255,255,85) yellow, then stamp 7 metadata cells:
+      row 0: '8','1','8'
+      row 1: '2','4'
+      row 2: '1','F'
+    """
     META_BG = (255, 255, 85)
     META_FG = (0, 0, 0)
-    space_cell = (32, META_FG, META_BG)
-    layer = [space_cell for _ in range(cols * rows)]
+    space_cell: Cell = (32, META_FG, META_BG)
+    layer: list[Cell] = [space_cell] * (cols * rows)
 
-    if native_compat and cols >= 3 and rows >= 3:
-        # Exact native player-0100.xp L0 metadata template.
-        # Row 0: '8','1','8'  Row 1: '2','4'  Row 2: '1','F'
-        def _set(r, c, ch):
-            layer[r * cols + c] = (ord(ch), META_FG, META_BG)
-        _set(0, 0, '8'); _set(0, 1, '1'); _set(0, 2, '8')
-        _set(1, 0, '2'); _set(1, 1, '4')
-        _set(2, 0, '1'); _set(2, 1, 'F')
-    else:
-        if cols > 0 and rows > 0:
-            layer[0] = (_digit_to_glyph(int(angles)), META_FG, META_BG)
-        for i, val in enumerate(anims, start=1):
-            if i >= cols:
-                break
-            layer[i] = (_digit_to_glyph(int(val)), META_FG, META_BG)
+    def _set(r: int, c: int, ch: str) -> None:
+        layer[r * cols + c] = (ord(ch), META_FG, META_BG)
+
+    _set(0, 0, '8'); _set(0, 1, '1'); _set(0, 2, '8')
+    _set(1, 0, '2'); _set(1, 1, '4')
+    _set(2, 0, '1'); _set(2, 1, 'F')
     return layer
 
 
-def _build_animation_index_layer(cols: int, rows: int, cell_h_chars: int) -> list[tuple[int, tuple[int, int, int], tuple[int, int, int]]]:
-    """Build layer 1: per-row animation index countdown within each angle block.
+def _build_native_l1_layer(cols: int, rows: int) -> list[Cell]:
+    """Build layer 1: 9→0 countdown repeating every 10 rows.
 
-    Native XP contract: every cell on row r has glyph = digit(cell_h_chars - 1 - (r % cell_h_chars)),
-    counting down within each angle's block of rows. bg=(255,255,255), fg=(0,0,0).
-    This layer must be fully populated — the engine reads it for animation frame indexing.
+    Native XP contract: every cell on row r has glyph = digit(9 - (r % 10)),
+    bg=(255,255,255), fg=(0,0,0). Fully populated.
     """
     ANIM_BG = (255, 255, 255)
     ANIM_FG = (0, 0, 0)
-    layer = []
+    layer: list[Cell] = []
     for y in range(rows):
-        row_in_block = y % cell_h_chars
-        index_val = cell_h_chars - 1 - row_in_block
+        index_val = NATIVE_CELL_H - 1 - (y % NATIVE_CELL_H)
         glyph = _digit_to_glyph(index_val)
-        cell = (glyph, ANIM_FG, ANIM_BG)
+        cell: Cell = (glyph, ANIM_FG, ANIM_BG)
         for _x in range(cols):
             layer.append(cell)
     return layer
+
+
+def _build_native_player_layers(
+    *,
+    cells_layer2: list[Cell],
+    cols: int,
+    rows: int,
+    stage: str,
+    req_id: str,
+) -> list[list[Cell]]:
+    """Assemble all 4 layers for a native-contract player skin XP."""
+    _assert_native_contract_dims(cols, rows, stage, req_id)
+    l0 = _build_native_l0_layer(cols, rows)
+    l1 = _build_native_l1_layer(cols, rows)
+    l3: list[Cell] = [_transparent_cell() for _ in range(cols * rows)]
+    return [l0, l1, cells_layer2, l3]
 
 
 def _estimate_bg_rgb(im: Image.Image) -> tuple[int, int, int]:
@@ -1466,21 +1490,16 @@ def run_pipeline(cfg: RunConfig, req_id: str) -> dict[str, Any]:
             raise
         raise ApiError(f"pipeline failed reading image: {e}", "pipeline_image_error", "run", req_id, 500)
 
-    blank_layer = [_transparent_cell() for _ in range(cols * rows)]
-    layer0 = _build_metadata_layer(cols, rows, cfg.angles, cfg.frames,
-                                    native_compat=cfg.native_compat)
-    layer1 = _build_animation_index_layer(cols, rows, cell_h_chars)
-    layers = [layer0, layer1, cells_layer2, blank_layer]
-
-    # Hard gate: native compat requires exact dimensions (before writing).
-    if cfg.native_compat and (cols != NATIVE_COLS or rows != NATIVE_ROWS):
-        raise ApiError(
-            f"native_compat gate failed: got {cols}x{rows}, expected {NATIVE_COLS}x{NATIVE_ROWS}",
-            "native_compat_dims_gate",
-            "run",
-            req_id,
-            500,
+    if cfg.native_compat:
+        layers = _build_native_player_layers(
+            cells_layer2=cells_layer2, cols=cols, rows=rows,
+            stage="run", req_id=req_id,
         )
+    else:
+        blank_layer = [_transparent_cell() for _ in range(cols * rows)]
+        layer0 = _build_native_l0_layer(cols, rows)
+        layer1 = _build_native_l1_layer(cols, rows)
+        layers = [layer0, layer1, cells_layer2, blank_layer]
 
     xp_path = EXPORT_DIR / f"{job_id}.xp"
     write_xp(xp_path, cols, rows, layers)
@@ -1636,22 +1655,10 @@ def workbench_export_xp(session_id: str, req_id: str) -> dict[str, Any]:
     if len(cells) != cols * rows:
         raise ApiError("session cell geometry mismatch", "session_geometry_invalid", "workbench", req_id, 422)
 
-    blank = [_transparent_cell() for _ in range(cols * rows)]
-    angles = max(1, int(sess["angles"]))
-    cell_h = max(1, rows // angles) if angles > 0 else rows
-    layer0 = _build_metadata_layer(cols, rows, angles, [int(x) for x in sess["anims"]])
-    layer1 = _build_animation_index_layer(cols, rows, cell_h)
-    layers = [layer0, layer1, cells, blank]
-
-    # Hard gate: reject non-native dimensions (before writing).
-    if cols != NATIVE_COLS or rows != NATIVE_ROWS:
-        raise ApiError(
-            f"export gate failed: got {cols}x{rows}, expected {NATIVE_COLS}x{NATIVE_ROWS}",
-            "native_compat_dims_gate",
-            "workbench",
-            req_id,
-            422,
-        )
+    layers = _build_native_player_layers(
+        cells_layer2=cells, cols=cols, rows=rows,
+        stage="workbench", req_id=req_id,
+    )
 
     out = EXPORT_DIR / f"session-{session_id}.xp"
     write_xp(out, cols, rows, layers)

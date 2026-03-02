@@ -798,3 +798,149 @@ Simplification paths to evaluate:
   - Evaluate whether headed-only testing is sufficient for the milestone.
   - If headless is required: implement force-viewport preflight in bootstrap.
   - Fix the rolling-check false positive in line 333 regardless (it's a correctness bug).
+
+### 2026-03-01T21:05Z — Solo-only load contract + A/B matrix verification
+
+**Environment mutation log (logged before execution):**
+- Killed existing server, wiped `runtime/` and `output/playwright/*`, `output/ralph/`
+- Rebuilt runtime: `./scripts/build_termpp_skin_lab_static.sh /Users/r/Downloads/asciicker-Y9-2/.web`
+- Synced bootstrap: `cp web/termpp_flat_map_bootstrap.js runtime/.../flat_map_bootstrap.js`
+- Created branch `fix/solo-only-load-contract` from master
+- Committed: removed StartGame from injection path, enforced solo-only Load contract
+- Restarted server on port 5071
+
+**Structural XP comparison (Section 3):**
+```
+native player-0100:     126x80, 4 layers, 10,080 cells/layer, 403KB decomp
+pipeline reliability:   252x160, 4 layers, 40,320 cells/layer, 1.6MB decomp (4.0x native)
+pipeline fidelity-rr8:  378x240, 4 layers, 90,720 cells/layer, 3.6MB decomp (9.0x native)
+pipeline skeleton:      240x40, 4 layers, 9,600 cells/layer, 384KB decomp (~1.0x native)
+```
+All structurally valid REXPaint v-1 with matching expected_payload. Divergence is purely dimensional.
+
+**A/B matrix runs (N=5 per cell, 20 total):**
+
+Control: Native XP (player-0100.xp, 126x80) + minimal_2x2:
+| # | error | fmd_classification | validity_status | passed | rem_crash | mem_oob | moved |
+|---|-------|--------------------|-----------------|--------|-----------|---------|-------|
+| 1 | invalid_run | unknown | invalid_run | False | 0 | 0 | True |
+| 2 | invalid_run | unknown | invalid_run | False | 0 | 0 | True |
+| 3 | invalid_run | unknown | invalid_run | False | 0 | 0 | True |
+| 4 | invalid_run | unknown | invalid_run | False | 0 | 0 | True |
+| 5 | invalid_run | unknown | invalid_run | False | 0 | 0 | True |
+
+Control: Native XP + game_map_y8:
+| # | error | fmd_classification | validity_status | passed | rem_crash | mem_oob | moved |
+|---|-------|--------------------|-----------------|--------|-----------|---------|-------|
+| 1 | invalid_run | unknown | invalid_run | False | 0 | 0 | True |
+| 2 | invalid_run | unknown | invalid_run | False | 0 | 0 | True |
+| 3 | invalid_run | unknown | invalid_run | False | 0 | 0 | True |
+| 4 | invalid_run | unknown | invalid_run | False | 0 | 0 | True |
+| 5 | invalid_run | unknown | invalid_run | False | 0 | 0 | True |
+
+Case: Pipeline XP (reliability, 252x160) + minimal_2x2:
+| # | error | fmd_classification | validity_status | passed | rem_crash | mem_oob | moved |
+|---|-------|--------------------|-----------------|--------|-----------|---------|-------|
+| 1 | wasm_crash | freeze_world_ready_dropped | valid | False | 89 | 2258 | False |
+| 2 | invalid_run | unknown | invalid_run | False | 0 | 0 | True |
+| 3 | wasm_crash | freeze_world_ready_dropped | valid | False | 0 | 50 | False |
+| 4 | invalid_run | unknown | invalid_run | False | 91 | 441 | True |
+| 5 | wasm_crash | freeze_world_ready_dropped | valid | False | 91 | 2252 | False |
+
+Case: Pipeline XP (reliability, 252x160) + game_map_y8:
+| # | error | fmd_classification | validity_status | passed | rem_crash | mem_oob | moved |
+|---|-------|--------------------|-----------------|--------|-----------|---------|-------|
+| 1 | wasm_crash | freeze_world_ready_dropped | valid | False | 88 | 2196 | False |
+| 2 | invalid_run | unknown | invalid_run | False | 3 | 567 | True |
+| 3 | wasm_crash | freeze_world_ready_dropped | valid | False | 0 | 51 | False |
+| 4 | wasm_crash | freeze_world_ready_dropped | valid | False | 88 | 2183 | False |
+| 5 | wasm_crash | freeze_world_ready_dropped | valid | False | 89 | 2192 | False |
+
+**Verdict tuples (per anti-evasion rule #1):**
+- Native control: 0/10 wasm_crash, 0/10 passed, 10/10 moved=True, 0 total WASM crashes
+- Pipeline case: 7/10 wasm_crash, 0/10 passed, 3/10 moved=True (all with crashes), 539 rem + 9,937 mem OOB total
+
+**Hypothesis impact (as of T21:05Z — SUPERSEDED by T22:46Z below):**
+
+> **NOTE:** The following hypothesis assessments were based on the initial A/B matrix
+> (20 runs) before the A/A/B causal check and isolation testing. The T22:46Z entry
+> below revises H3 from SUPPORTED to REJECTED and H5 from RULED OUT to SUBSUMED BY H2.
+
+| Hypothesis | Impact (T21:05Z) | Revised (T22:46Z) |
+|-----------|-------------------|-------------------|
+| H1 (focus theft) | mostly ruled_out | unchanged |
+| H2 (overlay race) | partially supported | **STRONGLY SUPPORTED** (injection race) |
+| H3 (XP format / dimensions) | SUPPORTED as dimensional mismatch | **REJECTED** (A/A/B: same dims still crash) |
+| H4 (map/spawn init bug) | open (pos regression) | unchanged |
+| H5 (runtime sandbox instability) | RULED OUT | **SUBSUMED BY H2** (instability IS the race) |
+| H_NEW: pos reporting regression | NEW/OPEN | unchanged |
+
+**Evidence files:**
+- `docs/research/ascii/verification/ab-matrix-2026-03-01.json` (20 runs, full data)
+- `docs/research/ascii/verification/ab-matrix-2026-03-01.md` (formatted report)
+- Raw: `output/playwright/workbench-png-to-skin-2026-03-01T21-*`
+
+### 2026-03-01T22:46Z — Crash signal exposure, A/A/B causal check, layer fix, and isolation testing
+
+**Phase 1: Crash signal exposure (cf54797)**
+- Patched `scripts/workbench_png_to_skin_test_playwright.mjs` to expose crash signals (`remainder_by_zero`, `mem_oob`) independently of `runValidity` status
+- Added `invalid_run_with_crash_signals` flag to detect hidden crashes behind `invalid_run`
+- This prevents `invalid_run` from masking crash evidence in future experiments
+
+**Phase 2: A/A/B causal dimension check (15 runs)**
+- Created resized pipeline XP at 126x80 (cropped top-left quadrant of 252x160)
+- Ran A/A/B: A=native 126x80, A2=pipeline-resized 126x80, B=pipeline 252x160
+- Results:
+  - A (native 126x80): 0/5 crashes, 5/5 moved — clean
+  - A2 (pipeline 126x80): **5/5 wasm_crash** — identical crash profile to B
+  - B (pipeline 252x160): 4/5 wasm_crash + 1 invalid_run_with_crash_signals
+- **FINDING: Dimensions alone do NOT explain the crash.** A2 has same dimensions as A but crashes identically to B.
+- Evidence: `docs/research/ascii/verification/aab-causal-check-2026-03-01.md`
+
+**Phase 3: Layer structure fix (b196f39)**
+- Analyzed native XP layer contract:
+  - Layer 0: metadata (angle/frame info), bg=(255,255,85), all cells populated
+  - Layer 1: animation frame indices (per-row countdown 9→0), bg=(255,255,255), all cells populated
+  - Layer 2: visual sprite content
+  - Layer 3: additional visual content
+- Pipeline had: sparse layer 0, blank layer 1
+- Fixed `_build_metadata_layer()` and added `_build_animation_index_layer()` in `src/pipeline_v2/service.py`
+- **Post-fix matrix (5 runs at 252x160): 4/5 wasm_crash — layer fix did NOT reduce crashes**
+
+**Phase 4: Isolation testing (systematic hypothesis elimination)**
+- Hybrid test: native content + blank layer 1 → **0/5 crashes** (layer structure not the cause)
+- Dimension variations (126x40, 126x80, 252x160): identical crash patterns (size not the cause)
+- Content isolation:
+  - Uniform glyph 219 at 126x80: 0/5 crashes in first run
+  - Same uniform-219 file retested: **1/5 crashes** (stochastic!)
+  - Fill density gradient (1%, 10%, 50%, 100%): all show crashes
+- **CRITICAL FINDING: Identical XP files produce different results across runs — crash is stochastic**
+- Native XP: consistently 0/5 crashes across repeated tests (small file, fast injection)
+- Pipeline XP: 4-5/5 crashes (large file, slow injection)
+
+**Phase 5: Root cause identification**
+- The crash is a **race condition** in `override_mode=mounted`:
+  - Mounted mode writes XP bytes to Emscripten FS **while WASM is already running**
+  - Larger files (pipeline 18KB+) take longer to write, widening the race window
+  - Smaller files (native 4.2KB) inject fast, rarely triggering the race
+  - This explains the file-size correlation and stochastic behavior
+- The geometry contract improvement (b196f39) is valid for XP format correctness but does not fix the crash
+
+**Hypothesis impact:**
+| Hypothesis | Status |
+|-----------|--------|
+| H1 (focus theft) | ruled_out — unchanged |
+| H2 (overlay race → injection race) | **UPGRADED → STRONGLY SUPPORTED**: crash is stochastic, correlates with file size / injection duration |
+| H3 (XP format incompatible) | **REJECTED**: dimensions, layers, cell content all eliminated by isolation tests |
+| H4 (map/spawn init bug) | remains open for pos=[None,None,None] (separate from crash) |
+| H5 (runtime sandbox instability) | **SUBSUMED BY H2**: instability is the injection race, not ambient sandbox drift |
+
+**Evidence files:**
+- A/A/B check: `docs/research/ascii/verification/aab-causal-check-2026-03-01.md`
+- Updated A/B matrix: `docs/research/ascii/verification/ab-matrix-2026-03-01.md`
+- Layer fix commit: `b196f39`
+- Crash signal exposure commit: `cf54797`
+
+**Next steps:**
+1. Fix the injection race: gate WASM startup until XP injection completes, or use pre-boot injection mode
+2. Investigate pos=[None,None,None] classification regression (separate PR)

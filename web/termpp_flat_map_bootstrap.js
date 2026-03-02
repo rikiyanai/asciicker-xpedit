@@ -563,7 +563,13 @@
           // Preserve synchronous Load() ordering when StartGame wrapper already applied the flat map.
           // Async deferral here can reorder Load/Resize/frame-start and cause visible spawn/camera glitches.
           if (appliedStamp) {
-            return originalLoad.apply(window, args);
+            var ret = originalLoad.apply(window, args);
+            // Solo primary path: Load() is the entry point (not StartGame).
+            // Schedule auto-newgame advance so the menu gets Enter pulses.
+            if (AUTO_NEW_GAME && !startGuardActive) {
+              setTimeout(function () { scheduleAutoNewGameAdvance(); }, 500);
+            }
+            return ret;
           }
           log("[DIAG] Load wrapper async path hit (appliedStamp=0) — map override deferred before originalLoad");
           applyFlatMapOverride(false)
@@ -571,6 +577,10 @@
             .finally(function () {
               log("[DIAG] Load wrapper async path complete — calling originalLoad now");
               originalLoad.apply(window, args);
+              // Solo primary path (async): schedule auto-newgame after deferred Load.
+              if (AUTO_NEW_GAME && !startGuardActive) {
+                setTimeout(function () { scheduleAutoNewGameAdvance(); }, 500);
+              }
             });
         };
         wrapped.__flatWrapped = true;

@@ -9,6 +9,17 @@ from flask import Flask, Response, jsonify, redirect, request, send_from_directo
 
 from .config import ensure_dirs, ROOT, EXPORT_DIR
 from .models import ApiError, RunConfig, parse_frames_csv
+
+
+def _as_bool(v: object, default: bool = True) -> bool:
+    """Parse a JSON/query-string value as boolean. 'false'/0/None → False."""
+    if v is None:
+        return default
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, str):
+        return v.lower() not in ("false", "0", "no", "")
+    return bool(v)
 from .service import (
     upload_image,
     analyze_image,
@@ -231,6 +242,7 @@ def create_app() -> Flask:
                 render_resolution=int(payload.get("render_resolution", 12)),
                 bg_mode=str(payload.get("bg_mode", "key_color")),
                 bg_tolerance=int(payload.get("bg_tolerance", 8)),
+                native_compat=_as_bool(payload.get("native_compat"), default=True),
             )
             return jsonify(run_pipeline(cfg, req_id)), 200
         except ApiError as e:

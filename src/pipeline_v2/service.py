@@ -945,8 +945,9 @@ def load_template_registry() -> dict[str, Any]:
 def _load_reference_l0(family: str) -> list[Cell] | None:
     if family in _l0_reference_cache:
         return _l0_reference_cache[family]
-    # Find the L0 ref path from registry
-    reg = load_template_registry() if _template_registry is not None else None
+    # Find the L0 ref path from registry (load_template_registry is safe to call —
+    # it assigns _template_registry before iterating actions, preventing recursion)
+    reg = load_template_registry()
     l0_ref_path: str | None = None
     l0_ref_sha256: str | None = None
     if reg:
@@ -1595,14 +1596,16 @@ def run_pipeline(cfg: RunConfig, req_id: str) -> dict[str, Any]:
                     422,
                 )
             if cfg.native_compat:
-                # Lock to native WASM engine contract: 126x80 player skin.
-                cell_h_chars = NATIVE_CELL_H
+                # Resolve effective target dims: explicit override or family default
+                eff_cols = cfg.target_cols if cfg.target_cols is not None else NATIVE_COLS
+                eff_rows = cfg.target_rows if cfg.target_rows is not None else NATIVE_ROWS
+                cell_h_chars = eff_rows // max(1, cfg.angles)
                 total_tile_cols = semantic_frames * cfg.projs
-                cell_w_chars = NATIVE_COLS // max(1, total_tile_cols)
-                if cell_w_chars < 1 or cell_w_chars * total_tile_cols != NATIVE_COLS:
+                cell_w_chars = eff_cols // max(1, total_tile_cols)
+                if cell_w_chars < 1 or cell_w_chars * total_tile_cols != eff_cols:
                     raise ApiError(
                         f"native_compat: frames={semantic_frames} projs={cfg.projs} "
-                        f"cannot tile evenly into {NATIVE_COLS} cols",
+                        f"cannot tile evenly into {eff_cols} cols",
                         "native_compat_geometry",
                         "run",
                         req_id,
@@ -1737,8 +1740,8 @@ def run_pipeline(cfg: RunConfig, req_id: str) -> dict[str, Any]:
         raise ApiError(f"pipeline failed reading image: {e}", "pipeline_image_error", "run", req_id, 500)
 
     if cfg.native_compat:
-        layers = _build_native_player_layers(
-            cells_layer2=cells_layer2, cols=cols, rows=rows,
+        layers = _build_native_layers(
+            family=cfg.family, cells_layer2=cells_layer2, cols=cols, rows=rows,
             stage="run", req_id=req_id,
         )
     else:
@@ -1792,6 +1795,7 @@ def run_pipeline(cfg: RunConfig, req_id: str) -> dict[str, Any]:
         "cell_w_chars": cell_w_chars,
         "cell_h_chars": cell_h_chars,
         "checksum": _sha256(xp_path),
+        "family": cfg.family,
     }
 
     record = JobRecord(
@@ -1860,7 +1864,9 @@ def workbench_load_from_job(job_id: str, req_id: str) -> dict[str, Any]:
         grid_rows=height,
         cells=cells,
     )
-    save_json(_session_path(session_id), sess.to_dict())
+    sess_dict = sess.to_dict()
+    sess_dict["family"] = str(meta.get("family", "player"))
+    save_json(_session_path(session_id), sess_dict)
 
     return {
         "session_id": session_id,
@@ -1882,6 +1888,65 @@ def workbench_load_from_job(job_id: str, req_id: str) -> dict[str, Any]:
         "source_cuts_v": [],
         "source_cuts_h": [],
         "cells": cells,
+    }
+
+
+def bundle_action_run(bundle_id: str, action_key: str, source_path: str, req_id: str) -> dict[str, Any]:
+    """Run pipeline for one action within a bundle, populating RunConfig from registry."""
+    bundle = load_bundle(bundle_id, req_id)
+    reg = load_template_registry()
+    ts = reg.get("template_sets", {}).get(bundle.template_set_key)
+    if ts is None:
+        raise ApiError("bundle references unknown template set", "invalid_template_set", "workbench", req_id, 422)
+    action_spec = ts.get("actions", {}).get(action_key)
+    if action_spec is None:
+        raise ApiError(f"action '{action_key}' not in template set", "invalid_action_key", "workbench", req_id, 422)
+    family = action_spec["family"]
+    if family not in ENABLED_FAMILIES:
+        raise ApiError(
+            f"Family '{family}' is not enabled in the current phase.",
+            "phase_not_enabled", "workbench", req_id, 422,
+        )
+
+    xp_dims = action_spec["xp_dims"]
+    target_cols, target_rows = xp_dims[0], xp_dims[1]
+
+    cfg = RunConfig(
+        source_path=source_path,
+        name=f"bundle-{bundle_id}-{action_key}",
+        angles=action_spec["angles"],
+        frames=action_spec["frames"],
+        native_compat=True,
+        target_cols=target_cols,
+        target_rows=target_rows,
+        family=family,
+    )
+    result = run_pipeline(cfg, req_id)
+
+    # Create workbench session from the job
+    job_id = result["job_id"]
+    session_result = workbench_load_from_job(job_id, req_id)
+    session_id = session_result["session_id"]
+
+    # Update bundle state
+    action_state = bundle.actions.get(action_key)
+    if action_state is None:
+        action_state = BundleActionState(action_key=action_key)
+        bundle.actions[action_key] = action_state
+    action_state.session_id = session_id
+    action_state.job_id = job_id
+    action_state.source_path = source_path
+    action_state.status = "converted"
+    save_bundle(bundle)
+
+    return {
+        "bundle_id": bundle_id,
+        "action_key": action_key,
+        "job_id": job_id,
+        "session_id": session_id,
+        "grid_cols": target_cols,
+        "grid_rows": target_rows,
+        "family": family,
     }
 
 
@@ -2269,6 +2334,121 @@ def workbench_web_skin_payload(session_id: str, req_id: str) -> dict[str, Any]:
         "xp_size_bytes": len(raw),
         "xp_b64": base64.b64encode(raw).decode("ascii"),
         "override_names": override_names,
+        "reload_player_name": "player",
+    }
+
+
+def _action_override_names(family: str, ahsw_range: str) -> list[str]:
+    """Generate override filenames for a family/AHSW range."""
+    names: list[str] = []
+    if ahsw_range == "all_16":
+        prefix_map = {
+            "player": ["player"],
+            "plydie": ["plydie"],
+        }
+        prefixes = prefix_map.get(family, [family])
+        for prefix in prefixes:
+            if prefix == "player":
+                names.append("player-nude.xp")
+            for i in range(16):
+                names.append(f"{prefix}-{i:04b}.xp")
+    elif ahsw_range == "weapon_gte_1":
+        # AHS ∈ {0,1}³, W=1 → 8 files. Weapon bit (bit 0) must be 1.
+        for i in range(16):
+            if i & 1:  # W bit is set
+                names.append(f"{family}-{i:04b}.xp")
+    return names
+
+
+def workbench_export_bundle(bundle_id: str, req_id: str) -> dict[str, Any]:
+    """Export all converted actions in a bundle."""
+    bundle = load_bundle(bundle_id, req_id)
+    reg = load_template_registry()
+    ts = reg.get("template_sets", {}).get(bundle.template_set_key)
+    if ts is None:
+        raise ApiError("bundle references unknown template set", "invalid_template_set", "workbench", req_id, 422)
+
+    exports: dict[str, dict[str, Any]] = {}
+    for act_key, act_state in bundle.actions.items():
+        if not act_state.session_id:
+            continue
+        action_spec = ts.get("actions", {}).get(act_key, {})
+        family = action_spec.get("family", "player")
+        if family not in ENABLED_FAMILIES:
+            continue
+        export = workbench_export_xp(act_state.session_id, req_id)
+        exports[act_key] = {
+            "session_id": act_state.session_id,
+            "xp_path": export["xp_path"],
+            "checksum": export["checksum"],
+            "family": family,
+        }
+
+    # Check required actions
+    for act_key, action_spec in ts.get("actions", {}).items():
+        if action_spec.get("required") and act_key not in exports:
+            raise ApiError(
+                f"required action '{act_key}' not converted",
+                "bundle_incomplete", "workbench", req_id, 422,
+            )
+
+    return {
+        "bundle_id": bundle_id,
+        "exports": exports,
+    }
+
+
+def workbench_web_skin_bundle_payload(bundle_id: str, req_id: str) -> dict[str, Any]:
+    """Build per-action XP bytes + target filenames for bundle WASM injection."""
+    bundle = load_bundle(bundle_id, req_id)
+    reg = load_template_registry()
+    ts = reg.get("template_sets", {}).get(bundle.template_set_key)
+    if ts is None:
+        raise ApiError("bundle references unknown template set", "invalid_template_set", "workbench", req_id, 422)
+
+    actions_payload: dict[str, dict[str, Any]] = {}
+    unmapped_families: list[str] = []
+
+    for act_key, action_spec in ts.get("actions", {}).items():
+        family = action_spec.get("family", "")
+        if family not in ENABLED_FAMILIES:
+            unmapped_families.append(family)
+            continue
+        act_state = bundle.actions.get(act_key)
+        if not act_state or not act_state.session_id:
+            if not action_spec.get("required"):
+                unmapped_families.append(family)
+                continue
+            raise ApiError(
+                f"required action '{act_key}' not converted",
+                "bundle_incomplete", "workbench", req_id, 422,
+            )
+
+        # Phase gate check
+        if family not in ENABLED_FAMILIES:
+            raise ApiError(
+                f"Family '{family}' is not enabled in the current phase.",
+                "phase_not_enabled", "workbench", req_id, 422,
+            )
+
+        export = workbench_export_xp(act_state.session_id, req_id)
+        xp_path = Path(export["xp_path"]).expanduser().resolve()
+        raw = xp_path.read_bytes()
+        ahsw_range = action_spec.get("ahsw_range", "all_16")
+        override_names = _action_override_names(family, ahsw_range)
+
+        actions_payload[act_key] = {
+            "xp_b64": base64.b64encode(raw).decode("ascii"),
+            "override_names": override_names,
+            "xp_size_bytes": len(raw),
+            "checksum": export["checksum"],
+            "family": family,
+        }
+
+    return {
+        "bundle_id": bundle_id,
+        "actions": actions_payload,
+        "unmapped_families": unmapped_families,
         "reload_player_name": "player",
     }
 

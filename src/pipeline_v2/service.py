@@ -1161,6 +1161,30 @@ def _assert_native_contract_dims(cols: int, rows: int, stage: str, req_id: str) 
         )
 
 
+# Family dimension contracts from registry (ground truth)
+_FAMILY_DIMS: dict[str, tuple[int, int]] = {
+    "player": (126, 80),
+    "attack": (144, 80),
+    "plydie": (110, 88),
+}
+
+
+def _assert_native_dims(cols: int, rows: int, family: str, stage: str, req_id: str) -> None:
+    """Fail fast if dimensions don't match family's native contract."""
+    expected = _FAMILY_DIMS.get(family)
+    if expected is None:
+        raise ApiError(f"unknown family for dims check: {family}", "unknown_family", stage, req_id, 422)
+    exp_cols, exp_rows = expected
+    if cols != exp_cols or rows != exp_rows:
+        raise ApiError(
+            f"native contract violated for {family}: got {cols}x{rows}, expected {exp_cols}x{exp_rows}",
+            "native_compat_dims_gate",
+            stage,
+            req_id,
+            422,
+        )
+
+
 def _build_native_l0_layer(cols: int, rows: int) -> list[Cell]:
     """Build layer 0: exact native player-0100.xp metadata template.
 
@@ -1215,6 +1239,80 @@ def _build_native_player_layers(
     l1 = _build_native_l1_layer(cols, rows)
     l3: list[Cell] = [_transparent_cell() for _ in range(cols * rows)]
     return [l0, l1, cells_layer2, l3]
+
+
+def _build_native_attack_layers(
+    *,
+    cells_layer2: list[Cell],
+    cols: int,
+    rows: int,
+    stage: str,
+    req_id: str,
+) -> list[list[Cell]]:
+    """Assemble all 4 layers for a native-contract attack skin XP.
+
+    Uses dynamic L0 from reference attack-0001.xp (dense border art).
+    Reuses row-based L1 countdown (ship-gated pattern).
+    """
+    _assert_native_dims(cols, rows, "attack", stage, req_id)
+    l0_ref = _assert_l0_reference_available("attack", req_id)
+    l0: list[Cell] = list(l0_ref)  # copy from reference
+    l1 = _build_native_l1_layer(cols, rows)
+    l3: list[Cell] = [_transparent_cell() for _ in range(cols * rows)]
+    return [l0, l1, cells_layer2, l3]
+
+
+def _build_native_death_layers(
+    *,
+    cells_layer2: list[Cell],
+    cols: int,
+    rows: int,
+    stage: str,
+    req_id: str,
+) -> list[list[Cell]]:
+    """Assemble all 3 layers for a native-contract plydie/death skin XP.
+
+    Uses dynamic L0 from reference plydie-0000.xp (dense border art).
+    Reuses row-based L1 countdown.
+    Note: death cell_h=11 != NATIVE_CELL_H=10; L1 cycle period difference
+    deferred to Phase 2.
+    """
+    _assert_native_dims(cols, rows, "plydie", stage, req_id)
+    l0_ref = _assert_l0_reference_available("plydie", req_id)
+    l0: list[Cell] = list(l0_ref)
+    l1 = _build_native_l1_layer(cols, rows)
+    return [l0, l1, cells_layer2]
+
+
+def _build_native_layers(
+    *,
+    family: str,
+    cells_layer2: list[Cell],
+    cols: int,
+    rows: int,
+    stage: str,
+    req_id: str,
+) -> list[list[Cell]]:
+    """Dispatch to family-specific native layer builder."""
+    if family == "player":
+        return _build_native_player_layers(
+            cells_layer2=cells_layer2, cols=cols, rows=rows,
+            stage=stage, req_id=req_id,
+        )
+    if family == "attack":
+        return _build_native_attack_layers(
+            cells_layer2=cells_layer2, cols=cols, rows=rows,
+            stage=stage, req_id=req_id,
+        )
+    if family == "plydie":
+        return _build_native_death_layers(
+            cells_layer2=cells_layer2, cols=cols, rows=rows,
+            stage=stage, req_id=req_id,
+        )
+    raise ApiError(
+        f"no native builder for family '{family}'",
+        "unknown_family_builder", stage, req_id, 422,
+    )
 
 
 def _estimate_bg_rgb(im: Image.Image) -> tuple[int, int, int]:
@@ -1803,8 +1901,11 @@ def workbench_export_xp(session_id: str, req_id: str) -> dict[str, Any]:
     if len(cells) != cols * rows:
         raise ApiError("session cell geometry mismatch", "session_geometry_invalid", "workbench", req_id, 422)
 
-    layers = _build_native_player_layers(
-        cells_layer2=cells, cols=cols, rows=rows,
+    # Read family from session metadata; default to "player" for pre-existing sessions
+    family = str(sess.get("family", "player"))
+
+    layers = _build_native_layers(
+        family=family, cells_layer2=cells, cols=cols, rows=rows,
         stage="workbench", req_id=req_id,
     )
 

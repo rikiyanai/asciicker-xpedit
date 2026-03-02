@@ -637,6 +637,22 @@
     return { mode: "createDataFile" };
   }
 
+  // ── Pre-boot XP injection helpers ──
+  // Resets iframe and waits for fresh WASM load (calledRun=true) before returning.
+  // Caller then injects XP files via injectXpBytesIntoWebbuild — BEFORE Load() is
+  // called, eliminating the race window that mounted mode has.
+  async function resetWebbuildForPreboot() {
+    stopWebbuildReadyPoll();
+    const frame = $("webbuildFrame");
+    if (frame) {
+      try { frame.src = "about:blank"; } catch (_e) {}
+      state.webbuild.loaded = false;
+      state.webbuild.ready = false;
+      state.webbuild.expectedSrc = "";
+    }
+    return await waitForWebbuildReady();
+  }
+
   async function waitForWebbuildReady(timeoutMs = WEBBUILD_READY_TIMEOUT_MS) {
     if (!(await ensureRuntimePreflight({ silent: true }))) {
       setWebbuildState("Skin dock blocked (runtime preflight failed)", "err");
@@ -890,23 +906,28 @@
       }
       const t0 = Date.now();
       const timings = {};
-      status("Preparing flat arena runtime for skin test...", "warn");
-      const prep = await prepareWebbuildForSkinApply({
-        force_restart: !!opts.force_restart,
-        restart_if_overlay_hidden: opts.restart_if_overlay_hidden !== false,
-      });
-      timings.prepare_ms = Date.now() - t0;
-      if (!prep.ready) {
-        status("Webbuild not ready yet; wait for load to finish", "warn");
-        try {
-          $("webbuildOut").textContent = JSON.stringify({
-            stage: "prepare_webbuild_not_ready",
-            prep,
-            timings,
-            webbuild_state: String($("webbuildState")?.textContent || ""),
-          }, null, 2);
-        } catch (_e) {}
-        return;
+      // ── Preboot vs mounted: prep diverges here ──
+      let prep = null;
+      if (OVERRIDE_MODE !== "preboot") {
+        // Mounted: load/reload iframe first, wait for WASM ready, then inject.
+        status("Preparing flat arena runtime for skin test...", "warn");
+        prep = await prepareWebbuildForSkinApply({
+          force_restart: !!opts.force_restart,
+          restart_if_overlay_hidden: opts.restart_if_overlay_hidden !== false,
+        });
+        timings.prepare_ms = Date.now() - t0;
+        if (!prep.ready) {
+          status("Webbuild not ready yet; wait for load to finish", "warn");
+          try {
+            $("webbuildOut").textContent = JSON.stringify({
+              stage: "prepare_webbuild_not_ready",
+              prep,
+              timings,
+              webbuild_state: String($("webbuildState")?.textContent || ""),
+            }, null, 2);
+          } catch (_e) {}
+          return;
+        }
       }
       try {
         const tSave = Date.now();
@@ -923,7 +944,7 @@
           return;
         }
         timings.save_session_ms = Date.now() - tSave;
-        status(prep.restarted ? "Reloaded preview; exporting XP skin payload..." : "Exporting XP skin payload...", "warn");
+        status(prep && prep.restarted ? "Reloaded preview; exporting XP skin payload..." : "Exporting XP skin payload...", "warn");
         const tPayload = Date.now();
         const r = await fetch("/api/workbench/web-skin-payload", {
           method: "POST",
@@ -937,13 +958,29 @@
           status("Web skin payload failed", "err");
           return;
         }
-        const win = webbuildFrameWindow();
         status("Injecting XP into flat arena runtime...", "warn");
         const tInject = Date.now();
-        const inject = await injectXpBytesIntoWebbuild(win, b64ToUint8Array(j.xp_b64 || ""), {
-          override_names: j.override_names,
-          reload_player_name: String(j.reload_player_name || "player"),
-        });
+        const xpBytes = b64ToUint8Array(j.xp_b64 || "");
+        let inject;
+        if (OVERRIDE_MODE === "preboot") {
+          // Preboot: reset iframe, wait for fresh WASM, inject BEFORE Load().
+          if (!(await resetWebbuildForPreboot())) {
+            status("Webbuild not ready after preboot reload", "err");
+            return;
+          }
+          const win = webbuildFrameWindow();
+          inject = await injectXpBytesIntoWebbuild(win, xpBytes, {
+            override_names: j.override_names,
+            reload_player_name: String(j.reload_player_name || "player"),
+          });
+          inject.preboot = true;
+        } else {
+          const win = webbuildFrameWindow();
+          inject = await injectXpBytesIntoWebbuild(win, xpBytes, {
+            override_names: j.override_names,
+            reload_player_name: String(j.reload_player_name || "player"),
+          });
+        }
         timings.inject_ms = Date.now() - tInject;
         timings.total_ms = Date.now() - t0;
         $("webbuildOut").textContent = JSON.stringify({
@@ -1002,22 +1039,39 @@
   async function applyUploadedXpBytesToWebbuild(fileName, xpBytes) {
     await runWebbuildSkinAction("upload skin", async () => {
       if (!(await ensureRuntimePreflight({ refresh: true }))) return;
-      const prep = await prepareWebbuildForSkinApply({ force_restart: true, restart_if_overlay_hidden: true });
-      if (!prep.ready) {
-        status("Webbuild not ready; preview failed to load", "err");
-        return;
-      }
-      try {
+      const override_names = WEBBUILD_DEFAULT_OVERRIDE_NAMES;
+      let inject, prep = null;
+      if (OVERRIDE_MODE === "preboot") {
+        // Preboot: reset iframe, wait for fresh WASM (calledRun=true), then inject
+        // XP files BEFORE Load() — no race because game loop hasn't started yet.
+        if (!(await resetWebbuildForPreboot())) {
+          status("Webbuild not ready after preboot reload", "err");
+          return;
+        }
         const win = webbuildFrameWindow();
-        const override_names = WEBBUILD_DEFAULT_OVERRIDE_NAMES;
-        const inject = await injectXpBytesIntoWebbuild(win, xpBytes, {
+        inject = await injectXpBytesIntoWebbuild(win, xpBytes, {
           override_names,
           reload_player_name: "player",
         });
+        inject.preboot = true;
+      } else {
+        prep = await prepareWebbuildForSkinApply({ force_restart: true, restart_if_overlay_hidden: true });
+        if (!prep.ready) {
+          status("Webbuild not ready; preview failed to load", "err");
+          return;
+        }
+        const win = webbuildFrameWindow();
+        inject = await injectXpBytesIntoWebbuild(win, xpBytes, {
+          override_names,
+          reload_player_name: "player",
+        });
+      }
+      try {
         state.webbuild.uploadedXpBytes = xpBytes;
         state.webbuild.uploadedXpName = fileName || "upload.xp";
         $("webbuildOut").textContent = JSON.stringify({
           mode: "upload_test_skin",
+          override_mode: OVERRIDE_MODE,
           file: state.webbuild.uploadedXpName,
           prep,
           inject,
@@ -6028,10 +6082,12 @@
           progressValue: progressEl ? Number(progressEl.value || 0) : null,
           progressMax: progressEl ? Number(progressEl.max || 0) : null,
           overlayVisible: webbuildLoginOverlayVisible(win),
+          prebootApplied: win.__prebootXpApplied || null,
         };
       } catch (e) {
         out.iframeError = String(e);
       }
+      out.overrideMode = OVERRIDE_MODE;
       return out;
     },
     openWebbuild: (forceFresh = true) => {

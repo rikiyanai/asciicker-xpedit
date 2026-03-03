@@ -1,0 +1,75 @@
+{
+  "template_sets": {
+    "player_native_idle_only": {
+      "label": "Player Skin (Idle Only)",
+      "actions": {
+        "idle": {
+          "family": "player",
+          "label": "Idle / Walk",
+          "required": true,
+          "xp_dims": [126, 80],
+          "angles": 8,
+          "frames": [1, 8],
+          "projs": 2,
+          "cell_w": 7,
+          "cell_h": 10,
+          "layers": 4,
+          "ahsw_range": "all_16",
+          "l0_ref": "sprites/player-0100.xp",
+          "l0_ref_sha256": "073bd74099536d9b2f0b1bab074a485060e2f135a1f309ec759d9a94f15c7e9c"
+        }
+      }
+    },
+    "player_native_full": {
+      "label": "Player Skin (Full Bundle)",
+      "actions": {
+        "idle": {
+          "family": "player",
+          "label": "Idle / Walk",
+          "required": true,
+          "xp_dims": [126, 80],
+          "angles": 8,
+          "frames": [1, 8],
+          "projs": 2,
+          "cell_w": 7,
+          "cell_h": 10,
+          "layers": 4,
+          "ahsw_range": "all_16",
+          "l0_ref": "sprites/player-0100.xp",
+          "l0_ref_sha256": "073bd74099536d9b2f0b1bab074a485060e2f135a1f309ec759d9a94f15c7e9c"
+        },
+        "attack": {
+          "family": "attack",
+          "label": "Attack",
+          "required": false,
+          "xp_dims": [144, 80],
+          "angles": 8,
+          "frames": [8],
+          "projs": 2,
+          "cell_w": 9,
+          "cell_h": 10,
+          "layers": 4,
+          "ahsw_range": "weapon_gte_1",
+          "weapon_filter": "W>=1",
+          "l0_ref": "sprites/attack-0001.xp",
+          "l0_ref_sha256": "a2ebf074ff8bfd1ef94703c011f2b9b793429b889223afd55951a13400cd7538"
+        },
+        "death": {
+          "family": "plydie",
+          "label": "Death",
+          "required": false,
+          "xp_dims": [110, 88],
+          "angles": 8,
+          "frames": [5],
+          "projs": 2,
+          "cell_w": 11,
+          "cell_h": 11,
+          "layers": 3,
+          "ahsw_range": "all_16",
+          "l0_ref": "sprites/plydie-0000.xp",
+          "l0_ref_sha256": "29627bf1873555e2935ad8eaf31834fc7a6f9b0fe5694de398a1b2e351e45442"
+        }
+      }
+    }
+  }
+}

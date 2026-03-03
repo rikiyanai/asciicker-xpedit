@@ -31,6 +31,7 @@
   }
 
   var AUTO_NEW_GAME = boolParam("autonewgame", true);
+  var AUTO_ATTACK = boolParam("autoattack", false);
   var ENABLE_KEYB_DIAG = boolParam("keybdiag", false);
   var TRACE_DURATION_MS = Math.max(5000, Math.min(60000, Number(qs("tracelen")) || 5000));
   var WORLD_READY_REQUIRED_STREAK = Math.max(1, Math.min(20, parseInt(qs("wrstreak"), 10) || 4));  // 4 polls at 500ms ≈ 1.5s stable
@@ -485,6 +486,58 @@
     }, 500);
   }
 
+  // ── Auto-attack test: fires Space key (attack) 2s after player is grounded ──
+  var autoAttackFired = false;
+  function scheduleAutoAttackTest() {
+    if (!AUTO_ATTACK || autoAttackFired) return;
+    var ATTACK_KEY_CODE = 6; // Space in engine key map
+    var ATTACK_DELAY_MS = 2000;
+    var pollTimer = setInterval(function () {
+      try {
+        var grounded = false;
+        if (typeof window.Grounded === "function") {
+          grounded = !!window.Grounded();
+        }
+        if (!grounded) return;
+        autoAttackFired = true;
+        clearInterval(pollTimer);
+        setTimeout(function () {
+          log("[ATTACK-TRIGGER] firing auto-attack (Space key code=" + ATTACK_KEY_CODE + ")");
+          if (typeof window.Keyb === "function") {
+            window.Keyb(0, ATTACK_KEY_CODE); // key down
+            setTimeout(function () {
+              window.Keyb(1, ATTACK_KEY_CODE); // key up
+              log("[ATTACK-TRIGGER] attack key released");
+            }, 150);
+          } else {
+            log("[ATTACK-TRIGGER] Keyb not available, using DOM fallback");
+            var targets = [window, document, document.body,
+              document.getElementById("asciicker_canvas")];
+            for (var i = 0; i < targets.length; i++) {
+              var t = targets[i];
+              if (!t || typeof t.dispatchEvent !== "function") continue;
+              t.dispatchEvent(new KeyboardEvent("keydown", {
+                key: " ", code: "Space", keyCode: 32, which: 32, bubbles: true
+              }));
+            }
+            setTimeout(function () {
+              for (var i = 0; i < targets.length; i++) {
+                var t = targets[i];
+                if (!t || typeof t.dispatchEvent !== "function") continue;
+                t.dispatchEvent(new KeyboardEvent("keyup", {
+                  key: " ", code: "Space", keyCode: 32, which: 32, bubbles: true
+                }));
+              }
+              log("[ATTACK-TRIGGER] DOM fallback attack key released");
+            }, 150);
+          }
+        }, ATTACK_DELAY_MS);
+      } catch (e) {
+        log("[ATTACK-TRIGGER] error: " + e);
+      }
+    }, 500);
+  }
+
   function clearStartGuard() {
     startGuardActive = false;
     startGuardStamp = 0;
@@ -542,6 +595,7 @@
       setTimeout(function () { clearLoadingUi("post_startgame"); }, 1200);
       setTimeout(function () { clearLoadingUi("post_startgame_fallback"); }, 5000);
       scheduleAutoNewGameAdvance();
+      scheduleAutoAttackTest();
       startDiagnosticTrace();
       return ret;
     };
@@ -569,6 +623,7 @@
             if (AUTO_NEW_GAME && !startGuardActive) {
               setTimeout(function () { scheduleAutoNewGameAdvance(); }, 500);
             }
+            setTimeout(function () { scheduleAutoAttackTest(); }, 1000);
             return ret;
           }
           log("[DIAG] Load wrapper async path hit (appliedStamp=0) — map override deferred before originalLoad");
@@ -581,6 +636,7 @@
               if (AUTO_NEW_GAME && !startGuardActive) {
                 setTimeout(function () { scheduleAutoNewGameAdvance(); }, 500);
               }
+              setTimeout(function () { scheduleAutoAttackTest(); }, 1000);
             });
         };
         wrapped.__flatWrapped = true;

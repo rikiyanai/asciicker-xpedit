@@ -36,3 +36,47 @@ def gate_g9_handoff(populated_cells: int) -> GateResult:
         verdict=THRESHOLD_MET if ok else THRESHOLD_BREACHED,
         details={"populated_cells": populated_cells},
     )
+
+
+def gate_g10_action_dims(
+    actual_cols: int,
+    actual_rows: int,
+    expected_cols: int,
+    expected_rows: int,
+) -> GateResult:
+    """XP dimensions must match template's xp_dims."""
+    ok = actual_cols == expected_cols and actual_rows == expected_rows
+    return GateResult(
+        gate="G10",
+        verdict=THRESHOLD_MET if ok else THRESHOLD_BREACHED,
+        details={
+            "actual": [actual_cols, actual_rows],
+            "expected": [expected_cols, expected_rows],
+        },
+    )
+
+
+def gate_g11_layer_count(actual_layers: int, expected_layers: int) -> GateResult:
+    """Layer count must match template's layers."""
+    ok = actual_layers == expected_layers
+    return GateResult(
+        gate="G11",
+        verdict=THRESHOLD_MET if ok else THRESHOLD_BREACHED,
+        details={"actual_layers": actual_layers, "expected_layers": expected_layers},
+    )
+
+
+def gate_g12_l0_metadata(
+    l0_row0_glyphs: list[str],
+    expected_glyphs: list[str],
+) -> GateResult:
+    """L0 row-0 metadata glyphs (first N cols) must match expected family pattern."""
+    ok = l0_row0_glyphs == expected_glyphs
+    return GateResult(
+        gate="G12",
+        verdict=THRESHOLD_MET if ok else THRESHOLD_BREACHED,
+        details={
+            "actual_l0_row0": l0_row0_glyphs,
+            "expected_l0_row0": expected_glyphs,
+        },
+    )

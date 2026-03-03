@@ -27,9 +27,17 @@ from .config import (
     TRACES_DIR,
     SESSIONS_DIR,
     EXPORT_DIR,
+    BUNDLES_DIR,
+    CONFIG_DIR,
+    SPRITES_DIR,
+    ENABLED_FAMILIES,
 )
-from .gates import gate_g7_geometry, gate_g8_nonempty, gate_g9_handoff
-from .models import ApiError, RunConfig, JobRecord, WorkbenchSession
+from .gates import (
+    gate_g7_geometry, gate_g8_nonempty, gate_g9_handoff,
+    gate_g10_action_dims, gate_g11_layer_count, gate_g12_l0_metadata,
+    THRESHOLD_BREACHED,
+)
+from .models import ApiError, RunConfig, JobRecord, WorkbenchSession, BundleSession, BundleActionState
 from .renderer import render_preview_png
 from .storage import save_json, load_json
 from .xp_codec import write_xp, read_xp
@@ -914,6 +922,151 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+_template_registry: dict[str, Any] | None = None
+_l0_reference_cache: dict[str, list[Cell]] = {}
+_l0_reference_status: dict[str, str] = {}
+
+
+def load_template_registry() -> dict[str, Any]:
+    global _template_registry
+    if _template_registry is not None:
+        return _template_registry
+    reg_path = CONFIG_DIR / "template_registry.json"
+    if not reg_path.exists():
+        _template_registry = {"template_sets": {}}
+        return _template_registry
+    import json
+    _template_registry = json.loads(reg_path.read_text(encoding="utf-8"))
+    # Validate L0 reference checksums at load time
+    for ts_key, ts in _template_registry.get("template_sets", {}).items():
+        for act_key, act in ts.get("actions", {}).items():
+            family = act.get("family", "")
+            if family not in _l0_reference_status:
+                _load_reference_l0(family)
+    return _template_registry
+
+
+def _load_reference_l0(family: str) -> list[Cell] | None:
+    if family in _l0_reference_cache:
+        return _l0_reference_cache[family]
+    # Find the L0 ref path from registry (load_template_registry is safe to call —
+    # it assigns _template_registry before iterating actions, preventing recursion)
+    reg = load_template_registry()
+    l0_ref_path: str | None = None
+    l0_ref_sha256: str | None = None
+    if reg:
+        for ts in reg.get("template_sets", {}).values():
+            for act in ts.get("actions", {}).values():
+                if act.get("family") == family:
+                    l0_ref_path = act.get("l0_ref")
+                    l0_ref_sha256 = act.get("l0_ref_sha256")
+                    break
+            if l0_ref_path:
+                break
+    if not l0_ref_path:
+        _l0_reference_status[family] = "no_ref_path"
+        return None
+    full_path = ROOT / l0_ref_path
+    if not full_path.exists():
+        _l0_reference_status[family] = "file_missing"
+        return None
+    actual_sha = _sha256(full_path)
+    if l0_ref_sha256 and actual_sha != l0_ref_sha256:
+        import logging
+        logging.warning(
+            "L0 reference checksum mismatch for family '%s': expected %s, got %s",
+            family, l0_ref_sha256, actual_sha,
+        )
+        _l0_reference_status[family] = "checksum_mismatch"
+        return None
+    parsed = read_xp(full_path)
+    l0_cells = parsed["cells"][0]
+    _l0_reference_cache[family] = l0_cells
+    _l0_reference_status[family] = "ok"
+    return l0_cells
+
+
+def _assert_l0_reference_available(family: str, req_id: str) -> list[Cell]:
+    cells = _load_reference_l0(family)
+    if cells is None:
+        status = _l0_reference_status.get(family, "unknown")
+        if status == "checksum_mismatch":
+            raise ApiError(
+                f"L0 reference checksum mismatch for family '{family}'. "
+                "Update l0_ref_sha256 in template_registry.json.",
+                "invalid_template_reference",
+                "workbench",
+                req_id,
+                422,
+            )
+        raise ApiError(
+            f"L0 reference not available for family '{family}': {status}",
+            "template_reference_unavailable",
+            "workbench",
+            req_id,
+            422,
+        )
+    return cells
+
+
+def _bundle_path(bundle_id: str) -> Path:
+    return BUNDLES_DIR / f"{bundle_id}.json"
+
+
+def create_bundle(template_set_key: str, req_id: str) -> dict[str, Any]:
+    ensure_dirs()
+    reg = load_template_registry()
+    ts = reg.get("template_sets", {}).get(template_set_key)
+    if ts is None:
+        raise ApiError(
+            f"unknown template_set_key: {template_set_key}",
+            "invalid_template_set", "workbench", req_id, 422,
+        )
+    from datetime import UTC, datetime
+    bundle_id = f"b-{uuid.uuid4()}"
+    now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    actions: dict[str, BundleActionState] = {}
+    for act_key in ts["actions"]:
+        actions[act_key] = BundleActionState(action_key=act_key)
+    bundle = BundleSession(
+        bundle_id=bundle_id,
+        template_set_key=template_set_key,
+        actions=actions,
+        created_at=now,
+        updated_at=now,
+    )
+    save_json(_bundle_path(bundle_id), bundle.to_dict())
+    return bundle.to_dict()
+
+
+def load_bundle(bundle_id: str, req_id: str) -> BundleSession:
+    p = _bundle_path(bundle_id)
+    if not p.exists():
+        raise ApiError("bundle not found", "bundle_not_found", "workbench", req_id, 404)
+    return BundleSession.from_dict(load_json(p))
+
+
+def save_bundle(bundle: BundleSession) -> None:
+    from datetime import UTC, datetime
+    bundle.updated_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    save_json(_bundle_path(bundle.bundle_id), bundle.to_dict())
+
+
+def _is_bundle_session(session_id: str) -> bool:
+    """Check if a session_id belongs to any bundle."""
+    if not BUNDLES_DIR.exists():
+        return False
+    for bp in BUNDLES_DIR.glob("*.json"):
+        try:
+            data = load_json(bp)
+            for act in data.get("actions", {}).values():
+                if isinstance(act, dict) and act.get("session_id") == session_id:
+                    return True
+        except Exception:
+            continue
+    return False
+
+
 def _job_path(job_id: str) -> Path:
     return JOBS_DIR / f"{job_id}.json"
 
@@ -1013,6 +1166,30 @@ def _assert_native_contract_dims(cols: int, rows: int, stage: str, req_id: str) 
         )
 
 
+# Family dimension contracts from registry (ground truth)
+_FAMILY_DIMS: dict[str, tuple[int, int]] = {
+    "player": (126, 80),
+    "attack": (144, 80),
+    "plydie": (110, 88),
+}
+
+
+def _assert_native_dims(cols: int, rows: int, family: str, stage: str, req_id: str) -> None:
+    """Fail fast if dimensions don't match family's native contract."""
+    expected = _FAMILY_DIMS.get(family)
+    if expected is None:
+        raise ApiError(f"unknown family for dims check: {family}", "unknown_family", stage, req_id, 422)
+    exp_cols, exp_rows = expected
+    if cols != exp_cols or rows != exp_rows:
+        raise ApiError(
+            f"native contract violated for {family}: got {cols}x{rows}, expected {exp_cols}x{exp_rows}",
+            "native_compat_dims_gate",
+            stage,
+            req_id,
+            422,
+        )
+
+
 def _build_native_l0_layer(cols: int, rows: int) -> list[Cell]:
     """Build layer 0: exact native player-0100.xp metadata template.
 
@@ -1067,6 +1244,80 @@ def _build_native_player_layers(
     l1 = _build_native_l1_layer(cols, rows)
     l3: list[Cell] = [_transparent_cell() for _ in range(cols * rows)]
     return [l0, l1, cells_layer2, l3]
+
+
+def _build_native_attack_layers(
+    *,
+    cells_layer2: list[Cell],
+    cols: int,
+    rows: int,
+    stage: str,
+    req_id: str,
+) -> list[list[Cell]]:
+    """Assemble all 4 layers for a native-contract attack skin XP.
+
+    Uses dynamic L0 from reference attack-0001.xp (dense border art).
+    Reuses row-based L1 countdown (ship-gated pattern).
+    """
+    _assert_native_dims(cols, rows, "attack", stage, req_id)
+    l0_ref = _assert_l0_reference_available("attack", req_id)
+    l0: list[Cell] = list(l0_ref)  # copy from reference
+    l1 = _build_native_l1_layer(cols, rows)
+    l3: list[Cell] = [_transparent_cell() for _ in range(cols * rows)]
+    return [l0, l1, cells_layer2, l3]
+
+
+def _build_native_death_layers(
+    *,
+    cells_layer2: list[Cell],
+    cols: int,
+    rows: int,
+    stage: str,
+    req_id: str,
+) -> list[list[Cell]]:
+    """Assemble all 3 layers for a native-contract plydie/death skin XP.
+
+    Uses dynamic L0 from reference plydie-0000.xp (dense border art).
+    Reuses row-based L1 countdown.
+    Note: death cell_h=11 != NATIVE_CELL_H=10; L1 cycle period difference
+    deferred to Phase 2.
+    """
+    _assert_native_dims(cols, rows, "plydie", stage, req_id)
+    l0_ref = _assert_l0_reference_available("plydie", req_id)
+    l0: list[Cell] = list(l0_ref)
+    l1 = _build_native_l1_layer(cols, rows)
+    return [l0, l1, cells_layer2]
+
+
+def _build_native_layers(
+    *,
+    family: str,
+    cells_layer2: list[Cell],
+    cols: int,
+    rows: int,
+    stage: str,
+    req_id: str,
+) -> list[list[Cell]]:
+    """Dispatch to family-specific native layer builder."""
+    if family == "player":
+        return _build_native_player_layers(
+            cells_layer2=cells_layer2, cols=cols, rows=rows,
+            stage=stage, req_id=req_id,
+        )
+    if family == "attack":
+        return _build_native_attack_layers(
+            cells_layer2=cells_layer2, cols=cols, rows=rows,
+            stage=stage, req_id=req_id,
+        )
+    if family == "plydie":
+        return _build_native_death_layers(
+            cells_layer2=cells_layer2, cols=cols, rows=rows,
+            stage=stage, req_id=req_id,
+        )
+    raise ApiError(
+        f"no native builder for family '{family}'",
+        "unknown_family_builder", stage, req_id, 422,
+    )
 
 
 def _estimate_bg_rgb(im: Image.Image) -> tuple[int, int, int]:
@@ -1349,14 +1600,16 @@ def run_pipeline(cfg: RunConfig, req_id: str) -> dict[str, Any]:
                     422,
                 )
             if cfg.native_compat:
-                # Lock to native WASM engine contract: 126x80 player skin.
-                cell_h_chars = NATIVE_CELL_H
+                # Resolve effective target dims: explicit override or family default
+                eff_cols = cfg.target_cols if cfg.target_cols is not None else NATIVE_COLS
+                eff_rows = cfg.target_rows if cfg.target_rows is not None else NATIVE_ROWS
+                cell_h_chars = eff_rows // max(1, cfg.angles)
                 total_tile_cols = semantic_frames * cfg.projs
-                cell_w_chars = NATIVE_COLS // max(1, total_tile_cols)
-                if cell_w_chars < 1 or cell_w_chars * total_tile_cols != NATIVE_COLS:
+                cell_w_chars = eff_cols // max(1, total_tile_cols)
+                if cell_w_chars < 1 or cell_w_chars * total_tile_cols != eff_cols:
                     raise ApiError(
                         f"native_compat: frames={semantic_frames} projs={cfg.projs} "
-                        f"cannot tile evenly into {NATIVE_COLS} cols",
+                        f"cannot tile evenly into {eff_cols} cols",
                         "native_compat_geometry",
                         "run",
                         req_id,
@@ -1491,8 +1744,8 @@ def run_pipeline(cfg: RunConfig, req_id: str) -> dict[str, Any]:
         raise ApiError(f"pipeline failed reading image: {e}", "pipeline_image_error", "run", req_id, 500)
 
     if cfg.native_compat:
-        layers = _build_native_player_layers(
-            cells_layer2=cells_layer2, cols=cols, rows=rows,
+        layers = _build_native_layers(
+            family=cfg.family, cells_layer2=cells_layer2, cols=cols, rows=rows,
             stage="run", req_id=req_id,
         )
     else:
@@ -1546,6 +1799,7 @@ def run_pipeline(cfg: RunConfig, req_id: str) -> dict[str, Any]:
         "cell_w_chars": cell_w_chars,
         "cell_h_chars": cell_h_chars,
         "checksum": _sha256(xp_path),
+        "family": cfg.family,
     }
 
     record = JobRecord(
@@ -1614,7 +1868,9 @@ def workbench_load_from_job(job_id: str, req_id: str) -> dict[str, Any]:
         grid_rows=height,
         cells=cells,
     )
-    save_json(_session_path(session_id), sess.to_dict())
+    sess_dict = sess.to_dict()
+    sess_dict["family"] = str(meta.get("family", "player"))
+    save_json(_session_path(session_id), sess_dict)
 
     return {
         "session_id": session_id,
@@ -1639,6 +1895,65 @@ def workbench_load_from_job(job_id: str, req_id: str) -> dict[str, Any]:
     }
 
 
+def bundle_action_run(bundle_id: str, action_key: str, source_path: str, req_id: str) -> dict[str, Any]:
+    """Run pipeline for one action within a bundle, populating RunConfig from registry."""
+    bundle = load_bundle(bundle_id, req_id)
+    reg = load_template_registry()
+    ts = reg.get("template_sets", {}).get(bundle.template_set_key)
+    if ts is None:
+        raise ApiError("bundle references unknown template set", "invalid_template_set", "workbench", req_id, 422)
+    action_spec = ts.get("actions", {}).get(action_key)
+    if action_spec is None:
+        raise ApiError(f"action '{action_key}' not in template set", "invalid_action_key", "workbench", req_id, 422)
+    family = action_spec["family"]
+    if family not in ENABLED_FAMILIES:
+        raise ApiError(
+            f"Family '{family}' is not enabled in the current phase.",
+            "phase_not_enabled", "workbench", req_id, 422,
+        )
+
+    xp_dims = action_spec["xp_dims"]
+    target_cols, target_rows = xp_dims[0], xp_dims[1]
+
+    cfg = RunConfig(
+        source_path=source_path,
+        name=f"bundle-{bundle_id}-{action_key}",
+        angles=action_spec["angles"],
+        frames=action_spec["frames"],
+        native_compat=True,
+        target_cols=target_cols,
+        target_rows=target_rows,
+        family=family,
+    )
+    result = run_pipeline(cfg, req_id)
+
+    # Create workbench session from the job
+    job_id = result["job_id"]
+    session_result = workbench_load_from_job(job_id, req_id)
+    session_id = session_result["session_id"]
+
+    # Update bundle state
+    action_state = bundle.actions.get(action_key)
+    if action_state is None:
+        action_state = BundleActionState(action_key=action_key)
+        bundle.actions[action_key] = action_state
+    action_state.session_id = session_id
+    action_state.job_id = job_id
+    action_state.source_path = source_path
+    action_state.status = "converted"
+    save_bundle(bundle)
+
+    return {
+        "bundle_id": bundle_id,
+        "action_key": action_key,
+        "job_id": job_id,
+        "session_id": session_id,
+        "grid_cols": target_cols,
+        "grid_rows": target_rows,
+        "family": family,
+    }
+
+
 def workbench_export_xp(session_id: str, req_id: str) -> dict[str, Any]:
     p = _session_path(session_id)
     if not p.exists():
@@ -1655,8 +1970,11 @@ def workbench_export_xp(session_id: str, req_id: str) -> dict[str, Any]:
     if len(cells) != cols * rows:
         raise ApiError("session cell geometry mismatch", "session_geometry_invalid", "workbench", req_id, 422)
 
-    layers = _build_native_player_layers(
-        cells_layer2=cells, cols=cols, rows=rows,
+    # Read family from session metadata; default to "player" for pre-existing sessions
+    family = str(sess.get("family", "player"))
+
+    layers = _build_native_layers(
+        family=family, cells_layer2=cells, cols=cols, rows=rows,
         stage="workbench", req_id=req_id,
     )
 
@@ -2020,6 +2338,186 @@ def workbench_web_skin_payload(session_id: str, req_id: str) -> dict[str, Any]:
         "xp_size_bytes": len(raw),
         "xp_b64": base64.b64encode(raw).decode("ascii"),
         "override_names": override_names,
+        "reload_player_name": "player",
+    }
+
+
+def _action_override_names(family: str, ahsw_range: str) -> list[str]:
+    """Generate override filenames for a family/AHSW range."""
+    names: list[str] = []
+    if ahsw_range == "all_16":
+        prefix_map = {
+            "player": ["player"],
+            "plydie": ["plydie"],
+        }
+        prefixes = prefix_map.get(family, [family])
+        for prefix in prefixes:
+            if prefix == "player":
+                names.append("player-nude.xp")
+            for i in range(16):
+                names.append(f"{prefix}-{i:04b}.xp")
+    elif ahsw_range == "weapon_gte_1":
+        # AHS ∈ {0,1}³, W=1 → 8 files. Weapon bit (bit 0) must be 1.
+        for i in range(16):
+            if i & 1:  # W bit is set
+                names.append(f"{family}-{i:04b}.xp")
+    return names
+
+
+_FAMILY_L0_COL0: dict[str, list[str]] = {
+    "player": ["8", "1", "8"],
+    "attack": ["8", "8"],
+    "plydie": ["8", "5"],
+}
+
+
+def _run_structural_gates(
+    xp_path: str,
+    action_spec: dict[str, Any],
+    req_id: str,
+) -> list[GateResult]:
+    """Run G10-G12 structural gates on an exported XP against its template spec."""
+    xp = read_xp(xp_path)
+    expected_dims = action_spec.get("xp_dims", [0, 0])
+    expected_layers = action_spec.get("layers", 0)
+    family = action_spec.get("family", "player")
+    expected_l0 = _FAMILY_L0_COL0.get(family, [])
+
+    results = []
+
+    # G10: dimension match
+    results.append(gate_g10_action_dims(
+        xp["width"], xp["height"],
+        expected_dims[0], expected_dims[1],
+    ))
+
+    # G11: layer count match
+    results.append(gate_g11_layer_count(len(xp["cells"]), expected_layers))
+
+    # G12: L0 row-0 metadata glyphs (first N cols of row 0)
+    if xp["cells"] and expected_l0:
+        l0 = xp["cells"][0]
+        cols = xp["width"]
+        actual_l0 = []
+        for col_idx in range(min(len(expected_l0), cols)):
+            cell = l0[col_idx]  # row-0, col col_idx
+            actual_l0.append(chr(cell[0]) if cell[0] >= 32 else "")
+        results.append(gate_g12_l0_metadata(actual_l0, expected_l0))
+    elif expected_l0:
+        results.append(gate_g12_l0_metadata([], expected_l0))
+
+    return results
+
+
+def workbench_export_bundle(bundle_id: str, req_id: str) -> dict[str, Any]:
+    """Export all converted actions in a bundle."""
+    bundle = load_bundle(bundle_id, req_id)
+    reg = load_template_registry()
+    ts = reg.get("template_sets", {}).get(bundle.template_set_key)
+    if ts is None:
+        raise ApiError("bundle references unknown template set", "invalid_template_set", "workbench", req_id, 422)
+
+    exports: dict[str, dict[str, Any]] = {}
+    gate_reports: dict[str, list[dict[str, Any]]] = {}
+    for act_key, act_state in bundle.actions.items():
+        if not act_state.session_id:
+            continue
+        action_spec = ts.get("actions", {}).get(act_key, {})
+        family = action_spec.get("family", "player")
+        if family not in ENABLED_FAMILIES:
+            continue
+        export = workbench_export_xp(act_state.session_id, req_id)
+
+        # Run structural gates G10-G12
+        gates = _run_structural_gates(export["xp_path"], action_spec, req_id)
+        gate_dicts = [{"gate": g.gate, "verdict": g.verdict, "details": g.details} for g in gates]
+        gate_reports[act_key] = gate_dicts
+        blocked = [g for g in gates if g.verdict == THRESHOLD_BREACHED]
+        if blocked:
+            gate_names = ", ".join(g.gate for g in blocked)
+            raise ApiError(
+                f"action '{act_key}' failed structural gates: {gate_names}",
+                "structural_gate_failed", "workbench", req_id, 422,
+            )
+
+        exports[act_key] = {
+            "session_id": act_state.session_id,
+            "xp_path": export["xp_path"],
+            "checksum": export["checksum"],
+            "family": family,
+            "gates": gate_dicts,
+        }
+
+    # Check required actions
+    for act_key, action_spec in ts.get("actions", {}).items():
+        if action_spec.get("required") and act_key not in exports:
+            raise ApiError(
+                f"required action '{act_key}' not converted",
+                "bundle_incomplete", "workbench", req_id, 422,
+            )
+
+    return {
+        "bundle_id": bundle_id,
+        "exports": exports,
+        "gate_reports": gate_reports,
+    }
+
+
+def workbench_web_skin_bundle_payload(bundle_id: str, req_id: str) -> dict[str, Any]:
+    """Build per-action XP bytes + target filenames for bundle WASM injection."""
+    bundle = load_bundle(bundle_id, req_id)
+    reg = load_template_registry()
+    ts = reg.get("template_sets", {}).get(bundle.template_set_key)
+    if ts is None:
+        raise ApiError("bundle references unknown template set", "invalid_template_set", "workbench", req_id, 422)
+
+    actions_payload: dict[str, dict[str, Any]] = {}
+    unmapped_families: list[str] = []
+
+    for act_key, action_spec in ts.get("actions", {}).items():
+        family = action_spec.get("family", "")
+        if family not in ENABLED_FAMILIES:
+            unmapped_families.append(family)
+            continue
+        act_state = bundle.actions.get(act_key)
+        if not act_state or not act_state.session_id:
+            if not action_spec.get("required"):
+                unmapped_families.append(family)
+                continue
+            raise ApiError(
+                f"required action '{act_key}' not converted",
+                "bundle_incomplete", "workbench", req_id, 422,
+            )
+
+        export = workbench_export_xp(act_state.session_id, req_id)
+        xp_path = Path(export["xp_path"]).expanduser().resolve()
+
+        # Structural gates G10-G12
+        gates = _run_structural_gates(str(xp_path), action_spec, req_id)
+        blocked = [g for g in gates if g.verdict == THRESHOLD_BREACHED]
+        if blocked:
+            gate_names = ", ".join(g.gate for g in blocked)
+            raise ApiError(
+                f"action '{act_key}' failed structural gates: {gate_names}",
+                "structural_gate_failed", "workbench", req_id, 422,
+            )
+
+        raw = xp_path.read_bytes()
+        ahsw_range = action_spec.get("ahsw_range", "all_16")
+        override_names = _action_override_names(family, ahsw_range)
+
+        actions_payload[act_key] = {
+            "xp_b64": base64.b64encode(raw).decode("ascii"),
+            "override_names": override_names,
+            "xp_size_bytes": len(raw),
+            "checksum": export["checksum"],
+            "family": family,
+        }
+
+    return {
+        "bundle_id": bundle_id,
+        "actions": actions_payload,
+        "unmapped_families": unmapped_families,
         "reload_player_name": "player",
     }
 

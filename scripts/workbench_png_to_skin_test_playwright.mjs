@@ -11,6 +11,7 @@ function parseArgs(argv) {
     url: "http://127.0.0.1:5071/workbench",
     pngPath: "",
     xpPath: "",
+    attackXpPath: "",
     headed: false,
     timeoutSec: 240,
     moveSec: 4,
@@ -24,6 +25,7 @@ function parseArgs(argv) {
     if (a === "--url" && argv[i + 1]) out.url = argv[++i];
     else if ((a === "--png" || a === "--png-path") && argv[i + 1]) out.pngPath = argv[++i];
     else if ((a === "--xp" || a === "--xp-path") && argv[i + 1]) out.xpPath = argv[++i];
+    else if (a === "--attack-xp" && argv[i + 1]) out.attackXpPath = argv[++i];
     else if (a === "--timeout-sec" && argv[i + 1]) out.timeoutSec = Math.max(30, Number(argv[++i]) || 240);
     else if (a === "--move-sec" && argv[i + 1]) out.moveSec = Math.max(1, Number(argv[++i]) || 4);
     else if (a === "--skip-move") out.skipMove = true;
@@ -148,6 +150,8 @@ function extractFirstMoveDiagnostic(consoleLogs = []) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const xpPath = args.xpPath ? path.resolve(args.xpPath) : "";
+  const attackXpPath = args.attackXpPath ? path.resolve(args.attackXpPath) : "";
+  const useBundleMode = !!xpPath && !!attackXpPath;
   const useUploadXpMode = !!xpPath;
   const pngPath = useUploadXpMode ? "" : pickPngPath(args);
   if (useUploadXpMode) {
@@ -160,6 +164,9 @@ async function main() {
       `PNG not found. Pass --png /absolute/path/to/daimon_sheet.png\n` +
       `Auto-find candidates:\n${cands.length ? cands.map((c) => `- ${c}`).join("\n") : "(none found)"}`
     );
+  }
+  if (attackXpPath && !(await fileExists(attackXpPath))) {
+    throw new Error(`Attack XP not found: ${attackXpPath}`);
   }
 
   const ts = new Date().toISOString().replace(/[:.]/g, "-");
@@ -460,13 +467,21 @@ async function main() {
 
   // Append override/reload mode query params to workbench URL if specified.
   let targetUrl = args.url;
-  if (args.overrideMode || args.reloadMode) {
+  if (args.overrideMode || args.reloadMode || useBundleMode) {
     const u = new URL(targetUrl);
     if (args.overrideMode) u.searchParams.set("overridemode", args.overrideMode);
     if (args.reloadMode) u.searchParams.set("reloadmode", args.reloadMode);
+    if (useBundleMode) u.searchParams.set("autoattack", "1");
     targetUrl = u.href;
   }
-  logEvent("start", { url: targetUrl, mode: useUploadXpMode ? "upload_xp" : "pipeline_png", pngPath, xpPath: useUploadXpMode ? xpPath : "", overrideMode: args.overrideMode || "mounted", reloadMode: args.reloadMode || "src_swap" });
+  logEvent("start", {
+    url: targetUrl,
+    mode: useBundleMode ? "bundle_xp" : (useUploadXpMode ? "upload_xp" : "pipeline_png"),
+    pngPath, xpPath: useUploadXpMode ? xpPath : "",
+    attackXpPath: useBundleMode ? attackXpPath : "",
+    overrideMode: args.overrideMode || "mounted",
+    reloadMode: args.reloadMode || "src_swap",
+  });
   await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
   await page.waitForTimeout(500);
   await wbSnapshot("after_goto");
@@ -552,6 +567,66 @@ async function main() {
     wbStatus: String(finalDebug?.wbStatus || ""),
     webbuildState: String(finalDebug?.webbuildState || ""),
   });
+
+  // ── Bundle mode: inject attack XP into attack-* slots after idle injection ──
+  let bundleInjection = null;
+  if (useBundleMode && loaded) {
+    logEvent("bundle_inject:start", { attackXpPath });
+    const attackXpBytes = await fs.readFile(attackXpPath);
+    const attackB64 = attackXpBytes.toString("base64");
+    // Attack AHSW range: weapon_gte_1 → 8 files where W bit (bit 0) is set
+    const attackOverrideNames = [];
+    for (let i = 0; i < 16; i++) {
+      if (i & 1) attackOverrideNames.push(`attack-${i.toString(2).padStart(4, "0")}.xp`);
+    }
+    const frameHandle = page.frame({ url: /\/termpp-web-flat\/index\.html/ });
+    if (frameHandle) {
+      bundleInjection = await frameHandle.evaluate(({ b64, names }) => {
+        const out = { injected: false, files: 0, error: null };
+        try {
+          const M = window.Module;
+          if (!M) { out.error = "no_module"; return out; }
+          // Decode base64 to Uint8Array
+          const raw = atob(b64);
+          const bytes = new Uint8Array(raw.length);
+          for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+          // Write to each attack sprite slot
+          for (const name of names) {
+            const path = `/sprites/${name}`;
+            try { M.FS_unlink(path); } catch (_e) {}
+            try {
+              M.FS_createDataFile("/sprites", name, bytes, true, true, true);
+            } catch (_e) {
+              try {
+                const stream = M.FS_open(path, "w");
+                M.FS_write(stream, bytes, 0, bytes.length, 0);
+                M.FS_close(stream);
+              } catch (e2) {
+                out.error = `write_failed:${name}:${e2}`;
+                return out;
+              }
+            }
+            out.files++;
+          }
+          // Reload to pick up new sprites
+          if (typeof window.Load === "function") window.Load("player");
+          if (typeof window.Resize === "function") {
+            try { window.Resize(null); } catch (_e) {}
+          }
+          out.injected = true;
+        } catch (e) {
+          out.error = String(e);
+        }
+        return out;
+      }, { b64: attackB64, names: attackOverrideNames });
+      logEvent("bundle_inject:done", bundleInjection);
+    } else {
+      bundleInjection = { injected: false, error: "frame_not_found" };
+      logEvent("bundle_inject:frame_not_found");
+    }
+    // Wait a moment for attack sprites to settle
+    await page.waitForTimeout(1500);
+  }
 
   let moveResult = { attempted: false };
   if (loaded && !args.skipMove) {
@@ -828,7 +903,9 @@ async function main() {
     error: topError,
     pngPath,
     xpPath: useUploadXpMode ? xpPath : "",
-    mode: useUploadXpMode ? "upload_xp" : "pipeline_png",
+    attackXpPath: useBundleMode ? attackXpPath : "",
+    mode: useBundleMode ? "bundle_xp" : (useUploadXpMode ? "upload_xp" : "pipeline_png"),
+    bundleInjection: bundleInjection || null,
     overrideMode: args.overrideMode || "mounted",
     reloadMode: args.reloadMode || "src_swap",
     headed: args.headed,
@@ -870,7 +947,9 @@ async function main() {
     runValidity,
     pngPath,
     xpPath: useUploadXpMode ? xpPath : "",
-    mode: useUploadXpMode ? "upload_xp" : "pipeline_png",
+    attackXpPath: useBundleMode ? attackXpPath : "",
+    mode: useBundleMode ? "bundle_xp" : (useUploadXpMode ? "upload_xp" : "pipeline_png"),
+    bundleInjection: bundleInjection || null,
     firstMoveDiagnosticPath,
     classification: firstMoveDiagnostic.classification,
     perf: result.perf,

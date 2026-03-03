@@ -32,7 +32,11 @@ from .config import (
     SPRITES_DIR,
     ENABLED_FAMILIES,
 )
-from .gates import gate_g7_geometry, gate_g8_nonempty, gate_g9_handoff
+from .gates import (
+    gate_g7_geometry, gate_g8_nonempty, gate_g9_handoff,
+    gate_g10_action_dims, gate_g11_layer_count, gate_g12_l0_metadata,
+    THRESHOLD_BREACHED,
+)
 from .models import ApiError, RunConfig, JobRecord, WorkbenchSession, BundleSession, BundleActionState
 from .renderer import render_preview_png
 from .storage import save_json, load_json
@@ -2360,6 +2364,51 @@ def _action_override_names(family: str, ahsw_range: str) -> list[str]:
     return names
 
 
+_FAMILY_L0_COL0: dict[str, list[str]] = {
+    "player": ["8", "1", "8"],
+    "attack": ["8", "8"],
+    "plydie": ["8", "5"],
+}
+
+
+def _run_structural_gates(
+    xp_path: str,
+    action_spec: dict[str, Any],
+    req_id: str,
+) -> list[GateResult]:
+    """Run G10-G12 structural gates on an exported XP against its template spec."""
+    xp = read_xp(xp_path)
+    expected_dims = action_spec.get("xp_dims", [0, 0])
+    expected_layers = action_spec.get("layers", 0)
+    family = action_spec.get("family", "player")
+    expected_l0 = _FAMILY_L0_COL0.get(family, [])
+
+    results = []
+
+    # G10: dimension match
+    results.append(gate_g10_action_dims(
+        xp["width"], xp["height"],
+        expected_dims[0], expected_dims[1],
+    ))
+
+    # G11: layer count match
+    results.append(gate_g11_layer_count(len(xp["cells"]), expected_layers))
+
+    # G12: L0 row-0 metadata glyphs (first N cols of row 0)
+    if xp["cells"] and expected_l0:
+        l0 = xp["cells"][0]
+        cols = xp["width"]
+        actual_l0 = []
+        for col_idx in range(min(len(expected_l0), cols)):
+            cell = l0[col_idx]  # row-0, col col_idx
+            actual_l0.append(chr(cell[0]) if cell[0] >= 32 else "")
+        results.append(gate_g12_l0_metadata(actual_l0, expected_l0))
+    elif expected_l0:
+        results.append(gate_g12_l0_metadata([], expected_l0))
+
+    return results
+
+
 def workbench_export_bundle(bundle_id: str, req_id: str) -> dict[str, Any]:
     """Export all converted actions in a bundle."""
     bundle = load_bundle(bundle_id, req_id)
@@ -2369,6 +2418,7 @@ def workbench_export_bundle(bundle_id: str, req_id: str) -> dict[str, Any]:
         raise ApiError("bundle references unknown template set", "invalid_template_set", "workbench", req_id, 422)
 
     exports: dict[str, dict[str, Any]] = {}
+    gate_reports: dict[str, list[dict[str, Any]]] = {}
     for act_key, act_state in bundle.actions.items():
         if not act_state.session_id:
             continue
@@ -2377,11 +2427,25 @@ def workbench_export_bundle(bundle_id: str, req_id: str) -> dict[str, Any]:
         if family not in ENABLED_FAMILIES:
             continue
         export = workbench_export_xp(act_state.session_id, req_id)
+
+        # Run structural gates G10-G12
+        gates = _run_structural_gates(export["xp_path"], action_spec, req_id)
+        gate_dicts = [{"gate": g.gate, "verdict": g.verdict, "details": g.details} for g in gates]
+        gate_reports[act_key] = gate_dicts
+        blocked = [g for g in gates if g.verdict == THRESHOLD_BREACHED]
+        if blocked:
+            gate_names = ", ".join(g.gate for g in blocked)
+            raise ApiError(
+                f"action '{act_key}' failed structural gates: {gate_names}",
+                "structural_gate_failed", "workbench", req_id, 422,
+            )
+
         exports[act_key] = {
             "session_id": act_state.session_id,
             "xp_path": export["xp_path"],
             "checksum": export["checksum"],
             "family": family,
+            "gates": gate_dicts,
         }
 
     # Check required actions
@@ -2395,6 +2459,7 @@ def workbench_export_bundle(bundle_id: str, req_id: str) -> dict[str, Any]:
     return {
         "bundle_id": bundle_id,
         "exports": exports,
+        "gate_reports": gate_reports,
     }
 
 
@@ -2424,15 +2489,19 @@ def workbench_web_skin_bundle_payload(bundle_id: str, req_id: str) -> dict[str, 
                 "bundle_incomplete", "workbench", req_id, 422,
             )
 
-        # Phase gate check
-        if family not in ENABLED_FAMILIES:
-            raise ApiError(
-                f"Family '{family}' is not enabled in the current phase.",
-                "phase_not_enabled", "workbench", req_id, 422,
-            )
-
         export = workbench_export_xp(act_state.session_id, req_id)
         xp_path = Path(export["xp_path"]).expanduser().resolve()
+
+        # Structural gates G10-G12
+        gates = _run_structural_gates(str(xp_path), action_spec, req_id)
+        blocked = [g for g in gates if g.verdict == THRESHOLD_BREACHED]
+        if blocked:
+            gate_names = ", ".join(g.gate for g in blocked)
+            raise ApiError(
+                f"action '{act_key}' failed structural gates: {gate_names}",
+                "structural_gate_failed", "workbench", req_id, 422,
+            )
+
         raw = xp_path.read_bytes()
         ahsw_range = action_spec.get("ahsw_range", "all_16")
         override_names = _action_override_names(family, ahsw_range)

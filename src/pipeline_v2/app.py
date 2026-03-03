@@ -219,6 +219,7 @@ def create_app() -> Flask:
     @app.get("/api/workbench/templates")
     def api_wb_templates():
         reg = load_template_registry()
+        reg["enabled_families"] = sorted(ENABLED_FAMILIES)
         return jsonify(reg), 200
 
     @app.post("/api/workbench/bundle/create")

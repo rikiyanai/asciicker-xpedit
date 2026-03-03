@@ -940,11 +940,11 @@
   async function applyCurrentXpAsWebSkin(opts = {}) {
     await runWebbuildSkinAction("apply skin", async () => {
       if (!(await ensureRuntimePreflight({ refresh: true }))) return;
-      // Guard: need a session (classic) or a bundle with required actions (bundle mode)
+      // Guard: need a session (classic) or a bundle with required enabled actions (bundle mode)
       if (isBundleMode()) {
         const ts = getActiveTemplateSet();
         if (ts) {
-          for (const [key, spec] of Object.entries(ts.actions)) {
+          for (const [key, spec] of Object.entries(getEnabledActions(ts))) {
             if (spec.required && (!state.actionStates[key] || state.actionStates[key].status !== "converted")) {
               status(`Required action "${key}" not converted yet`, "warn");
               return;
@@ -1094,10 +1094,10 @@
   async function testCurrentSkinInDock() {
     if (!(await ensureRuntimePreflight({ refresh: true }))) return;
     if (isBundleMode()) {
-      // Bundle mode: need at least the required actions converted
+      // Bundle mode: need at least the required enabled actions converted
       const ts = getActiveTemplateSet();
       if (ts) {
-        for (const [key, spec] of Object.entries(ts.actions)) {
+        for (const [key, spec] of Object.entries(getEnabledActions(ts))) {
           if (spec.required && (!state.actionStates[key] || state.actionStates[key].status !== "converted")) {
             status(`Required action "${key}" not converted yet`, "warn");
             return;
@@ -5450,6 +5450,21 @@
     return state.templateRegistry.template_sets?.[state.templateSetKey] || null;
   }
 
+  function getEnabledActions(ts) {
+    if (!ts || !ts.actions) return {};
+    const ef = state.templateRegistry?.enabled_families;
+    if (!ef || !Array.isArray(ef)) {
+      console.warn("enabled_families missing from template registry — fail-closed, showing no actions");
+      return {};
+    }
+    const efSet = new Set(ef);
+    const out = {};
+    for (const [key, spec] of Object.entries(ts.actions)) {
+      if (efSet.has(spec.family)) out[key] = spec;
+    }
+    return out;
+  }
+
   function renderBundleActionTabs() {
     const container = $("bundleActionTabs");
     if (!container) return;
@@ -5460,7 +5475,7 @@
     }
     container.classList.remove("hidden");
     container.innerHTML = "";
-    for (const [key, spec] of Object.entries(ts.actions)) {
+    for (const [key, spec] of Object.entries(getEnabledActions(ts))) {
       const btn = document.createElement("button");
       const actState = state.actionStates[key];
       const isActive = key === state.activeActionKey;
@@ -5506,8 +5521,10 @@
     if (isBundleMode()) {
       if (bundleStatus) {
         const ts = getActiveTemplateSet();
-        const total = ts ? Object.keys(ts.actions).length : 0;
-        const done = Object.values(state.actionStates).filter(a => a.status === "converted").length;
+        const enabled = ts ? getEnabledActions(ts) : {};
+        const enabledKeys = new Set(Object.keys(enabled));
+        const total = enabledKeys.size;
+        const done = Object.entries(state.actionStates).filter(([k, a]) => enabledKeys.has(k) && a.status === "converted").length;
         bundleStatus.textContent = `Bundle: ${done}/${total} actions converted`;
         bundleStatus.classList.remove("hidden");
       }
@@ -5535,7 +5552,8 @@
       status(`Unknown template: ${key}`, "err");
       return;
     }
-    const actionKeys = Object.keys(ts.actions);
+    const enabledActions = getEnabledActions(ts);
+    const actionKeys = Object.keys(enabledActions);
     if (actionKeys.length <= 1) {
       // Single-action template: classic mode, no bundle
       state.bundleId = null;

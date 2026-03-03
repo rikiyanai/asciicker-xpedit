@@ -56,6 +56,8 @@
     u.searchParams.set("flatmap", flatmapParam || DEFAULT_FLATMAP_NAME);
     const autoNewGameParam = String(params.get("autonewgame") || "1").trim();
     if (autoNewGameParam) u.searchParams.set("autonewgame", autoNewGameParam);
+    const autoAttackParam = String(params.get("autoattack") || "").trim();
+    if (autoAttackParam) u.searchParams.set("autoattack", autoAttackParam);
     return `${u.pathname}${u.search}`;
   })();
 

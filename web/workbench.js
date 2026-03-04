@@ -814,11 +814,12 @@
     const isSafePlayerOverride = (name) => {
       const s = String(name || "").trim().toLowerCase();
       if (s === "player-nude.xp") return true;
-      if (OVERRIDE_MODE === "full_parity") {
-        if (/^(player|attack|plydie|wolfie|wolack)-[01]{4}\.xp$/.test(s)) return true;
+      // AHSW naming: A,H,S ∈ {0,1}, W ∈ {0,1,2}
+      if (isBundleMode() || OVERRIDE_MODE === "full_parity") {
+        if (/^(player|attack|plydie|wolfie|wolack)-[01]{3}[012]\.xp$/.test(s)) return true;
       } else {
         // mounted default: player + wolfie + wolack
-        if (/^(player|wolfie|wolack)-[01]{4}\.xp$/.test(s)) return true;
+        if (/^(player|wolfie|wolack)-[01]{3}[012]\.xp$/.test(s)) return true;
       }
       return false;
     };

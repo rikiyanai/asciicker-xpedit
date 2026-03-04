@@ -2343,24 +2343,28 @@ def workbench_web_skin_payload(session_id: str, req_id: str) -> dict[str, Any]:
 
 
 def _action_override_names(family: str, ahsw_range: str) -> list[str]:
-    """Generate override filenames for a family/AHSW range."""
+    """Generate override filenames for a family/AHSW range.
+
+    Legacy full-parity override naming: AHSW = Armor/Helmet/Shield/Weapon.
+    A,H,S ∈ {0,1} (binary), W ∈ {0,1,2} (ternary).
+    Produces filenames like player-0120.xp where digits are A,H,S,W.
+    """
     names: list[str] = []
     if ahsw_range == "all_16":
-        prefix_map = {
-            "player": ["player"],
-            "plydie": ["plydie"],
-        }
-        prefixes = prefix_map.get(family, [family])
-        for prefix in prefixes:
-            if prefix == "player":
-                names.append("player-nude.xp")
-            for i in range(16):
-                names.append(f"{prefix}-{i:04b}.xp")
+        if family == "player":
+            names.append("player-nude.xp")
+        for a in range(2):
+            for h in range(2):
+                for s in range(2):
+                    for w in range(3):
+                        names.append(f"{family}-{a}{h}{s}{w}.xp")
     elif ahsw_range == "weapon_gte_1":
-        # AHS ∈ {0,1}³, W=1 → 8 files. Weapon bit (bit 0) must be 1.
-        for i in range(16):
-            if i & 1:  # W bit is set
-                names.append(f"{family}-{i:04b}.xp")
+        # W ∈ {1,2} — weapon must be equipped.
+        for a in range(2):
+            for h in range(2):
+                for s in range(2):
+                    for w in (1, 2):
+                        names.append(f"{family}-{a}{h}{s}{w}.xp")
     return names
 
 

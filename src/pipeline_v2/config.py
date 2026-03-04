@@ -15,7 +15,7 @@ BUNDLES_DIR = DATA_DIR / "bundles"
 CONFIG_DIR = ROOT / "config"
 SPRITES_DIR = ROOT / "sprites"
 
-ENABLED_FAMILIES: set[str] = {"player", "attack"}
+ENABLED_FAMILIES: set[str] = {"player", "attack", "plydie"}
 
 
 def ensure_dirs() -> None:

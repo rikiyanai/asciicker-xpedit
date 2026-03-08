@@ -170,6 +170,46 @@ runner.describe('Canvas Module', () => {
     expect(pixels.x).toBeGreaterThan(-1);
     expect(pixels.y).toBeGreaterThan(-1);
   });
+
+  runner.it('should detach mouse event handlers on dispose()', () => {
+    const canvasElement = document.createElement('canvas');
+    const listeners = new Map();
+
+    // Mock addEventListener/removeEventListener to track calls
+    canvasElement.addEventListener = function(event, handler) {
+      if (!listeners.has(event)) {
+        listeners.set(event, []);
+      }
+      listeners.get(event).push(handler);
+    };
+
+    canvasElement.removeEventListener = function(event, handler) {
+      if (listeners.has(event)) {
+        const arr = listeners.get(event);
+        const idx = arr.indexOf(handler);
+        if (idx > -1) {
+          arr.splice(idx, 1);
+        }
+      }
+    };
+
+    const canvas = new Canvas(canvasElement, 80, 25);
+
+    // Verify handlers were attached
+    expect(listeners.get('mousedown').length).toBe(1);
+    expect(listeners.get('mousemove').length).toBe(1);
+    expect(listeners.get('mouseup').length).toBe(1);
+    expect(listeners.get('mouseleave').length).toBe(1);
+
+    // Dispose should remove all handlers
+    canvas.dispose();
+
+    // Verify all handlers were removed
+    expect(listeners.get('mousedown').length).toBe(0);
+    expect(listeners.get('mousemove').length).toBe(0);
+    expect(listeners.get('mouseup').length).toBe(0);
+    expect(listeners.get('mouseleave').length).toBe(0);
+  });
 });
 
 runner.report();

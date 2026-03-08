@@ -83,12 +83,24 @@ export class GlyphPicker {
    * Register an event listener.
    * @param {string} event - Event name (e.g., 'select')
    * @param {function} callback - Callback function
+   * @returns {Function} Unsubscribe function to remove this listener
    */
   on(event, callback) {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, []);
     }
     this.listeners.get(event).push(callback);
+
+    // Return unsubscribe function
+    return () => {
+      const listeners = this.listeners.get(event);
+      if (listeners) {
+        const index = listeners.indexOf(callback);
+        if (index > -1) {
+          listeners.splice(index, 1);
+        }
+      }
+    };
   }
 
   /**
@@ -118,5 +130,13 @@ export class GlyphPicker {
     if (selectedButton) {
       selectedButton.classList.add('selected');
     }
+  }
+
+  /**
+   * Dispose: removes all event listeners
+   * Call this when the glyph picker is no longer needed (e.g., modal closes)
+   */
+  dispose() {
+    this.listeners.clear();
   }
 }

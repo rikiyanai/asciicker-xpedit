@@ -300,6 +300,45 @@ runner.describe('Palette', () => {
     palette.setApplyMode('glyph', false);
     expect(palette.getApplyMode().glyph).toBe(false);
   });
+
+  runner.it('should return unsubscribe function from on()', () => {
+    const palette = new Palette();
+    let callCount = 0;
+    const unsubscribe = palette.on('color-changed', () => {
+      callCount++;
+    });
+
+    palette.setForeground([100, 100, 100]);
+    expect(callCount).toBe(1);
+
+    // Unsubscribe and verify callback no longer fires
+    unsubscribe();
+    palette.setForeground([200, 200, 200]);
+    expect(callCount).toBe(1); // Should not increment
+  });
+
+  runner.it('should remove all listeners on dispose()', () => {
+    const palette = new Palette();
+    let callCount1 = 0;
+    let callCount2 = 0;
+    palette.on('color-changed', () => {
+      callCount1++;
+    });
+    palette.on('apply-mode-changed', () => {
+      callCount2++;
+    });
+
+    palette.setForeground([100, 100, 100]);
+    expect(callCount1).toBe(1);
+
+    palette.dispose();
+
+    palette.setForeground([200, 200, 200]);
+    palette.setApplyMode('glyph', false);
+
+    expect(callCount1).toBe(1); // Should not increment after dispose
+    expect(callCount2).toBe(0); // Should never fire after dispose
+  });
 });
 
 runner.report();

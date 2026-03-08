@@ -35,6 +35,9 @@ export class Canvas {
     // Active tool reference
     this.activeTool = null;
 
+    // Store bound event handlers for cleanup
+    this._boundHandlers = null;
+
     // Initialize with default cells (transparent, white on black)
     this._initializeCells();
 
@@ -63,10 +66,18 @@ export class Canvas {
       return;
     }
 
-    this.canvasElement.addEventListener('mousedown', (event) => this._onMouseDown(event));
-    this.canvasElement.addEventListener('mousemove', (event) => this._onMouseMove(event));
-    this.canvasElement.addEventListener('mouseup', (event) => this._onMouseUp(event));
-    this.canvasElement.addEventListener('mouseleave', (event) => this._onMouseLeave(event));
+    // Store bound handlers for cleanup
+    this._boundHandlers = {
+      mousedown: (event) => this._onMouseDown(event),
+      mousemove: (event) => this._onMouseMove(event),
+      mouseup: (event) => this._onMouseUp(event),
+      mouseleave: (event) => this._onMouseLeave(event),
+    };
+
+    this.canvasElement.addEventListener('mousedown', this._boundHandlers.mousedown);
+    this.canvasElement.addEventListener('mousemove', this._boundHandlers.mousemove);
+    this.canvasElement.addEventListener('mouseup', this._boundHandlers.mouseup);
+    this.canvasElement.addEventListener('mouseleave', this._boundHandlers.mouseleave);
   }
 
   /**
@@ -371,5 +382,25 @@ export class Canvas {
         `Coordinates (${x}, ${y}) out of bounds (0-${this.width - 1}, 0-${this.height - 1})`
       );
     }
+  }
+
+  /**
+   * Dispose: removes all event listeners and cleans up resources
+   * Call this when the canvas is no longer needed (e.g., modal closes)
+   */
+  dispose() {
+    if (!this.canvasElement.removeEventListener || !this._boundHandlers) {
+      return;
+    }
+
+    // Remove all mouse event listeners
+    this.canvasElement.removeEventListener('mousedown', this._boundHandlers.mousedown);
+    this.canvasElement.removeEventListener('mousemove', this._boundHandlers.mousemove);
+    this.canvasElement.removeEventListener('mouseup', this._boundHandlers.mouseup);
+    this.canvasElement.removeEventListener('mouseleave', this._boundHandlers.mouseleave);
+
+    // Clear references
+    this._boundHandlers = null;
+    this.activeTool = null;
   }
 }

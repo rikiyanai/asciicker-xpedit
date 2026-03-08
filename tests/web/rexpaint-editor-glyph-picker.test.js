@@ -251,6 +251,38 @@ runner.describe('Glyph Picker', () => {
     picker.selectGlyph(100);
     expect(picker.getSelectedGlyph()).toBe(100);
   });
+
+  runner.it('should return unsubscribe function from on()', () => {
+    const picker = new GlyphPicker(12, 12);
+    let callCount = 0;
+    const unsubscribe = picker.on('select', () => {
+      callCount++;
+    });
+
+    picker.selectGlyph(65);
+    expect(callCount).toBe(1);
+
+    // Unsubscribe and verify callback no longer fires
+    unsubscribe();
+    picker.selectGlyph(100);
+    expect(callCount).toBe(1); // Should not increment
+  });
+
+  runner.it('should remove all listeners on dispose()', () => {
+    const picker = new GlyphPicker(12, 12);
+    let callCount = 0;
+    picker.on('select', () => {
+      callCount++;
+    });
+
+    picker.selectGlyph(65);
+    expect(callCount).toBe(1);
+
+    picker.dispose();
+
+    picker.selectGlyph(100);
+    expect(callCount).toBe(1); // Should not increment after dispose
+  });
 });
 
 runner.report();

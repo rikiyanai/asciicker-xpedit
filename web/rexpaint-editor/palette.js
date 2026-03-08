@@ -123,12 +123,24 @@ export class Palette {
    * Register event listener
    * @param {string} event - Event name ('color-changed', 'apply-mode-changed')
    * @param {Function} callback
+   * @returns {Function} Unsubscribe function to remove this listener
    */
   on(event, callback) {
     if (!this._listeners.has(event)) {
       this._listeners.set(event, []);
     }
     this._listeners.get(event).push(callback);
+
+    // Return unsubscribe function
+    return () => {
+      const listeners = this._listeners.get(event);
+      if (listeners) {
+        const index = listeners.indexOf(callback);
+        if (index > -1) {
+          listeners.splice(index, 1);
+        }
+      }
+    };
   }
 
   /**
@@ -159,6 +171,14 @@ export class Palette {
    */
   _emitApplyModeChanged() {
     this._emit('apply-mode-changed', this.getApplyMode());
+  }
+
+  /**
+   * Dispose: removes all event listeners
+   * Call this when the palette is no longer needed (e.g., modal closes)
+   */
+  dispose() {
+    this._listeners.clear();
   }
 
   /**

@@ -50,6 +50,9 @@ export class EditorApp {
 
     // Wire component events
     this._wireComponentEvents();
+
+    // Set up apply mode toggle buttons
+    this._setupApplyModeToggles();
   }
 
   /**
@@ -84,6 +87,50 @@ export class EditorApp {
       }
     });
     this._unsubscribers.push(unsubApplyMode);
+  }
+
+  /**
+   * Set up click handlers for apply mode toggle buttons
+   * @private
+   */
+  _setupApplyModeToggles() {
+    const glyphBtn = document.getElementById('applyGlyph');
+    const fgBtn = document.getElementById('applyForeground');
+    const bgBtn = document.getElementById('applyBackground');
+
+    if (glyphBtn) {
+      glyphBtn.addEventListener('click', () => {
+        this.activeApplyModes.glyph = !this.activeApplyModes.glyph;
+        glyphBtn.classList.toggle('active');
+        this._syncApplyModesToTools();
+      });
+    }
+
+    if (fgBtn) {
+      fgBtn.addEventListener('click', () => {
+        this.activeApplyModes.foreground = !this.activeApplyModes.foreground;
+        fgBtn.classList.toggle('active');
+        this._syncApplyModesToTools();
+      });
+    }
+
+    if (bgBtn) {
+      bgBtn.addEventListener('click', () => {
+        this.activeApplyModes.background = !this.activeApplyModes.background;
+        bgBtn.classList.toggle('active');
+        this._syncApplyModesToTools();
+      });
+    }
+  }
+
+  /**
+   * Sync apply modes to all active tools
+   * @private
+   */
+  _syncApplyModesToTools() {
+    if (this.activeTool && typeof this.activeTool.setApplyModes === 'function') {
+      this.activeTool.setApplyModes(this.activeApplyModes);
+    }
   }
 
   /**

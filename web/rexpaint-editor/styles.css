@@ -158,3 +158,31 @@
   border-color: #0f0;
   font-weight: bold;
 }
+
+.apply-mode-toggles {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.toggle-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #444;
+  background: #1e1e1e;
+  color: #ffb86c;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 14px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.toggle-btn.active {
+  background: #2e2e2e;
+  border-color: #ffb86c;
+}
+
+.toggle-btn:hover {
+  background: #3e3e3e;
+}

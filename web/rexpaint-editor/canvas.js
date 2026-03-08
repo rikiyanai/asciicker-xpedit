@@ -32,8 +32,123 @@ export class Canvas {
     // CP437 font renderer (optional, fallback to monospace if not set)
     this.cp437Font = null;
 
+    // Active tool reference
+    this.activeTool = null;
+
     // Initialize with default cells (transparent, white on black)
     this._initializeCells();
+
+    // Bind mouse event handlers
+    this._bindMouseEventHandlers();
+  }
+
+  /**
+   * Set the active tool for this canvas
+   * @param {Object} tool - The tool instance to activate
+   */
+  toolActivated(tool) {
+    this.activeTool = tool;
+    if (tool) {
+      tool.setCanvas(this);
+    }
+  }
+
+  /**
+   * Bind mouse event handlers to the canvas element
+   * @private
+   */
+  _bindMouseEventHandlers() {
+    if (!this.canvasElement.addEventListener) {
+      // Skip event binding in test environments
+      return;
+    }
+
+    this.canvasElement.addEventListener('mousedown', (event) => this._onMouseDown(event));
+    this.canvasElement.addEventListener('mousemove', (event) => this._onMouseMove(event));
+    this.canvasElement.addEventListener('mouseup', (event) => this._onMouseUp(event));
+    this.canvasElement.addEventListener('mouseleave', (event) => this._onMouseLeave(event));
+  }
+
+  /**
+   * Handle mousedown event
+   * @private
+   */
+  _onMouseDown(event) {
+    if (!this.activeTool) {
+      return;
+    }
+
+    const rect = this.canvasElement.getBoundingClientRect();
+    const pixelX = event.clientX - rect.left;
+    const pixelY = event.clientY - rect.top;
+    const coords = this.pixelToCellCoords(pixelX, pixelY);
+
+    // Check bounds
+    if (coords.x < 0 || coords.x >= this.width || coords.y < 0 || coords.y >= this.height) {
+      return;
+    }
+
+    // Notify tool of drag start
+    if (this.activeTool.startDrag) {
+      this.activeTool.startDrag(coords.x, coords.y);
+      this.render();
+    }
+  }
+
+  /**
+   * Handle mousemove event
+   * @private
+   */
+  _onMouseMove(event) {
+    if (!this.activeTool || !this.activeTool.drag) {
+      return;
+    }
+
+    // Check if mouse button is pressed
+    if (event.buttons === 0) {
+      return;
+    }
+
+    const rect = this.canvasElement.getBoundingClientRect();
+    const pixelX = event.clientX - rect.left;
+    const pixelY = event.clientY - rect.top;
+    const coords = this.pixelToCellCoords(pixelX, pixelY);
+
+    // Check bounds
+    if (coords.x < 0 || coords.x >= this.width || coords.y < 0 || coords.y >= this.height) {
+      return;
+    }
+
+    // Notify tool of drag continuation
+    this.activeTool.drag(coords.x, coords.y);
+    this.render();
+  }
+
+  /**
+   * Handle mouseup event
+   * @private
+   */
+  _onMouseUp(event) {
+    if (!this.activeTool || !this.activeTool.endDrag) {
+      return;
+    }
+
+    this.activeTool.endDrag();
+    this.render();
+  }
+
+  /**
+   * Handle mouseleave event
+   * @private
+   */
+  _onMouseLeave(event) {
+    if (!this.activeTool || !this.activeTool.endDrag) {
+      return;
+    }
+
+    // Cancel drag if mouse leaves canvas
+    this.activeTool.endDrag();
+    this.render();
   }
 
   /**

@@ -133,8 +133,23 @@ export class CP437Font {
       throw new Error(`Invalid glyph code ${code}. Must be 0-255.`);
     }
 
-    if (!Array.isArray(fg) || fg.length !== 3 || !Array.isArray(bg) || bg.length !== 3) {
-      throw new Error('Foreground and background colors must be [R, G, B] arrays.');
+    // Validate color arrays and clamp values
+    if (!Array.isArray(fg) || fg.length < 3) {
+      fg = [255, 255, 255]; // Default to white
+    } else {
+      fg = fg.slice(0, 3).map(c => {
+        const val = Math.round(c);
+        return isNaN(val) ? 255 : Math.max(0, Math.min(255, val));
+      });
+    }
+
+    if (!Array.isArray(bg) || bg.length < 3) {
+      bg = [0, 0, 0]; // Default to black
+    } else {
+      bg = bg.slice(0, 3).map(c => {
+        const val = Math.round(c);
+        return isNaN(val) ? 0 : Math.max(0, Math.min(255, val));
+      });
     }
 
     // Draw background rectangle

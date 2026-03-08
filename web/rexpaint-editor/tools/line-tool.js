@@ -117,6 +117,11 @@ export class LineTool {
    * @param {number} y - Starting cell row
    */
   startLine(x, y) {
+    // Clamp to valid canvas bounds
+    if (!this.canvas || x < 0 || y < 0 || x >= this.canvas.width || y >= this.canvas.height) {
+      return; // Silently ignore out-of-bounds
+    }
+
     this.isDrawing = true;
     this.lineStartX = x;
     this.lineStartY = y;

@@ -58,32 +58,34 @@ export class Palette {
   /**
    * Normalize color format to RGB array
    * Accepts either [r,g,b] array or '#RRGGBB' hex string
-   * Clamps values to 0-255
+   * Clamps values to 0-255, defaults to white for invalid input
    * @param {number[] | string} color
    * @returns {number[]} RGB array
    */
   normalizeColor(color) {
     if (Array.isArray(color)) {
-      // Clamp RGB values to 0-255
-      return [
-        Math.max(0, Math.min(255, Math.round(color[0]))),
-        Math.max(0, Math.min(255, Math.round(color[1]))),
-        Math.max(0, Math.min(255, Math.round(color[2]))),
-      ];
+      // Validate and clamp RGB values to 0-255
+      return color.slice(0, 3).map(c => {
+        const val = Math.round(c);
+        if (isNaN(val)) return 255; // Default to white if invalid
+        return Math.max(0, Math.min(255, val));
+      });
     }
 
-    if (typeof color === 'string' && color.startsWith('#')) {
-      // Parse hex string '#RRGGBB'
-      const hex = color.substring(1);
-      if (hex.length === 6) {
-        const r = parseInt(hex.substring(0, 2), 16);
-        const g = parseInt(hex.substring(2, 4), 16);
-        const b = parseInt(hex.substring(4, 6), 16);
-        return [r, g, b];
+    if (typeof color === 'string') {
+      const hex = color.replace('#', '').toUpperCase();
+      // Validate hex format: must be exactly 6 hexadecimal characters
+      if (/^[0-9A-F]{6}$/.test(hex)) {
+        return [
+          parseInt(hex.substring(0, 2), 16),
+          parseInt(hex.substring(2, 4), 16),
+          parseInt(hex.substring(4, 6), 16)
+        ];
       }
     }
 
-    throw new Error(`Invalid color format: ${color}`);
+    // Default to white for any invalid input
+    return [255, 255, 255];
   }
 
   /**

@@ -1,0 +1,72 @@
+/**
+ * Keyboard Handler
+ *
+ * Manages keyboard shortcuts for the editor:
+ * - Tool selection: C=Cell, L=Line, R=Rect, O=Oval, F=Fill, T=Text
+ * - Undo/Redo: Ctrl+Z=undo, Ctrl+Y=redo
+ * - Browser integration: Ctrl+S prevents default browser save
+ */
+
+export class KeyboardHandler {
+  /**
+   * Create a new KeyboardHandler instance
+   * @param {EditorApp} editorApp - The EditorApp instance to route actions to
+   */
+  constructor(editorApp) {
+    this.app = editorApp;
+
+    // Define shortcuts map with code-to-action mappings
+    this.shortcuts = {
+      'KeyC': () => this.app.activateTool(this.app.cellTool),
+      'KeyL': () => this.app.activateTool(this.app.lineTool),
+      'KeyR': () => this.app.activateTool(this.app.rectTool),
+      'KeyO': () => this.app.activateTool(this.app.ovalTool),
+      'KeyF': () => this.app.activateTool(this.app.fillTool),
+      'KeyT': () => this.app.activateTool(this.app.textTool),
+      'KeyZ': (evt) => evt.ctrlKey && this.app.undo(),
+      'KeyY': (evt) => evt.ctrlKey && this.app.redo(),
+      'KeyS': (evt) => evt.ctrlKey && evt.preventDefault(),
+    };
+
+    this._element = null;
+    this._handleKeyDown = this._handleKeyDown.bind(this);
+  }
+
+  /**
+   * Attach keyboard handler to a DOM element
+   * @param {HTMLElement} element - Element to attach listener to
+   */
+  attach(element) {
+    this._element = element;
+    element.addEventListener('keydown', this._handleKeyDown);
+  }
+
+  /**
+   * Handle keydown events and dispatch to shortcuts
+   * @private
+   * @param {KeyboardEvent} evt - The keyboard event
+   */
+  _handleKeyDown(evt) {
+    const shortcut = this.shortcuts[evt.code];
+    if (shortcut) {
+      shortcut(evt);
+    }
+  }
+
+  /**
+   * Detach keyboard handler from DOM element
+   */
+  detach() {
+    if (this._element) {
+      this._element.removeEventListener('keydown', this._handleKeyDown);
+      this._element = null;
+    }
+  }
+
+  /**
+   * Dispose of the handler and clean up resources
+   */
+  dispose() {
+    this.detach();
+  }
+}

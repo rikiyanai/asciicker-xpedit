@@ -898,6 +898,51 @@ export class EditorApp {
    * Dispose of the editor app and all components
    * Unsubscribes all listeners and calls dispose() on components
    */
+
+  /**
+   * Set the current action context for bundle mode (idle/attack/death)
+   * Used by workbench grid panel to switch between action animations
+   * @param {string} actionKey - Action key ('idle', 'attack', or 'death')
+   * @returns {boolean} True if action changed, false if already active
+   */
+  setActionContext(actionKey) {
+    if (!['idle', 'attack', 'death'].includes(actionKey)) {
+      console.warn(`Invalid action context: ${actionKey}`);
+      return false;
+    }
+
+    if (this.currentAction === actionKey) {
+      return false; // No change needed
+    }
+
+    const oldAction = this.currentAction;
+    this.currentAction = actionKey;
+
+    // Update status bar if available
+    if (this.statusBar && this.statusBar.toolDisplay) {
+      this.statusBar.toolDisplay.textContent = `Action: ${actionKey}`;
+    }
+
+    return true;
+  }
+
+  /**
+   * Get current action context
+   * @returns {string} Current action ('idle', 'attack', or 'death')
+   */
+  getActionContext() {
+    return this.currentAction;
+  }
+
+  /**
+   * Enable or disable bundle mode
+   * In bundle mode, editor works with multiple actions (idle/attack/death)
+   * @param {boolean} enabled - Whether to enable bundle mode
+   */
+  setBundleMode(enabled) {
+    this.bundleMode = enabled;
+    this.currentAction = enabled ? 'idle' : 'idle';
+  }
   dispose() {
     // Clean up paste mode
     this.cancelPaste();

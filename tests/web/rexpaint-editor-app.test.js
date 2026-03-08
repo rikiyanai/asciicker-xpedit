@@ -103,10 +103,22 @@ class MockCanvas extends MockEventEmitter {
     super();
     this.activeTool = null;
     this.disposeCalled = false;
+    this.fontSize = 12;
   }
 
   setActiveTool(tool) {
     this.activeTool = tool;
+  }
+
+  setFontSize(size) {
+    if (![8, 10, 12, 16].includes(size)) {
+      throw new Error('Font size must be 8, 10, 12, or 16 pixels');
+    }
+    this.fontSize = size;
+  }
+
+  getFontSize() {
+    return this.fontSize;
   }
 
   dispose() {
@@ -363,6 +375,36 @@ runner.describe('EditorApp', () => {
     expect(tool1.glyph).toBe(65);
     expect(tool2.glyph).toBe(66);
     expect(app.activeTool).toBe(tool2);
+  });
+
+  runner.it('should change font size through canvas', () => {
+    const canvas = new MockCanvas();
+    const palette = new MockPalette();
+    const glyphPicker = new MockGlyphPicker();
+
+    const app = new EditorApp({ canvas, palette, glyphPicker });
+    expect(canvas.fontSize).toBe(12); // Default
+
+    app.setFontSize(16);
+    expect(canvas.fontSize).toBe(16);
+
+    app.setFontSize(8);
+    expect(canvas.fontSize).toBe(8);
+  });
+
+  runner.it('should get current font size from canvas', () => {
+    const canvas = new MockCanvas();
+    const palette = new MockPalette();
+    const glyphPicker = new MockGlyphPicker();
+
+    const app = new EditorApp({ canvas, palette, glyphPicker });
+    expect(app.getFontSize()).toBe(12); // Default
+
+    canvas.fontSize = 16;
+    expect(app.getFontSize()).toBe(16);
+
+    app.setFontSize(8);
+    expect(app.getFontSize()).toBe(8);
   });
 });
 

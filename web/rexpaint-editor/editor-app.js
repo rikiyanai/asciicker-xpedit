@@ -160,6 +160,28 @@ export class EditorApp {
   }
 
   /**
+   * Change font size on the canvas
+   * Valid sizes: 8, 10, 12, 16
+   * @param {number} pixelsPerCell - Size in pixels
+   */
+  setFontSize(pixelsPerCell) {
+    if (this.canvas && typeof this.canvas.setFontSize === 'function') {
+      this.canvas.setFontSize(pixelsPerCell);
+    }
+  }
+
+  /**
+   * Get current font size
+   * @returns {number} Current font size in pixels
+   */
+  getFontSize() {
+    if (this.canvas && typeof this.canvas.getFontSize === 'function') {
+      return this.canvas.getFontSize();
+    }
+    return 12; // Default
+  }
+
+  /**
    * Dispose of the editor app and all components
    * Unsubscribes all listeners and calls dispose() on components
    */

@@ -38,6 +38,11 @@ export class EditorApp {
     this.glyphPicker = glyphPicker;
     this.tools = tools;
 
+    // Wire EditorApp reference to Canvas for pan event delegation
+    if (this.canvas) {
+      this.canvas.editorApp = this;
+    }
+
     // Tool references for keyboard shortcuts
     this.cellTool = null;
     this.lineTool = null;
@@ -606,6 +611,30 @@ export class EditorApp {
       return this.canvas.getFontSize();
     }
     return 12; // Default
+  }
+
+  /**
+   * Enable pan mode - called when Space key is pressed
+   * Sets panMode flag and changes cursor to 'grab'
+   */
+  enablePanMode() {
+    this.panMode = true;
+    const canvasElement = document.getElementById('rexpaintCanvas');
+    if (canvasElement) {
+      canvasElement.style.cursor = 'grab';
+    }
+  }
+
+  /**
+   * Disable pan mode - called when Space key is released
+   * Clears panMode flag and restores cursor to 'crosshair'
+   */
+  disablePanMode() {
+    this.panMode = false;
+    const canvasElement = document.getElementById('rexpaintCanvas');
+    if (canvasElement) {
+      canvasElement.style.cursor = 'crosshair';
+    }
   }
 
   /**

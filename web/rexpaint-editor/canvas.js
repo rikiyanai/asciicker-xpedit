@@ -392,6 +392,34 @@ export class Canvas {
   }
 
   /**
+   * Change font/cell size and re-render
+   * Valid sizes: 8, 10, 12, 16 (matching CP437 bitmap fonts)
+   * @param {number} pixelsPerCell - Size of each cell in pixels
+   */
+  setFontSize(pixelsPerCell) {
+    if (![8, 10, 12, 16].includes(pixelsPerCell)) {
+      throw new Error('Font size must be 8, 10, 12, or 16 pixels');
+    }
+
+    this.cellSizePixels = pixelsPerCell;
+
+    // Update canvas physical size
+    this.canvasElement.width = this.width * pixelsPerCell;
+    this.canvasElement.height = this.height * pixelsPerCell;
+
+    // Re-render with new size
+    this.render();
+  }
+
+  /**
+   * Get current font size in pixels per cell
+   * @returns {number} Current font size (8, 10, 12, or 16)
+   */
+  getFontSize() {
+    return this.cellSizePixels;
+  }
+
+  /**
    * Dispose: removes all event listeners and cleans up resources
    * Call this when the canvas is no longer needed (e.g., modal closes)
    */

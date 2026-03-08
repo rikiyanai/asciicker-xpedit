@@ -258,6 +258,100 @@ runner.describe('Canvas Module', () => {
     expect(listeners.get('mouseup').length).toBe(0);
     expect(listeners.get('mouseleave').length).toBe(0);
   });
+
+  runner.it('should change font size and update canvas dimensions', () => {
+    const canvas = new Canvas(document.createElement('canvas'), 80, 25);
+    expect(canvas.cellSizePixels).toBe(12); // Default
+
+    canvas.setFontSize(16);
+    expect(canvas.cellSizePixels).toBe(16);
+    expect(canvas.canvasElement.width).toBe(80 * 16);
+    expect(canvas.canvasElement.height).toBe(25 * 16);
+  });
+
+  runner.it('should throw error on invalid font size', () => {
+    const canvas = new Canvas(document.createElement('canvas'), 80, 25);
+
+    let errorThrown = false;
+    try {
+      canvas.setFontSize(7);
+    } catch (e) {
+      errorThrown = true;
+      expect(e.message).toBe('Font size must be 8, 10, 12, or 16 pixels');
+    }
+    if (!errorThrown) {
+      throw new Error('Expected error for invalid font size 7');
+    }
+
+    errorThrown = false;
+    try {
+      canvas.setFontSize(13);
+    } catch (e) {
+      errorThrown = true;
+      expect(e.message).toBe('Font size must be 8, 10, 12, or 16 pixels');
+    }
+    if (!errorThrown) {
+      throw new Error('Expected error for invalid font size 13');
+    }
+
+    errorThrown = false;
+    try {
+      canvas.setFontSize(20);
+    } catch (e) {
+      errorThrown = true;
+      expect(e.message).toBe('Font size must be 8, 10, 12, or 16 pixels');
+    }
+    if (!errorThrown) {
+      throw new Error('Expected error for invalid font size 20');
+    }
+  });
+
+  runner.it('should only accept valid font sizes (8, 10, 12, 16)', () => {
+    const canvas = new Canvas(document.createElement('canvas'), 80, 25);
+
+    // Test all valid sizes
+    canvas.setFontSize(8);
+    expect(canvas.cellSizePixels).toBe(8);
+
+    canvas.setFontSize(10);
+    expect(canvas.cellSizePixels).toBe(10);
+
+    canvas.setFontSize(12);
+    expect(canvas.cellSizePixels).toBe(12);
+
+    canvas.setFontSize(16);
+    expect(canvas.cellSizePixels).toBe(16);
+  });
+
+  runner.it('should re-render when font size changes', () => {
+    const canvas = new Canvas(document.createElement('canvas'), 80, 25);
+    canvas.setCell(0, 0, 65, [255, 255, 255], [0, 0, 0]); // 'A'
+
+    const oldWidth = canvas.canvasElement.width;
+    const oldHeight = canvas.canvasElement.height;
+
+    canvas.setFontSize(16);
+
+    expect(canvas.canvasElement.width).toBe(oldWidth * (16 / 12));
+    expect(canvas.canvasElement.height).toBe(oldHeight * (16 / 12));
+
+    // Cell data should still be intact after re-render
+    const cell = canvas.getCell(0, 0);
+    expect(cell.glyph).toBe(65);
+    expect(cell.fg).toEqual([255, 255, 255]);
+    expect(cell.bg).toEqual([0, 0, 0]);
+  });
+
+  runner.it('should get current font size', () => {
+    const canvas = new Canvas(document.createElement('canvas'), 80, 25);
+    expect(canvas.getFontSize()).toBe(12); // Default
+
+    canvas.setFontSize(8);
+    expect(canvas.getFontSize()).toBe(8);
+
+    canvas.setFontSize(16);
+    expect(canvas.getFontSize()).toBe(16);
+  });
 });
 
 runner.report();

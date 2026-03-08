@@ -57,6 +57,10 @@ export class Canvas {
 
     // Bind mouse event handlers
     this._bindMouseEventHandlers();
+
+    // Layer composition support
+    this.layerStack = null;
+    this.useLayerStack = false;
   }
 
   /**
@@ -68,6 +72,16 @@ export class Canvas {
     if (tool) {
       tool.setCanvas(this);
     }
+  }
+
+  /**
+   * Set the LayerStack for multi-layer composition rendering
+   * @param {LayerStack} layerStack - The LayerStack instance to render from
+   */
+  setLayerStack(layerStack) {
+    this.layerStack = layerStack;
+    this.useLayerStack = true;
+    this.render();
   }
 
   /**
@@ -232,6 +246,15 @@ export class Canvas {
    */
   setCell(x, y, glyph, fg, bg) {
     this._validateCoordinates(x, y);
+
+    // If using LayerStack, apply to active layer
+    if (this.useLayerStack && this.layerStack) {
+      const activeLayer = this.layerStack.getActiveLayer();
+      activeLayer.setCell(x, y, glyph & 0xFF, fg, bg);
+      return;
+    }
+
+    // Use original behavior when not using LayerStack
     const key = `${x},${y}`;
     this.cells.set(key, {
       glyph: glyph & 0xFF, // Ensure 0-255
@@ -248,6 +271,37 @@ export class Canvas {
    */
   getCell(x, y) {
     this._validateCoordinates(x, y);
+
+    // If using LayerStack, composite from visible layers
+    if (this.useLayerStack && this.layerStack) {
+      const layers = this.layerStack.getLayers();
+      // Iterate from top to bottom (end to start)
+      for (let i = layers.length - 1; i >= 0; i--) {
+        const layer = layers[i];
+        // Skip hidden layers
+        if (!layer.visible) {
+          continue;
+        }
+        // Get cell from this layer
+        const cell = layer.getCell(x, y);
+        if (cell && cell.glyph !== 0) {
+          // Return first visible layer with non-transparent glyph
+          return {
+            glyph: cell.glyph,
+            fg: [...cell.fg],
+            bg: [...cell.bg],
+          };
+        }
+      }
+      // No visible layer had content, return transparent cell
+      return {
+        glyph: 0,
+        fg: [255, 255, 255],
+        bg: [0, 0, 0],
+      };
+    }
+
+    // Use original behavior when not using LayerStack
     const key = `${x},${y}`;
     const stored = this.cells.get(key) || {
       glyph: 0,

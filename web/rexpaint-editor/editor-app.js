@@ -62,6 +62,13 @@ export class EditorApp {
     this.offsetX = 0;
     this.offsetY = 0;
 
+    // Copy/paste state
+    this.clipboard = null; // Stores {cells, bounds}
+    this.pasteMode = false; // Whether we're in paste placement mode
+    this.pasteOffset = { x: 0, y: 0 }; // Offset for paste cursor tracking
+    this._pasteMoveListener = null; // Reference to mousemove listener for cleanup
+    this._pasteClickListener = null; // Reference to click listener for cleanup
+
     // Store event unsubscribe functions for cleanup
     this._unsubscribers = [];
 
@@ -631,6 +638,155 @@ export class EditorApp {
   }
 
   /**
+   * Copy the current selection to clipboard
+   * Gets selected cells from the active tool (assumed to be SelectTool)
+   * @returns {boolean} True if copy was successful, false if no selection
+   */
+  copy() {
+    // Check if there's an active selection tool
+    if (!this.activeTool || typeof this.activeTool.getSelectedCells !== 'function') {
+      return false;
+    }
+
+    try {
+      const selectedCells = this.activeTool.getSelectedCells();
+      const selectionBounds = this.activeTool.getSelectionBounds();
+
+      if (!selectedCells || selectedCells.length === 0) {
+        return false;
+      }
+
+      // Store clipboard with cells and their bounds
+      this.clipboard = {
+        cells: selectedCells,
+        bounds: selectionBounds,
+      };
+
+      return true;
+    } catch (e) {
+      console.warn('Copy failed:', e);
+      return false;
+    }
+  }
+
+  /**
+   * Start paste mode - enables cursor tracking for paste placement
+   * @returns {boolean} True if paste mode was started, false if no clipboard
+   */
+  startPaste() {
+    if (!this.clipboard || !this.clipboard.cells || this.clipboard.cells.length === 0) {
+      return false;
+    }
+
+    // Enable paste mode
+    this.pasteMode = true;
+
+    // Attach mousemove listener to track paste cursor position
+    const canvasElement = document.getElementById('rexpaintCanvas');
+    if (canvasElement) {
+      this._pasteMoveListener = (e) => {
+        const rect = canvasElement.getBoundingClientRect();
+        const screenX = e.clientX - rect.left;
+        const screenY = e.clientY - rect.top;
+
+        const pixelsPerCell = this.getFontSize() || 12;
+        const cellX = Math.floor(screenX / pixelsPerCell);
+        const cellY = Math.floor(screenY / pixelsPerCell);
+
+        this.pasteOffset = { x: cellX, y: cellY };
+      };
+
+      // Add click listener to paste at clicked location
+      const pasteClickListener = (e) => {
+        const rect = canvasElement.getBoundingClientRect();
+        const screenX = e.clientX - rect.left;
+        const screenY = e.clientY - rect.top;
+
+        const pixelsPerCell = this.getFontSize() || 12;
+        const cellX = Math.floor(screenX / pixelsPerCell);
+        const cellY = Math.floor(screenY / pixelsPerCell);
+
+        // Paste at clicked location
+        this.paste(cellX, cellY);
+      };
+
+      canvasElement.addEventListener('mousemove', this._pasteMoveListener);
+      canvasElement.addEventListener('click', pasteClickListener);
+
+      // Store click listener reference for cleanup
+      this._pasteClickListener = pasteClickListener;
+    }
+
+    return true;
+  }
+
+  /**
+   * Cancel paste mode and remove cursor tracking
+   */
+  cancelPaste() {
+    this.pasteMode = false;
+
+    const canvasElement = document.getElementById('rexpaintCanvas');
+
+    // Remove mousemove listener
+    if (this._pasteMoveListener) {
+      if (canvasElement) {
+        canvasElement.removeEventListener('mousemove', this._pasteMoveListener);
+      }
+      this._pasteMoveListener = null;
+    }
+
+    // Remove click listener
+    if (this._pasteClickListener) {
+      if (canvasElement) {
+        canvasElement.removeEventListener('click', this._pasteClickListener);
+      }
+      this._pasteClickListener = null;
+    }
+
+    this.pasteOffset = { x: 0, y: 0 };
+  }
+
+  /**
+   * Paste clipboard contents at the current paste cursor position
+   * Takes a snapshot before pasting for undo support
+   * @param {number} x - Paste position X (cell column)
+   * @param {number} y - Paste position Y (cell row)
+   */
+  paste(x, y) {
+    if (!this.clipboard || !this.clipboard.cells || !this.canvas) {
+      return;
+    }
+
+    // Create undo snapshot (simplified - just snapshot the canvas state)
+    // In a full implementation, this would integrate with UndoStack
+    const before = new Map(this.canvas.cells);
+
+    // Apply pasted cells
+    const { cells } = this.clipboard;
+    const { bounds } = this.clipboard;
+
+    // Calculate offset from original selection position
+    const offsetX = x - bounds.x;
+    const offsetY = y - bounds.y;
+
+    // Paint each cell from clipboard at new location
+    cells.forEach((cell) => {
+      const newX = cell.x + offsetX;
+      const newY = cell.y + offsetY;
+
+      // Only paint cells that fit within canvas bounds
+      if (newX >= 0 && newX < this.canvas.width && newY >= 0 && newY < this.canvas.height) {
+        this.canvas.setCell(newX, newY, cell.glyph, cell.fg, cell.bg);
+      }
+    });
+
+    // Exit paste mode and re-render
+    this.cancelPaste();
+    this.canvas.render();
+  }
+
+  /**
    * Undo the last action
    * Placeholder for future undo/redo stack integration
    */
@@ -674,6 +830,9 @@ export class EditorApp {
    * Unsubscribes all listeners and calls dispose() on components
    */
   dispose() {
+    // Clean up paste mode
+    this.cancelPaste();
+
     // Dispose keyboard handler
     if (this.keyboardHandler && typeof this.keyboardHandler.dispose === 'function') {
       this.keyboardHandler.dispose();

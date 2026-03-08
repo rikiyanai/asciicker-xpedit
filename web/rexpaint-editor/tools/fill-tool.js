@@ -186,4 +186,11 @@ export class FillTool {
 
     this.canvas.setCell(x, y, glyph, fg, bg);
   }
+
+  /**
+   * Deactivate the tool (cleanup)
+   */
+  deactivate() {
+    // no-op for fill tool
+  }
 }

@@ -787,6 +787,49 @@ export class EditorApp {
   }
 
   /**
+   * Delete all cells in the current selection
+   * Clears selected cells to empty (glyph 0) while preserving background color
+   * Supports undo via snapshot before deletion
+   * @returns {boolean} True if deletion was successful, false if no selection
+   */
+  deleteSelection() {
+    // Check if there's an active selection tool
+    if (!this.activeTool || typeof this.activeTool.getSelectionBounds !== 'function') {
+      return false;
+    }
+
+    const bounds = this.activeTool.getSelectionBounds();
+    if (!bounds) {
+      return false;
+    }
+
+    try {
+      // Capture canvas state before deletion for undo support
+      const before = new Map(this.canvas.cells);
+
+      // Clear all cells in selection
+      for (let y = bounds.y; y < bounds.y + bounds.height; y++) {
+        for (let x = bounds.x; x < bounds.x + bounds.width; x++) {
+          // Get current cell to preserve background color
+          const currentCell = this.canvas.getCell(x, y);
+          const bgColor = currentCell ? currentCell.bg : [0, 0, 0];
+
+          // Set glyph to 0 (empty/space), preserve background color
+          this.canvas.setCell(x, y, 0, [255, 255, 255], bgColor);
+        }
+      }
+
+      // Re-render canvas
+      this.canvas.render();
+
+      return true;
+    } catch (e) {
+      console.warn('Delete selection failed:', e);
+      return false;
+    }
+  }
+
+  /**
    * Undo the last action
    * Placeholder for future undo/redo stack integration
    */

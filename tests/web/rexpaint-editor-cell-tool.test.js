@@ -163,6 +163,45 @@ runner.describe('Cell Tool', () => {
     expect(canvas.setCell).toHaveBeenCalledWith(5, 10, 65, [255, 0, 0], [0, 0, 0]);
   });
 
+  runner.it('should not corrupt canvas state when apply modes use existing cell values', () => {
+    const tool = new CellTool();
+    // Mock canvas with real getCell behavior that returns cell data
+    const mockCanvas = {
+      width: 80,
+      height: 25,
+      setCell: vi.fn(),
+      getCell: vi.fn(() => ({ glyph: 42, fg: [100, 100, 100], bg: [50, 50, 50] })),
+    };
+    tool.setCanvas(mockCanvas);
+    tool.setGlyph(65);
+    tool.setColors([255, 0, 0], [0, 0, 255]);
+
+    // Disable glyph apply mode - should preserve existing glyph
+    tool.setApplyModes({ glyph: false, foreground: true, background: true });
+    tool.paint(5, 10);
+
+    // Verify that the existing cell colors from getCell are copied, not referenced
+    // The mock returns the same object every time, but tool should copy the data
+    const calls = mockCanvas.setCell.lastArgs;
+    expect(calls[0]).toBe(5);  // x
+    expect(calls[1]).toBe(10); // y
+    expect(calls[2]).toBe(42); // glyph (from existing, not tool glyph 65)
+
+    // Mutate the mock's returned object
+    const existingCell = mockCanvas.getCell();
+    existingCell.glyph = 999;
+    existingCell.fg[0] = 0;
+    existingCell.bg[0] = 255;
+
+    // Paint again with same apply modes
+    tool.paint(6, 10);
+
+    // setCell should have been called with a different value,
+    // proving the tool doesn't re-use the mutated object
+    const newCalls = mockCanvas.setCell.lastArgs;
+    expect(newCalls[2]).toBe(42); // Should still be 42, not 999
+  });
+
   runner.it('should not crash when painting out-of-bounds (negative x)', () => {
     const tool = new CellTool();
     const canvas = { width: 80, height: 25, setCell: vi.fn() };

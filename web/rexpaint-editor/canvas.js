@@ -201,15 +201,22 @@ export class Canvas {
    * Get a single cell's data
    * @param {number} x - Column coordinate
    * @param {number} y - Row coordinate
-   * @returns {Object} Cell data {glyph, fg, bg}
+   * @returns {Object} Cell data {glyph, fg, bg} - Returns defensive copy to prevent mutation
    */
   getCell(x, y) {
     this._validateCoordinates(x, y);
     const key = `${x},${y}`;
-    return this.cells.get(key) || {
+    const stored = this.cells.get(key) || {
       glyph: 0,
       fg: [255, 255, 255],
       bg: [0, 0, 0],
+    };
+
+    // Return deep copy to prevent caller from mutating internal state
+    return {
+      glyph: stored.glyph,
+      fg: [...stored.fg],  // Copy array to prevent mutation
+      bg: [...stored.bg],  // Copy array to prevent mutation
     };
   }
 

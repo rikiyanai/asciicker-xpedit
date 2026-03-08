@@ -4,6 +4,8 @@
  * Manages keyboard shortcuts for the editor:
  * - Tool selection: C=Cell, L=Line, R=Rect, O=Oval, F=Fill, T=Text
  * - Undo/Redo: Ctrl+Z=undo, Ctrl+Y=redo
+ * - Copy/Paste: Ctrl+C=copy, Ctrl+V=paste
+ * - Delete: Delete=delete selection
  * - Browser integration: Ctrl+S prevents default browser save
  */
 
@@ -42,6 +44,7 @@ export class KeyboardHandler {
       'KeyZ': (evt) => evt.ctrlKey && this.app.undo(),
       'KeyY': (evt) => evt.ctrlKey && this.app.redo(),
       'KeyS': (evt) => evt.ctrlKey && evt.preventDefault(),
+      'Delete': () => this.app.deleteSelection(),
       'Escape': () => {
         // Escape: cancel paste mode
         if (this.app.pasteMode) {

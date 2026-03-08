@@ -226,6 +226,39 @@ class MockLineTool {
   }
 }
 
+// Mock document and DOM for Node.js environment
+if (typeof document === 'undefined') {
+  global.document = {
+    createElement(tag) {
+      return {
+        tag,
+        children: [],
+        classList: {
+          add() {},
+          remove() {},
+          toggle() {},
+          contains() { return false; }
+        },
+        addEventListener() {},
+        querySelector() { return null; },
+        querySelectorAll() { return []; },
+        appendChild() {},
+        textContent: '',
+        getBoundingClientRect() { return { top: 0, left: 0 }; }
+      };
+    },
+    getElementById() {
+      return null; // Return null for optional UI elements
+    },
+    querySelector() {
+      return null;
+    },
+    querySelectorAll() {
+      return [];
+    }
+  };
+}
+
 // Run tests
 const runner = new TestRunner();
 

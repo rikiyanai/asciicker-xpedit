@@ -65,6 +65,11 @@ const expect = (value) => ({
       throw new Error(`Expected ${value} to be < ${expected}`);
     }
   },
+  toBeLessThanOrEqual(expected) {
+    if (value > expected) {
+      throw new Error(`Expected ${value} to be <= ${expected}`);
+    }
+  },
   toHaveBeenCalled() {
     if (!value.called) {
       throw new Error(`Expected function to have been called`);
@@ -110,7 +115,7 @@ const vi = {
 const runner = new TestRunner();
 
 runner.describe('Oval Tool', () => {
-  runner.it('should draw outline oval', () => {
+  runner.it('should draw outline oval with perimeter-only cells', () => {
     const tool = new OvalTool();
     const canvas = { setCell: vi.fn(), width: 10, height: 10 };
     tool.setCanvas(canvas);
@@ -122,13 +127,20 @@ runner.describe('Oval Tool', () => {
     tool.drawOval(5, 3);
     tool.endOval();
 
-    // Outline: only perimeter cells painted
+    // Outline of 6x4 bounding box should have ~8 perimeter cells (fewer for outline)
     const calls = canvas.setCell.mock.calls;
-    expect(calls.length).toBeGreaterThan(0);
-    expect(calls.length).toBeLessThan(24); // Less than filled
+    expect(calls.length).toBeGreaterThan(5); // At least some cells
+    expect(calls.length).toBeLessThan(24); // Less than filled (24 = 6*4)
+
+    // Verify all cells have correct glyph and colors
+    for (let i = 0; i < calls.length; i++) {
+      expect(calls[i][2]).toBe(35); // Glyph
+      expect(calls[i][3]).toEqual([255, 255, 255]); // Foreground
+      expect(calls[i][4]).toEqual([0, 0, 0]); // Background
+    }
   });
 
-  runner.it('should draw filled oval', () => {
+  runner.it('should draw filled oval with all interior cells', () => {
     const tool = new OvalTool();
     const canvas = { setCell: vi.fn(), width: 10, height: 10 };
     tool.setCanvas(canvas);
@@ -140,11 +152,21 @@ runner.describe('Oval Tool', () => {
     tool.drawOval(5, 3);
     tool.endOval();
 
-    // Filled: more cells than outline
-    expect(canvas.setCell.mock.calls.length).toBeGreaterThan(0);
+    // Filled 6x4 oval should paint more cells than outline
+    const callCount = canvas.setCell.mock.calls.length;
+    expect(callCount).toBeGreaterThan(5); // More than outline
+    expect(callCount).toBeLessThanOrEqual(24); // Max 6*4=24
+
+    // Verify all cells have correct glyph and colors
+    for (let i = 0; i < callCount; i++) {
+      const call = canvas.setCell.mock.calls[i];
+      expect(call[2]).toBe(178); // Glyph
+      expect(call[3]).toEqual([100, 100, 100]); // Foreground
+      expect(call[4]).toEqual([0, 0, 0]); // Background
+    }
   });
 
-  runner.it('should respect apply modes', () => {
+  runner.it('should respect apply modes - preserve glyph when disabled', () => {
     const tool = new OvalTool();
     const canvas = {
       setCell: vi.fn(),
@@ -153,6 +175,8 @@ runner.describe('Oval Tool', () => {
       height: 10,
     };
     tool.setCanvas(canvas);
+    tool.setGlyph(99);
+    tool.setColors([255, 0, 0], [0, 0, 0]);
     tool.setApplyModes({ glyph: false, foreground: true, background: true });
     tool.setMode('filled');
 
@@ -160,11 +184,21 @@ runner.describe('Oval Tool', () => {
     tool.drawOval(3, 3);
     tool.endOval();
 
-    // Should paint cells respecting apply modes
-    expect(canvas.setCell.mock.calls.length).toBeGreaterThan(0);
+    // 4x4 filled oval should paint at least a few cells
+    const callCount = canvas.setCell.mock.calls.length;
+    expect(callCount).toBeGreaterThan(3); // At least some cells
+    expect(callCount).toBeLessThanOrEqual(16); // Max 4x4
+
+    // When glyph apply mode is false, should preserve existing glyph
+    for (let i = 0; i < callCount; i++) {
+      const call = canvas.setCell.mock.calls[i];
+      expect(call[2]).toBe(42); // Existing glyph, not tool's glyph (99)
+      expect(call[3]).toEqual([255, 0, 0]); // New foreground
+      expect(call[4]).toEqual([0, 0, 0]); // New background
+    }
   });
 
-  runner.it('should handle ovals with swapped coordinates', () => {
+  runner.it('should handle ovals with swapped coordinates (normalized bounds)', () => {
     const tool = new OvalTool();
     const canvas = { setCell: vi.fn(), width: 10, height: 10 };
     tool.setCanvas(canvas);
@@ -176,11 +210,18 @@ runner.describe('Oval Tool', () => {
     tool.drawOval(0, 0);
     tool.endOval();
 
-    // Should draw oval regardless of coordinate order
-    expect(canvas.setCell.mock.calls.length).toBeGreaterThan(0);
+    // Should draw 6x6 oval regardless of coordinate order, paint at least 10 cells
+    const callCount = canvas.setCell.mock.calls.length;
+    expect(callCount).toBeGreaterThan(8); // Reasonable portion of 6x6=36 filled
+    expect(callCount).toBeLessThanOrEqual(36); // Max 6x6
+
+    // Verify all cells have correct glyph
+    for (let i = 0; i < callCount; i++) {
+      expect(canvas.setCell.mock.calls[i][2]).toBe(65);
+    }
   });
 
-  runner.it('should silently ignore out-of-bounds start', () => {
+  runner.it('should silently ignore out-of-bounds start and return early', () => {
     const tool = new OvalTool();
     const canvas = { setCell: vi.fn(), width: 10, height: 10 };
     tool.setCanvas(canvas);
@@ -190,6 +231,8 @@ runner.describe('Oval Tool', () => {
 
     // Should not throw, just ignore
     expect(tool.isDrawing).toBe(false);
+    // No cells should be painted
+    expect(canvas.setCell.mock.calls.length).toBe(0);
   });
 });
 

@@ -79,11 +79,14 @@ const vi = {
       fn.called = true;
       fn.callCount++;
       fn.lastArgs = args;
+      fn.mock = fn.mock || { calls: [] };
+      fn.mock.calls.push(args);
       return implementation(...args);
     };
     fn.called = false;
     fn.callCount = 0;
     fn.lastArgs = [];
+    fn.mock = { calls: [] };
     return fn;
   },
 };
@@ -151,7 +154,7 @@ runner.describe('Fill Tool', () => {
     expect(canvas.setCell).toHaveBeenCalledWith(0, 0, 77, [100, 100, 100], [10, 10, 10]);
   });
 
-  runner.it('should respect apply modes - glyph only', () => {
+  runner.it('should respect apply modes - glyph only (preserve colors)', () => {
     const canvas = {
       width: 3,
       height: 3,
@@ -170,12 +173,15 @@ runner.describe('Fill Tool', () => {
     // Fill from (0, 0)
     tool.fill(0, 0);
 
-    // Should fill (0,0), (1,0), (0,1), (2,0), (1,1), (0,2), (2,1), (1,2), (2,2) - 9 cells total (3x3 grid)
+    // Should fill entire 3x3 grid = 9 cells total
     expect(canvas.setCell).toHaveBeenCalledTimes(9);
-    // But should preserve original colors
+
+    // Verify each call used new glyph but preserved original colors
     for (let i = 0; i < canvas.setCell.callCount; i++) {
-      const args = canvas.setCell.mock ? canvas.setCell.mock.calls[i] : null;
-      // Check that the call used glyph 77 but kept original colors [255, 0, 0] and [0, 0, 0]
+      const call = canvas.setCell.mock.calls[i];
+      expect(call[2]).toBe(77); // Glyph should be new tool glyph
+      expect(call[3]).toEqual([255, 0, 0]); // Colors preserved (original fg)
+      expect(call[4]).toEqual([0, 0, 0]); // Colors preserved (original bg)
     }
   });
 
@@ -244,6 +250,46 @@ runner.describe('Fill Tool', () => {
 
     // Should fill all 4 cells: (0,0), (1,0), (0,1), (1,1)
     expect(canvas.setCell).toHaveBeenCalledTimes(4);
+
+    // Verify all cells have correct glyph and colors
+    for (let i = 0; i < 4; i++) {
+      const call = canvas.setCell.mock.calls[i];
+      expect(call[2]).toBe(77); // Glyph
+      expect(call[3]).toEqual([100, 100, 100]); // Foreground
+      expect(call[4]).toEqual([10, 10, 10]); // Background
+    }
+  });
+
+  runner.it('should respect apply modes - colors only (preserve glyph)', () => {
+    const canvas = {
+      width: 2,
+      height: 2,
+      getCell: vi.fn((x, y) => {
+        return { glyph: 42, fg: [255, 0, 0], bg: [0, 0, 0] };
+      }),
+      setCell: vi.fn(),
+    };
+
+    const tool = new FillTool();
+    tool.setCanvas(canvas);
+    tool.setGlyph(77); // New glyph
+    tool.setColors([100, 100, 100], [10, 10, 10]); // New colors
+    tool.setApplyModes({ glyph: false, foreground: true, background: true });
+
+    // Fill from (0, 0)
+    tool.fill(0, 0);
+
+    // Should fill all 4 cells in 2x2 grid
+    expect(canvas.setCell).toHaveBeenCalledTimes(4);
+
+    // When glyph apply mode is false, should preserve existing glyph (42)
+    // but apply new colors
+    for (let i = 0; i < 4; i++) {
+      const call = canvas.setCell.mock.calls[i];
+      expect(call[2]).toBe(42); // Existing glyph preserved
+      expect(call[3]).toEqual([100, 100, 100]); // New foreground
+      expect(call[4]).toEqual([10, 10, 10]); // New background
+    }
   });
 });
 

@@ -93,7 +93,17 @@ if (typeof document === 'undefined') {
 }
 
 if (typeof window === 'undefined') {
-  global.window = global;
+  global.window = {
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  };
+}
+
+// Ensure requestAnimationFrame is available
+if (typeof requestAnimationFrame === 'undefined') {
+  global.requestAnimationFrame = (callback) => {
+    return 0;
+  };
 }
 
 // Simple test framework (polyfill for vitest-like API)

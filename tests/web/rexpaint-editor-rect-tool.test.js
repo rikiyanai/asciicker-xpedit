@@ -110,7 +110,7 @@ const vi = {
 const runner = new TestRunner();
 
 runner.describe('Rectangle Tool', () => {
-  runner.it('should draw outline rectangle', () => {
+  runner.it('should draw outline rectangle with exact perimeter cells', () => {
     const tool = new RectTool();
     const canvas = { setCell: vi.fn() };
     tool.setCanvas(canvas);
@@ -122,13 +122,28 @@ runner.describe('Rectangle Tool', () => {
     tool.drawRect(4, 4);
     tool.endRect();
 
-    // Outline: only perimeter cells painted (8 cells for 5x5 rect)
+    // Outline of 5x5 rect: perimeter = 2*(5+5) - 4 = 16 cells
+    // Top: 5 cells, Bottom: 5 cells, Left (excluding corners): 3 cells, Right (excluding corners): 3 cells
     const calls = canvas.setCell.mock.calls;
-    expect(calls.length).toBeGreaterThan(0);
-    expect(calls.length).toBeLessThan(25); // Not filled
+    expect(calls.length).toBe(16);
+
+    // Verify all outline cells have correct glyph and colors
+    for (let i = 0; i < calls.length; i++) {
+      expect(calls[i][2]).toBe(35); // Glyph
+      expect(calls[i][3]).toEqual([255, 255, 255]); // Foreground
+      expect(calls[i][4]).toEqual([0, 0, 0]); // Background
+    }
+
+    // Verify cells are only on perimeter (not interior)
+    const cellSet = new Set();
+    calls.forEach(call => cellSet.add(`${call[0]},${call[1]}`));
+    // No interior cells should be painted (e.g., not (1,1), (2,2), (3,3))
+    expect(cellSet.has('1,1')).toBe(false);
+    expect(cellSet.has('2,2')).toBe(false);
+    expect(cellSet.has('3,3')).toBe(false);
   });
 
-  runner.it('should draw filled rectangle', () => {
+  runner.it('should draw filled rectangle with exact area cells', () => {
     const tool = new RectTool();
     const canvas = { setCell: vi.fn() };
     tool.setCanvas(canvas);
@@ -140,11 +155,19 @@ runner.describe('Rectangle Tool', () => {
     tool.drawRect(4, 4);
     tool.endRect();
 
-    // Filled: all cells in rectangle (25 cells for 5x5)
+    // Filled 5x5 rectangle = 25 cells exactly
     expect(canvas.setCell.mock.calls.length).toBe(25);
+
+    // Verify all cells have correct glyph and colors
+    for (let i = 0; i < 25; i++) {
+      const call = canvas.setCell.mock.calls[i];
+      expect(call[2]).toBe(178); // Glyph
+      expect(call[3]).toEqual([100, 100, 100]); // Foreground
+      expect(call[4]).toEqual([0, 0, 0]); // Background
+    }
   });
 
-  runner.it('should handle rectangles with swapped coordinates', () => {
+  runner.it('should normalize coordinates and draw correct area for swapped corners', () => {
     const tool = new RectTool();
     const canvas = { setCell: vi.fn() };
     tool.setCanvas(canvas);
@@ -156,17 +179,37 @@ runner.describe('Rectangle Tool', () => {
     tool.drawRect(0, 0); // Top-left to bottom-right swapped
     tool.endRect();
 
-    // Should draw 6x6 rectangle (from 0,0 to 5,5 inclusive)
+    // Should normalize to (0,0)-(5,5) and draw 6x6 rectangle = 36 cells
     expect(canvas.setCell.mock.calls.length).toBe(36);
+
+    // Verify all 36 cells are painted with correct glyph
+    for (let i = 0; i < 36; i++) {
+      const call = canvas.setCell.mock.calls[i];
+      expect(call[2]).toBe(65); // Glyph
+    }
+
+    // Verify cells cover range (0,0) to (5,5)
+    const minX = Math.min(...canvas.setCell.mock.calls.map(c => c[0]));
+    const maxX = Math.max(...canvas.setCell.mock.calls.map(c => c[0]));
+    const minY = Math.min(...canvas.setCell.mock.calls.map(c => c[1]));
+    const maxY = Math.max(...canvas.setCell.mock.calls.map(c => c[1]));
+    expect(minX).toBe(0);
+    expect(maxX).toBe(5);
+    expect(minY).toBe(0);
+    expect(maxY).toBe(5);
   });
 
-  runner.it('should respect apply modes', () => {
+  runner.it('should respect apply modes - preserve glyph when disabled', () => {
     const tool = new RectTool();
     const canvas = {
       setCell: vi.fn(),
-      getCell: vi.fn(() => ({ glyph: 42, fg: [100, 100, 100], bg: [50, 50, 50] }))
+      getCell: vi.fn(() => ({ glyph: 42, fg: [100, 100, 100], bg: [50, 50, 50] })),
+      width: 80,
+      height: 25
     };
     tool.setCanvas(canvas);
+    tool.setGlyph(99); // Tool's glyph should be 99
+    tool.setColors([255, 0, 0], [0, 0, 0]); // Tool's colors
     tool.setApplyModes({ glyph: false, foreground: true, background: true });
     tool.setMode('filled');
 
@@ -174,8 +217,16 @@ runner.describe('Rectangle Tool', () => {
     tool.drawRect(2, 2);
     tool.endRect();
 
-    // Should still paint cells respecting apply modes
-    expect(canvas.setCell.mock.calls.length).toBeGreaterThan(0);
+    // Should paint 3x3 = 9 cells
+    expect(canvas.setCell.mock.calls.length).toBe(9);
+
+    // When glyph apply mode is false, should preserve existing glyph (42), not tool's (99)
+    for (let i = 0; i < 9; i++) {
+      const call = canvas.setCell.mock.calls[i];
+      expect(call[2]).toBe(42); // Existing glyph, not tool's glyph (99)
+      expect(call[3]).toEqual([255, 0, 0]); // New foreground
+      expect(call[4]).toEqual([0, 0, 0]); // New background
+    }
   });
 });
 

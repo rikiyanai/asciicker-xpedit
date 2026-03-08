@@ -766,46 +766,52 @@ export class EditorApp {
       return false;
     }
 
-    // Enable paste mode
-    this.pasteMode = true;
+    try {
+      // Ensure any previous listeners are cleaned up before attaching new ones
+      this.cancelPaste();
 
-    // Attach mousemove listener to track paste cursor position
-    const canvasElement = document.getElementById('rexpaintCanvas');
-    if (canvasElement) {
-      this._pasteMoveListener = (e) => {
-        const rect = canvasElement.getBoundingClientRect();
-        const screenX = e.clientX - rect.left;
-        const screenY = e.clientY - rect.top;
+      // Enable paste mode
+      this.pasteMode = true;
 
-        const pixelsPerCell = this.getFontSize() || 12;
-        const cellX = Math.floor(screenX / pixelsPerCell);
-        const cellY = Math.floor(screenY / pixelsPerCell);
+      // Attach mousemove listener to track paste cursor position
+      const canvasElement = document.getElementById('rexpaintCanvas');
+      if (canvasElement) {
+        this._pasteMoveListener = (e) => {
+          const rect = canvasElement.getBoundingClientRect();
+          const screenX = e.clientX - rect.left;
+          const screenY = e.clientY - rect.top;
 
-        this.pasteOffset = { x: cellX, y: cellY };
-      };
+          const pixelsPerCell = this.getFontSize() || 12;
+          const cellX = Math.floor(screenX / pixelsPerCell);
+          const cellY = Math.floor(screenY / pixelsPerCell);
 
-      // Add click listener to paste at clicked location
-      const pasteClickListener = (e) => {
-        const rect = canvasElement.getBoundingClientRect();
-        const screenX = e.clientX - rect.left;
-        const screenY = e.clientY - rect.top;
+          this.pasteOffset = { x: cellX, y: cellY };
+        };
 
-        const pixelsPerCell = this.getFontSize() || 12;
-        const cellX = Math.floor(screenX / pixelsPerCell);
-        const cellY = Math.floor(screenY / pixelsPerCell);
+        // Add click listener to paste at clicked location
+        this._pasteClickListener = (e) => {
+          const rect = canvasElement.getBoundingClientRect();
+          const screenX = e.clientX - rect.left;
+          const screenY = e.clientY - rect.top;
 
-        // Paste at clicked location
-        this.paste(cellX, cellY);
-      };
+          const pixelsPerCell = this.getFontSize() || 12;
+          const cellX = Math.floor(screenX / pixelsPerCell);
+          const cellY = Math.floor(screenY / pixelsPerCell);
 
-      canvasElement.addEventListener('mousemove', this._pasteMoveListener);
-      canvasElement.addEventListener('click', pasteClickListener);
+          // Paste at clicked location
+          this.paste(cellX, cellY);
+        };
 
-      // Store click listener reference for cleanup
-      this._pasteClickListener = pasteClickListener;
+        canvasElement.addEventListener('mousemove', this._pasteMoveListener);
+        canvasElement.addEventListener('click', this._pasteClickListener);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error setting up paste listeners:', error);
+      this.cancelPaste(); // Force cleanup on error
+      throw error;
     }
-
-    return true;
   }
 
   /**

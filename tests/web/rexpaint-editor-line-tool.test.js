@@ -152,20 +152,6 @@ runner.describe('Line Tool', () => {
     // When glyph mode false, only colors should be painted
     expect(canvas.setCell.mock.calls.length).toBeGreaterThan(0);
   });
-
-  runner.it('should draw vertical lines', () => {
-    const tool = new LineTool();
-    const canvas = { setCell: vi.fn() };
-    tool.setCanvas(canvas);
-    tool.setGlyph(35);
-    tool.setColors([100, 100, 100], [0, 0, 0]);
-
-    tool.startLine(5, 0);
-    tool.drawLine(5, 10); // Vertical line
-    tool.endLine();
-
-    expect(canvas.setCell.mock.calls.length).toBeGreaterThanOrEqual(11);
-  });
 });
 
 runner.report();

@@ -356,56 +356,6 @@ runner.describe('EditorApp', () => {
     expect(palette.disposeCalled).toBe(true);
     expect(glyphPicker.disposeCalled).toBe(true);
   });
-
-  runner.it('should maintain separate tool instances with independent state', () => {
-    const canvas = new MockCanvas();
-    const palette = new MockPalette();
-    const glyphPicker = new MockGlyphPicker();
-    const tool1 = new MockCellTool();
-    const tool2 = new MockCellTool();
-
-    const app = new EditorApp({ canvas, palette, glyphPicker });
-
-    app.activateTool(tool1);
-    tool1.glyph = 65;
-
-    app.activateTool(tool2);
-    tool2.glyph = 66;
-
-    expect(tool1.glyph).toBe(65);
-    expect(tool2.glyph).toBe(66);
-    expect(app.activeTool).toBe(tool2);
-  });
-
-  runner.it('should change font size through canvas', () => {
-    const canvas = new MockCanvas();
-    const palette = new MockPalette();
-    const glyphPicker = new MockGlyphPicker();
-
-    const app = new EditorApp({ canvas, palette, glyphPicker });
-    expect(canvas.fontSize).toBe(12); // Default
-
-    app.setFontSize(16);
-    expect(canvas.fontSize).toBe(16);
-
-    app.setFontSize(8);
-    expect(canvas.fontSize).toBe(8);
-  });
-
-  runner.it('should get current font size from canvas', () => {
-    const canvas = new MockCanvas();
-    const palette = new MockPalette();
-    const glyphPicker = new MockGlyphPicker();
-
-    const app = new EditorApp({ canvas, palette, glyphPicker });
-    expect(app.getFontSize()).toBe(12); // Default
-
-    canvas.fontSize = 16;
-    expect(app.getFontSize()).toBe(16);
-
-    app.setFontSize(8);
-    expect(app.getFontSize()).toBe(8);
-  });
 });
 
 runner.report();

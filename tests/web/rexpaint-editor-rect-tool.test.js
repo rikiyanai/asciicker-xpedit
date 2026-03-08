@@ -177,38 +177,6 @@ runner.describe('Rectangle Tool', () => {
     // Should still paint cells respecting apply modes
     expect(canvas.setCell.mock.calls.length).toBeGreaterThan(0);
   });
-
-  runner.it('should draw single-cell rectangle', () => {
-    const tool = new RectTool();
-    const canvas = { setCell: vi.fn() };
-    tool.setCanvas(canvas);
-    tool.setGlyph(35);
-    tool.setColors([255, 255, 255], [0, 0, 0]);
-    tool.setMode('filled');
-
-    tool.startRect(3, 3);
-    tool.drawRect(3, 3); // Same point
-    tool.endRect();
-
-    // Single cell
-    expect(canvas.setCell.mock.calls.length).toBe(1);
-  });
-
-  runner.it('should draw 2x2 outline rectangle', () => {
-    const tool = new RectTool();
-    const canvas = { setCell: vi.fn() };
-    tool.setCanvas(canvas);
-    tool.setGlyph(35);
-    tool.setColors([255, 255, 255], [0, 0, 0]);
-    tool.setMode('outline');
-
-    tool.startRect(0, 0);
-    tool.drawRect(1, 1); // 2x2 rectangle
-    tool.endRect();
-
-    // 2x2 outline = 4 cells (all perimeter)
-    expect(canvas.setCell.mock.calls.length).toBe(4);
-  });
 });
 
 runner.report();

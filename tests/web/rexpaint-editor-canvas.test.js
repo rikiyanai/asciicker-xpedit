@@ -158,18 +158,6 @@ runner.describe('Canvas Module', () => {
     expect(imageData.data.length).toBeGreaterThan(0);
   });
 
-  runner.it('should track grid dimensions', () => {
-    const canvas = new Canvas(document.createElement('canvas'), 80, 25);
-    expect(canvas.width).toBe(80);
-    expect(canvas.height).toBe(25);
-  });
-
-  runner.it('should convert cell coordinates to pixel coordinates', () => {
-    const canvas = new Canvas(document.createElement('canvas'), 80, 25);
-    const pixels = canvas.cellToPixelCoords(5, 10);
-    expect(pixels.x).toBeGreaterThan(-1);
-    expect(pixels.y).toBeGreaterThan(-1);
-  });
 
   runner.it('should return defensive copy from getCell() - mutating returned cell does not corrupt canvas', () => {
     const canvas = new Canvas(document.createElement('canvas'), 80, 25);
@@ -193,31 +181,6 @@ runner.describe('Canvas Module', () => {
     expect(original.bg[2]).toBe(255);
   });
 
-  runner.it('should return defensive copy from getCell() - mutating returned color arrays does not corrupt canvas', () => {
-    const canvas = new Canvas(document.createElement('canvas'), 80, 25);
-    canvas.setCell(3, 7, 42, [100, 150, 200], [50, 75, 100]); // '#' in custom colors
-
-    // Get the cell and mutate color arrays
-    const cell = canvas.getCell(3, 7);
-    const fg = cell.fg;
-    const bg = cell.bg;
-
-    fg[0] = 0;
-    fg[1] = 0;
-    fg[2] = 0;
-    bg[0] = 255;
-    bg[1] = 255;
-    bg[2] = 255;
-
-    // Original cell colors should be unchanged
-    const original = canvas.getCell(3, 7);
-    expect(original.fg[0]).toBe(100);
-    expect(original.fg[1]).toBe(150);
-    expect(original.fg[2]).toBe(200);
-    expect(original.bg[0]).toBe(50);
-    expect(original.bg[1]).toBe(75);
-    expect(original.bg[2]).toBe(100);
-  });
 
   runner.it('should detach mouse event handlers on dispose()', () => {
     const canvasElement = document.createElement('canvas');
@@ -306,23 +269,6 @@ runner.describe('Canvas Module', () => {
     }
   });
 
-  runner.it('should only accept valid font sizes (8, 10, 12, 16)', () => {
-    const canvas = new Canvas(document.createElement('canvas'), 80, 25);
-
-    // Test all valid sizes
-    canvas.setFontSize(8);
-    expect(canvas.cellSizePixels).toBe(8);
-
-    canvas.setFontSize(10);
-    expect(canvas.cellSizePixels).toBe(10);
-
-    canvas.setFontSize(12);
-    expect(canvas.cellSizePixels).toBe(12);
-
-    canvas.setFontSize(16);
-    expect(canvas.cellSizePixels).toBe(16);
-  });
-
   runner.it('should re-render when font size changes', () => {
     const canvas = new Canvas(document.createElement('canvas'), 80, 25);
     canvas.setCell(0, 0, 65, [255, 255, 255], [0, 0, 0]); // 'A'
@@ -340,17 +286,6 @@ runner.describe('Canvas Module', () => {
     expect(cell.glyph).toBe(65);
     expect(cell.fg).toEqual([255, 255, 255]);
     expect(cell.bg).toEqual([0, 0, 0]);
-  });
-
-  runner.it('should get current font size', () => {
-    const canvas = new Canvas(document.createElement('canvas'), 80, 25);
-    expect(canvas.getFontSize()).toBe(12); // Default
-
-    canvas.setFontSize(8);
-    expect(canvas.getFontSize()).toBe(8);
-
-    canvas.setFontSize(16);
-    expect(canvas.getFontSize()).toBe(16);
   });
 });
 

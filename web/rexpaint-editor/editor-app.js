@@ -18,6 +18,7 @@
  */
 
 import { FillTool } from './tools/fill-tool.js';
+import { KeyboardHandler } from './keyboard-handler.js';
 
 export class EditorApp {
   /**
@@ -27,12 +28,21 @@ export class EditorApp {
    * @param {Palette} config.palette - The Palette instance
    * @param {GlyphPicker} config.glyphPicker - The GlyphPicker instance
    * @param {Array} config.tools - (Optional) Array of tool instances
+   * @param {HTMLElement} config.modalElement - (Optional) Element to attach keyboard handler to
    */
-  constructor({ canvas, palette, glyphPicker, tools = [] }) {
+  constructor({ canvas, palette, glyphPicker, tools = [], modalElement = null }) {
     this.canvas = canvas;
     this.palette = palette;
     this.glyphPicker = glyphPicker;
     this.tools = tools;
+
+    // Tool references for keyboard shortcuts
+    this.cellTool = null;
+    this.lineTool = null;
+    this.rectTool = null;
+    this.ovalTool = null;
+    this.fillTool = null;
+    this.textTool = null;
 
     // Canonical state
     this.activeGlyph = 0;
@@ -47,6 +57,12 @@ export class EditorApp {
 
     // Store event unsubscribe functions for cleanup
     this._unsubscribers = [];
+
+    // Create keyboard handler
+    this.keyboardHandler = new KeyboardHandler(this);
+    if (modalElement) {
+      this.keyboardHandler.attach(modalElement);
+    }
 
     // Wire component events
     this._wireComponentEvents();
@@ -231,6 +247,22 @@ export class EditorApp {
   }
 
   /**
+   * Undo the last action
+   * Placeholder for future undo/redo stack integration
+   */
+  undo() {
+    // TODO: Implement undo stack (Task 14)
+  }
+
+  /**
+   * Redo the last undone action
+   * Placeholder for future undo/redo stack integration
+   */
+  redo() {
+    // TODO: Implement redo stack (Task 14)
+  }
+
+  /**
    * Activate the fill tool
    * Instantiates a FillTool, adds it to the tools array, and activates it
    * @returns {FillTool} The activated fill tool
@@ -258,6 +290,12 @@ export class EditorApp {
    * Unsubscribes all listeners and calls dispose() on components
    */
   dispose() {
+    // Dispose keyboard handler
+    if (this.keyboardHandler && typeof this.keyboardHandler.dispose === 'function') {
+      this.keyboardHandler.dispose();
+    }
+    this.keyboardHandler = null;
+
     // Unsubscribe all event listeners
     for (const unsubscribe of this._unsubscribers) {
       unsubscribe();

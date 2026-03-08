@@ -243,9 +243,13 @@ export class Canvas {
    * @param {number} glyph - CP437 glyph code (0-255)
    * @param {Array<number>} fg - Foreground color [R, G, B]
    * @param {Array<number>} bg - Background color [R, G, B]
+   * @throws {Error} If coordinates, glyph, or colors are invalid
    */
   setCell(x, y, glyph, fg, bg) {
     this._validateCoordinates(x, y);
+    this._validateGlyph(glyph);
+    this._validateColor(fg, 'foreground');
+    this._validateColor(bg, 'background');
 
     // If using LayerStack, apply to active layer
     if (this.useLayerStack && this.layerStack) {
@@ -588,16 +592,68 @@ export class Canvas {
   }
 
   /**
-   * Validate that coordinates are within bounds
+   * Validate that coordinates are within bounds and are integers
    * @param {number} x - Column coordinate
    * @param {number} y - Row coordinate
+   * @throws {Error} If coordinates are invalid (not integers or out of bounds)
    * @private
    */
   _validateCoordinates(x, y) {
+    if (!Number.isInteger(x) || !Number.isInteger(y)) {
+      throw new Error(
+        `Invalid coordinates: x=${x}, y=${y} (must be integers)`
+      );
+    }
     if (x < 0 || x >= this.width || y < 0 || y >= this.height) {
       throw new Error(
-        `Coordinates (${x}, ${y}) out of bounds (0-${this.width - 1}, 0-${this.height - 1})`
+        `Coordinates (${x}, ${y}) out of bounds (valid: 0-${this.width - 1}, 0-${this.height - 1})`
       );
+    }
+  }
+
+  /**
+   * Validate a glyph value
+   * @param {number} glyph - Glyph code to validate
+   * @throws {Error} If glyph is invalid
+   * @private
+   */
+  _validateGlyph(glyph) {
+    if (!Number.isInteger(glyph)) {
+      throw new Error(`Invalid glyph: ${glyph} (must be an integer)`);
+    }
+    if (glyph < 0 || glyph > 255) {
+      throw new Error(`Invalid glyph: ${glyph} (must be 0-255)`);
+    }
+  }
+
+  /**
+   * Validate a color value
+   * @param {Array<number>} color - Color as [R, G, B]
+   * @param {string} colorType - Name of color (for error messages)
+   * @throws {Error} If color is invalid
+   * @private
+   */
+  _validateColor(color, colorType = 'color') {
+    if (!Array.isArray(color)) {
+      throw new Error(`Invalid ${colorType}: ${JSON.stringify(color)} (must be an array)`);
+    }
+    if (color.length !== 3) {
+      throw new Error(
+        `Invalid ${colorType}: length=${color.length} (must have exactly 3 elements [R, G, B])`
+      );
+    }
+    for (let i = 0; i < 3; i++) {
+      const component = color[i];
+      if (!Number.isInteger(component)) {
+        throw new Error(
+          `Invalid ${colorType}[${i}]: ${component} (must be an integer)`
+        );
+      }
+      if (component < 0 || component > 255) {
+        throw new Error(
+          `Invalid ${colorType}[${i}]: ${component} (must be 0-255)`
+        );
+      }
     }
   }
 

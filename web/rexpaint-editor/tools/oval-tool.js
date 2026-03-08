@@ -100,33 +100,43 @@ export class OvalTool {
       throw new Error('Canvas not set');
     }
 
+    // Validate coordinates are integers
+    if (!Number.isInteger(x) || !Number.isInteger(y)) {
+      return; // Silently ignore invalid coordinates
+    }
+
     // Bounds checking
     if (x < 0 || y < 0 || x >= this.canvas.width || y >= this.canvas.height) {
       return; // Silently ignore out-of-bounds
     }
 
-    // Determine what to apply based on apply modes
-    let glyph = this.glyph;
-    let fg = [...this.fg];
-    let bg = [...this.bg];
+    try {
+      // Determine what to apply based on apply modes
+      let glyph = this.glyph;
+      let fg = [...this.fg];
+      let bg = [...this.bg];
 
-    // If apply mode is disabled, use existing cell value
-    if (!this.applyModes.glyph) {
-      const existingCell = this.canvas.getCell(x, y);
-      glyph = existingCell.glyph;
+      // If apply mode is disabled, use existing cell value
+      if (!this.applyModes.glyph) {
+        const existingCell = this.canvas.getCell(x, y);
+        glyph = existingCell.glyph;
+      }
+
+      if (!this.applyModes.foreground) {
+        const existingCell = this.canvas.getCell(x, y);
+        fg = [...existingCell.fg];
+      }
+
+      if (!this.applyModes.background) {
+        const existingCell = this.canvas.getCell(x, y);
+        bg = [...existingCell.bg];
+      }
+
+      this.canvas.setCell(x, y, glyph, fg, bg);
+    } catch (e) {
+      // Log error but don't crash - graceful degradation
+      console.warn(`OvalTool paint error at (${x}, ${y}): ${e.message}`);
     }
-
-    if (!this.applyModes.foreground) {
-      const existingCell = this.canvas.getCell(x, y);
-      fg = [...existingCell.fg];
-    }
-
-    if (!this.applyModes.background) {
-      const existingCell = this.canvas.getCell(x, y);
-      bg = [...existingCell.bg];
-    }
-
-    this.canvas.setCell(x, y, glyph, fg, bg);
   }
 
   /**
@@ -135,8 +145,13 @@ export class OvalTool {
    * @param {number} y - Starting cell row
    */
   startDrag(x, y) {
+    // Validate inputs
+    if (!this.canvas || !Number.isInteger(x) || !Number.isInteger(y)) {
+      return; // Silently ignore invalid inputs
+    }
+
     // Clamp to valid canvas bounds
-    if (!this.canvas || x < 0 || y < 0 || x >= this.canvas.width || y >= this.canvas.height) {
+    if (x < 0 || y < 0 || x >= this.canvas.width || y >= this.canvas.height) {
       return; // Silently ignore out-of-bounds
     }
 

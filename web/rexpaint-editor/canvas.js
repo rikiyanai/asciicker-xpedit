@@ -42,6 +42,9 @@ export class Canvas {
     this.offsetX = 0;
     this.offsetY = 0;
 
+    // Grid visibility state
+    this.showGrid = false;
+
     // Initialize with default cells (transparent, white on black)
     this._initializeCells();
 
@@ -376,6 +379,45 @@ export class Canvas {
       for (let x = 0; x < this.width; x++) {
         this.drawCell(x, y);
       }
+    }
+    if (this.showGrid) {
+      this._drawGrid();
+    }
+  }
+
+  /**
+   * Set grid visibility state and re-render
+   * @param {boolean} visible - Whether to show the grid
+   */
+  setGridVisible(visible) {
+    this.showGrid = visible;
+    this.render();
+  }
+
+  /**
+   * Draw a 0.5px grid overlay on the canvas
+   * @private
+   */
+  _drawGrid() {
+    this.ctx.strokeStyle = '#444444';
+    this.ctx.lineWidth = 0.5;
+
+    // Draw vertical lines
+    for (let x = 1; x < this.width; x++) {
+      const px = x * this.cellSizePixels - this.offsetX;
+      this.ctx.beginPath();
+      this.ctx.moveTo(px, 0);
+      this.ctx.lineTo(px, this.canvasElement.height);
+      this.ctx.stroke();
+    }
+
+    // Draw horizontal lines
+    for (let y = 1; y < this.height; y++) {
+      const py = y * this.cellSizePixels - this.offsetY;
+      this.ctx.beginPath();
+      this.ctx.moveTo(0, py);
+      this.ctx.lineTo(this.canvasElement.width, py);
+      this.ctx.stroke();
     }
   }
 

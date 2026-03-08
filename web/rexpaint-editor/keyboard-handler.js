@@ -17,15 +17,37 @@ export class KeyboardHandler {
 
     // Define shortcuts map with code-to-action mappings
     this.shortcuts = {
-      'KeyC': () => this.app.activateTool(this.app.cellTool),
+      'KeyC': (evt) => {
+        if (evt.ctrlKey) {
+          // Ctrl+C: copy selection
+          evt.preventDefault();
+          this.app.copy();
+        } else {
+          // C: activate cell tool
+          this.app.activateTool(this.app.cellTool);
+        }
+      },
       'KeyL': () => this.app.activateTool(this.app.lineTool),
       'KeyR': () => this.app.activateTool(this.app.rectTool),
       'KeyO': () => this.app.activateTool(this.app.ovalTool),
       'KeyF': () => this.app.activateTool(this.app.fillTool),
       'KeyT': () => this.app.activateTool(this.app.textTool),
+      'KeyV': (evt) => {
+        if (evt.ctrlKey) {
+          // Ctrl+V: start paste mode
+          evt.preventDefault();
+          this.app.startPaste();
+        }
+      },
       'KeyZ': (evt) => evt.ctrlKey && this.app.undo(),
       'KeyY': (evt) => evt.ctrlKey && this.app.redo(),
       'KeyS': (evt) => evt.ctrlKey && evt.preventDefault(),
+      'Escape': () => {
+        // Escape: cancel paste mode
+        if (this.app.pasteMode) {
+          this.app.cancelPaste();
+        }
+      },
     };
 
     this._element = null;

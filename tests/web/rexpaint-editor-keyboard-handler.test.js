@@ -134,15 +134,18 @@ runner.describe('KeyboardHandler', () => {
   runner.it('should activate cell tool on KeyC', () => {
     const app = new MockEditorApp();
     const handler = new KeyboardHandler(app);
+    let keydownCallback = null;
     const mockElement = {
       addEventListener: vi.fn((event, callback) => {
-        handler._keydownCallback = callback;
+        if (event === 'keydown') {
+          keydownCallback = callback;
+        }
       }),
     };
     handler.attach(mockElement);
 
     const event = createKeyboardEvent('KeyC');
-    handler._keydownCallback(event);
+    keydownCallback(event);
 
     expect(app.activateTool.called).toBe(true);
     expect(app.activateTool.lastArgs[0]).toBe(app.cellTool);
@@ -151,15 +154,18 @@ runner.describe('KeyboardHandler', () => {
   runner.it('should activate line tool on KeyL', () => {
     const app = new MockEditorApp();
     const handler = new KeyboardHandler(app);
+    let keydownCallback = null;
     const mockElement = {
       addEventListener: vi.fn((event, callback) => {
-        handler._keydownCallback = callback;
+        if (event === 'keydown') {
+          keydownCallback = callback;
+        }
       }),
     };
     handler.attach(mockElement);
 
     const event = createKeyboardEvent('KeyL');
-    handler._keydownCallback(event);
+    keydownCallback(event);
 
     expect(app.activateTool.called).toBe(true);
     expect(app.activateTool.lastArgs[0]).toBe(app.lineTool);
@@ -168,15 +174,18 @@ runner.describe('KeyboardHandler', () => {
   runner.it('should activate rect tool on KeyR', () => {
     const app = new MockEditorApp();
     const handler = new KeyboardHandler(app);
+    let keydownCallback = null;
     const mockElement = {
       addEventListener: vi.fn((event, callback) => {
-        handler._keydownCallback = callback;
+        if (event === 'keydown') {
+          keydownCallback = callback;
+        }
       }),
     };
     handler.attach(mockElement);
 
     const event = createKeyboardEvent('KeyR');
-    handler._keydownCallback(event);
+    keydownCallback(event);
 
     expect(app.activateTool.called).toBe(true);
     expect(app.activateTool.lastArgs[0]).toBe(app.rectTool);
@@ -185,15 +194,18 @@ runner.describe('KeyboardHandler', () => {
   runner.it('should activate oval tool on KeyO', () => {
     const app = new MockEditorApp();
     const handler = new KeyboardHandler(app);
+    let keydownCallback = null;
     const mockElement = {
       addEventListener: vi.fn((event, callback) => {
-        handler._keydownCallback = callback;
+        if (event === 'keydown') {
+          keydownCallback = callback;
+        }
       }),
     };
     handler.attach(mockElement);
 
     const event = createKeyboardEvent('KeyO');
-    handler._keydownCallback(event);
+    keydownCallback(event);
 
     expect(app.activateTool.called).toBe(true);
     expect(app.activateTool.lastArgs[0]).toBe(app.ovalTool);
@@ -202,15 +214,18 @@ runner.describe('KeyboardHandler', () => {
   runner.it('should activate fill tool on KeyF', () => {
     const app = new MockEditorApp();
     const handler = new KeyboardHandler(app);
+    let keydownCallback = null;
     const mockElement = {
       addEventListener: vi.fn((event, callback) => {
-        handler._keydownCallback = callback;
+        if (event === 'keydown') {
+          keydownCallback = callback;
+        }
       }),
     };
     handler.attach(mockElement);
 
     const event = createKeyboardEvent('KeyF');
-    handler._keydownCallback(event);
+    keydownCallback(event);
 
     expect(app.activateTool.called).toBe(true);
     expect(app.activateTool.lastArgs[0]).toBe(app.fillTool);
@@ -219,15 +234,18 @@ runner.describe('KeyboardHandler', () => {
   runner.it('should activate text tool on KeyT', () => {
     const app = new MockEditorApp();
     const handler = new KeyboardHandler(app);
+    let keydownCallback = null;
     const mockElement = {
       addEventListener: vi.fn((event, callback) => {
-        handler._keydownCallback = callback;
+        if (event === 'keydown') {
+          keydownCallback = callback;
+        }
       }),
     };
     handler.attach(mockElement);
 
     const event = createKeyboardEvent('KeyT');
-    handler._keydownCallback(event);
+    keydownCallback(event);
 
     expect(app.activateTool.called).toBe(true);
     expect(app.activateTool.lastArgs[0]).toBe(app.textTool);
@@ -236,15 +254,18 @@ runner.describe('KeyboardHandler', () => {
   runner.it('should undo on Ctrl+Z', () => {
     const app = new MockEditorApp();
     const handler = new KeyboardHandler(app);
+    let keydownCallback = null;
     const mockElement = {
       addEventListener: vi.fn((event, callback) => {
-        handler._keydownCallback = callback;
+        if (event === 'keydown') {
+          keydownCallback = callback;
+        }
       }),
     };
     handler.attach(mockElement);
 
     const event = createKeyboardEvent('KeyZ', { ctrlKey: true });
-    handler._keydownCallback(event);
+    keydownCallback(event);
 
     expect(app.undo.called).toBe(true);
   });
@@ -252,15 +273,18 @@ runner.describe('KeyboardHandler', () => {
   runner.it('should NOT undo on plain Z key without Ctrl', () => {
     const app = new MockEditorApp();
     const handler = new KeyboardHandler(app);
+    let keydownCallback = null;
     const mockElement = {
       addEventListener: vi.fn((event, callback) => {
-        handler._keydownCallback = callback;
+        if (event === 'keydown') {
+          keydownCallback = callback;
+        }
       }),
     };
     handler.attach(mockElement);
 
     const event = createKeyboardEvent('KeyZ', { ctrlKey: false });
-    handler._keydownCallback(event);
+    keydownCallback(event);
 
     expect(app.undo.called).toBe(false);
   });
@@ -268,15 +292,18 @@ runner.describe('KeyboardHandler', () => {
   runner.it('should redo on Ctrl+Y', () => {
     const app = new MockEditorApp();
     const handler = new KeyboardHandler(app);
+    let keydownCallback = null;
     const mockElement = {
       addEventListener: vi.fn((event, callback) => {
-        handler._keydownCallback = callback;
+        if (event === 'keydown') {
+          keydownCallback = callback;
+        }
       }),
     };
     handler.attach(mockElement);
 
     const event = createKeyboardEvent('KeyY', { ctrlKey: true });
-    handler._keydownCallback(event);
+    keydownCallback(event);
 
     expect(app.redo.called).toBe(true);
   });
@@ -284,15 +311,18 @@ runner.describe('KeyboardHandler', () => {
   runner.it('should NOT redo on plain Y key without Ctrl', () => {
     const app = new MockEditorApp();
     const handler = new KeyboardHandler(app);
+    let keydownCallback = null;
     const mockElement = {
       addEventListener: vi.fn((event, callback) => {
-        handler._keydownCallback = callback;
+        if (event === 'keydown') {
+          keydownCallback = callback;
+        }
       }),
     };
     handler.attach(mockElement);
 
     const event = createKeyboardEvent('KeyY', { ctrlKey: false });
-    handler._keydownCallback(event);
+    keydownCallback(event);
 
     expect(app.redo.called).toBe(false);
   });
@@ -300,15 +330,18 @@ runner.describe('KeyboardHandler', () => {
   runner.it('should prevent default on Ctrl+S', () => {
     const app = new MockEditorApp();
     const handler = new KeyboardHandler(app);
+    let keydownCallback = null;
     const mockElement = {
       addEventListener: vi.fn((event, callback) => {
-        handler._keydownCallback = callback;
+        if (event === 'keydown') {
+          keydownCallback = callback;
+        }
       }),
     };
     handler.attach(mockElement);
 
     const event = createKeyboardEvent('KeyS', { ctrlKey: true });
-    handler._keydownCallback(event);
+    keydownCallback(event);
 
     expect(event.preventDefault.called).toBe(true);
   });
@@ -316,15 +349,18 @@ runner.describe('KeyboardHandler', () => {
   runner.it('should not prevent default on plain S key', () => {
     const app = new MockEditorApp();
     const handler = new KeyboardHandler(app);
+    let keydownCallback = null;
     const mockElement = {
       addEventListener: vi.fn((event, callback) => {
-        handler._keydownCallback = callback;
+        if (event === 'keydown') {
+          keydownCallback = callback;
+        }
       }),
     };
     handler.attach(mockElement);
 
     const event = createKeyboardEvent('KeyS', { ctrlKey: false });
-    handler._keydownCallback(event);
+    keydownCallback(event);
 
     expect(event.preventDefault.called).toBe(false);
   });
@@ -343,19 +379,65 @@ runner.describe('KeyboardHandler', () => {
   runner.it('should ignore unknown key codes', () => {
     const app = new MockEditorApp();
     const handler = new KeyboardHandler(app);
+    let keydownCallback = null;
     const mockElement = {
       addEventListener: vi.fn((event, callback) => {
-        handler._keydownCallback = callback;
+        if (event === 'keydown') {
+          keydownCallback = callback;
+        }
       }),
     };
     handler.attach(mockElement);
 
     const event = createKeyboardEvent('KeyX');
-    handler._keydownCallback(event);
+    keydownCallback(event);
 
     expect(app.activateTool.called).toBe(false);
     expect(app.undo.called).toBe(false);
     expect(app.redo.called).toBe(false);
+  });
+
+  runner.it('should enable pan mode when Space key is pressed', () => {
+    const app = new MockEditorApp();
+    app.enablePanMode = vi.fn();
+    const handler = new KeyboardHandler(app);
+    let keydownCallback = null;
+    const mockElement = {
+      addEventListener: vi.fn((event, callback) => {
+        if (event === 'keydown') {
+          keydownCallback = callback;
+        }
+      }),
+    };
+    handler.attach(mockElement);
+
+    const event = createKeyboardEvent('Space');
+    event.preventDefault = vi.fn();
+    keydownCallback(event);
+
+    expect(app.enablePanMode.called).toBe(true);
+  });
+
+  runner.it('should disable pan mode when Space key is released', () => {
+    const app = new MockEditorApp();
+    app.disablePanMode = vi.fn();
+    const handler = new KeyboardHandler(app);
+    let keyupCallback = null;
+    const mockElement = {
+      addEventListener: vi.fn((event, callback) => {
+        if (event === 'keyup') {
+          keyupCallback = callback;
+        }
+      }),
+    };
+    handler.attach(mockElement);
+
+    // Release Space (should disable)
+    const keyUpEvent = createKeyboardEvent('Space');
+    keyUpEvent.preventDefault = vi.fn();
+    keyupCallback(keyUpEvent);
+
+    expect(app.disablePanMode.called).toBe(true);
   });
 });
 

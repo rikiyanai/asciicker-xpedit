@@ -55,6 +55,7 @@ export class KeyboardHandler {
 
     this._element = null;
     this._handleKeyDown = this._handleKeyDown.bind(this);
+    this._handleKeyUp = this._handleKeyUp.bind(this);
   }
 
   /**
@@ -64,6 +65,7 @@ export class KeyboardHandler {
   attach(element) {
     this._element = element;
     element.addEventListener('keydown', this._handleKeyDown);
+    element.addEventListener('keyup', this._handleKeyUp);
   }
 
   /**
@@ -72,9 +74,34 @@ export class KeyboardHandler {
    * @param {KeyboardEvent} evt - The keyboard event
    */
   _handleKeyDown(evt) {
+    // Handle Space key for pan mode
+    if (evt.code === 'Space') {
+      evt.preventDefault();
+      if (this.app && typeof this.app.enablePanMode === 'function') {
+        this.app.enablePanMode();
+      }
+      return;
+    }
+
     const shortcut = this.shortcuts[evt.code];
     if (shortcut) {
       shortcut(evt);
+    }
+  }
+
+  /**
+   * Handle keyup events
+   * @private
+   * @param {KeyboardEvent} evt - The keyboard event
+   */
+  _handleKeyUp(evt) {
+    // Handle Space key release for pan mode
+    if (evt.code === 'Space') {
+      evt.preventDefault();
+      if (this.app && typeof this.app.disablePanMode === 'function') {
+        this.app.disablePanMode();
+      }
+      return;
     }
   }
 
@@ -84,6 +111,7 @@ export class KeyboardHandler {
   detach() {
     if (this._element) {
       this._element.removeEventListener('keydown', this._handleKeyDown);
+      this._element.removeEventListener('keyup', this._handleKeyUp);
       this._element = null;
     }
   }

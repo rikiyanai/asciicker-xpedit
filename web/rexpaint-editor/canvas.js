@@ -35,6 +35,9 @@ export class Canvas {
     // Active tool reference
     this.activeTool = null;
 
+    // EditorApp reference for pan mode delegation
+    this.editorApp = null;
+
     // Store bound event handlers for cleanup
     this._boundHandlers = null;
 
@@ -96,6 +99,15 @@ export class Canvas {
    * @private
    */
   _onMouseDown(event) {
+    // Check for pan mode
+    if (this.editorApp && this.editorApp.panMode) {
+      const rect = this.canvasElement.getBoundingClientRect();
+      const pixelX = event.clientX - rect.left;
+      const pixelY = event.clientY - rect.top;
+      this.editorApp.startPan(pixelX, pixelY);
+      return;
+    }
+
     if (!this.activeTool) {
       return;
     }
@@ -122,6 +134,20 @@ export class Canvas {
    * @private
    */
   _onMouseMove(event) {
+    // Check for pan mode
+    if (this.editorApp && this.editorApp.panMode) {
+      // Check if mouse button is pressed
+      if (event.buttons === 0) {
+        return;
+      }
+
+      const rect = this.canvasElement.getBoundingClientRect();
+      const pixelX = event.clientX - rect.left;
+      const pixelY = event.clientY - rect.top;
+      this.editorApp.pan(pixelX, pixelY);
+      return;
+    }
+
     if (!this.activeTool || !this.activeTool.drag) {
       return;
     }
@@ -151,6 +177,12 @@ export class Canvas {
    * @private
    */
   _onMouseUp(event) {
+    // End pan operation if active
+    if (this.editorApp && this.editorApp.panMode) {
+      this.editorApp.endPan();
+      return;
+    }
+
     if (!this.activeTool || !this.activeTool.endDrag) {
       return;
     }

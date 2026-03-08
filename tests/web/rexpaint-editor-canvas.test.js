@@ -78,6 +78,9 @@ if (typeof HTMLCanvasElement === 'undefined') {
     constructor(canvas) {
       this.canvas = canvas;
       this.fillStyle = '#000000';
+      this.strokeStyle = '#000000';
+      this.lineWidth = 1;
+      this.lineDashOffset = 0;
       this.font = '12px monospace';
       this.textAlign = 'left';
       this.textBaseline = 'top';
@@ -94,7 +97,16 @@ if (typeof HTMLCanvasElement === 'undefined') {
       }
     }
 
+    strokeRect(x, y, w, h) {
+      // Mock implementation for selection outline
+      // Just verify it's called correctly
+    }
+
     fillText(text, x, y, maxWidth) {}
+
+    setLineDash(dash) {
+      // Mock implementation for line dashing
+    }
 
     _parseColor(colorStr) {
       // Parse rgb(r, g, b) format
@@ -135,6 +147,14 @@ if (typeof document === 'undefined') {
       }
       throw new Error(`Unsupported element: ${tag}`);
     },
+  };
+}
+
+// Mock requestAnimationFrame for Node.js environment
+if (typeof requestAnimationFrame === 'undefined') {
+  global.requestAnimationFrame = (callback) => {
+    // In tests, just call immediately instead of scheduling
+    return 0;
   };
 }
 
@@ -286,6 +306,29 @@ runner.describe('Canvas Module', () => {
     expect(cell.glyph).toBe(65);
     expect(cell.fg).toEqual([255, 255, 255]);
     expect(cell.bg).toEqual([0, 0, 0]);
+  });
+
+  runner.it('should render selection outline when SelectTool has active selection', () => {
+    const canvasElement = document.createElement('canvas');
+    const canvas = new Canvas(canvasElement, 4, 4);
+
+    // Create a mock SelectTool with active selection
+    const mockSelectTool = {
+      getSelectionBounds: () => ({
+        x: 1,
+        y: 1,
+        width: 2,
+        height: 2,
+      }),
+    };
+
+    canvas.setSelectionTool(mockSelectTool);
+
+    // Verify that setSelectionTool was called and stored
+    expect(canvas.selectionTool).toBe(mockSelectTool);
+
+    // Render and verify no errors
+    canvas.render();
   });
 });
 

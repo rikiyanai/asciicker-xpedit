@@ -45,6 +45,10 @@ export class Canvas {
     // Grid visibility state
     this.showGrid = false;
 
+    // Selection visualization state
+    this.selectionTool = null;
+    this._animationFrame = 0; // For marching ants animation
+
     // Initialize with default cells (transparent, white on black)
     this._initializeCells();
 
@@ -383,6 +387,15 @@ export class Canvas {
     if (this.showGrid) {
       this._drawGrid();
     }
+
+    // Draw selection outline last (on top of all cells)
+    this._drawSelectionOutline();
+
+    // Schedule next animation frame for marching ants
+    this._animationFrame++;
+    if (this.selectionTool && this.selectionTool.getSelectionBounds()) {
+      requestAnimationFrame(() => this.render());
+    }
   }
 
   /**
@@ -392,6 +405,52 @@ export class Canvas {
   setGridVisible(visible) {
     this.showGrid = visible;
     this.render();
+  }
+
+  /**
+   * Set the SelectTool instance for selection visualization
+   * @param {SelectTool} tool - The SelectTool instance
+   */
+  setSelectionTool(tool) {
+    this.selectionTool = tool;
+    this.render();
+  }
+
+  /**
+   * Draw selection outline (marching ants) if selection is active
+   * @private
+   */
+  _drawSelectionOutline() {
+    if (!this.selectionTool) {
+      return;
+    }
+
+    const bounds = this.selectionTool.getSelectionBounds();
+    if (!bounds) {
+      return; // No active selection
+    }
+
+    // Convert cell bounds to pixel coordinates
+    const pixelX = bounds.x * this.cellSizePixels - this.offsetX;
+    const pixelY = bounds.y * this.cellSizePixels - this.offsetY;
+    const pixelWidth = bounds.width * this.cellSizePixels;
+    const pixelHeight = bounds.height * this.cellSizePixels;
+
+    // Draw marching ants outline (dashed line with animation)
+    this.ctx.strokeStyle = '#FFFF00'; // Bright yellow
+    this.ctx.lineWidth = 1;
+    this.ctx.setLineDash([4, 4]); // 4px dash, 4px gap
+
+    // Animate dash offset for marching effect
+    const dashOffset = (this._animationFrame % 8) * 0.5;
+    this.ctx.lineDashOffset = -dashOffset;
+
+    // Draw the rectangle outline
+    this.ctx.strokeRect(pixelX, pixelY, pixelWidth, pixelHeight);
+
+    // Reset line dash
+    this.ctx.setLineDash([]);
+    this.ctx.lineDashOffset = 0;
   }
 
   /**

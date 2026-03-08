@@ -18,6 +18,7 @@
  */
 
 import { FillTool } from './tools/fill-tool.js';
+import { SelectTool } from './tools/select-tool.js';
 import { KeyboardHandler } from './keyboard-handler.js';
 import { UndoStack } from './undo-stack.js';
 
@@ -44,6 +45,7 @@ export class EditorApp {
     this.ovalTool = null;
     this.fillTool = null;
     this.textTool = null;
+    this.selectTool = null;
 
     // Canonical state
     this.activeGlyph = 0;
@@ -533,6 +535,12 @@ export class EditorApp {
     // Tell canvas about the active tool
     if (this.canvas && typeof this.canvas.setActiveTool === 'function') {
       this.canvas.setActiveTool(tool);
+    }
+
+    // After tool activation, if it's SelectTool, register it with canvas for visualization
+    if (tool instanceof SelectTool) {
+      this.canvas.setSelectionTool(tool);
+      this.selectTool = tool;
     }
   }
 

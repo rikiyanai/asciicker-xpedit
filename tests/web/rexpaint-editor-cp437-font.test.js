@@ -278,6 +278,139 @@ runner.describe('CP437Font', () => {
     const glyph = cp437.getGlyph(65);
     expect(glyph).toBeDefined();
   });
+
+  runner.it('should handle drawGlyph with NaN in foreground color', () => {
+    const cp437 = new CP437Font('fonts/cp437-12x12.png', 12, 12);
+    cp437.spriteSheet = document.createElement('canvas');
+    cp437.spriteSheet.width = 192;
+    cp437.spriteSheet.height = 192;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 100;
+    canvas.height = 100;
+    const ctx = canvas.getContext('2d');
+
+    // Should not throw with NaN values
+    try {
+      cp437.drawGlyph(ctx, 65, 10, 10, [NaN, 100, 200], [0, 0, 0]);
+    } catch (e) {
+      throw new Error(`drawGlyph should handle NaN without throwing: ${e.message}`);
+    }
+  });
+
+  runner.it('should handle drawGlyph with all NaN foreground color', () => {
+    const cp437 = new CP437Font('fonts/cp437-12x12.png', 12, 12);
+    cp437.spriteSheet = document.createElement('canvas');
+    cp437.spriteSheet.width = 192;
+    cp437.spriteSheet.height = 192;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 100;
+    canvas.height = 100;
+    const ctx = canvas.getContext('2d');
+
+    // Should not throw and should default to white
+    try {
+      cp437.drawGlyph(ctx, 65, 10, 10, [NaN, NaN, NaN], [0, 0, 0]);
+    } catch (e) {
+      throw new Error(`drawGlyph should handle all NaN without throwing: ${e.message}`);
+    }
+  });
+
+  runner.it('should handle drawGlyph with invalid foreground array (missing values)', () => {
+    const cp437 = new CP437Font('fonts/cp437-12x12.png', 12, 12);
+    cp437.spriteSheet = document.createElement('canvas');
+    cp437.spriteSheet.width = 192;
+    cp437.spriteSheet.height = 192;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 100;
+    canvas.height = 100;
+    const ctx = canvas.getContext('2d');
+
+    // Should not throw with missing array values
+    try {
+      cp437.drawGlyph(ctx, 65, 10, 10, [255], [0, 0, 0]); // Only 1 value
+    } catch (e) {
+      throw new Error(`drawGlyph should handle short array without throwing: ${e.message}`);
+    }
+  });
+
+  runner.it('should handle drawGlyph with null foreground color', () => {
+    const cp437 = new CP437Font('fonts/cp437-12x12.png', 12, 12);
+    cp437.spriteSheet = document.createElement('canvas');
+    cp437.spriteSheet.width = 192;
+    cp437.spriteSheet.height = 192;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 100;
+    canvas.height = 100;
+    const ctx = canvas.getContext('2d');
+
+    // Should not throw with null
+    try {
+      cp437.drawGlyph(ctx, 65, 10, 10, null, [0, 0, 0]);
+    } catch (e) {
+      throw new Error(`drawGlyph should handle null color without throwing: ${e.message}`);
+    }
+  });
+
+  runner.it('should clamp out-of-range color values in drawGlyph', () => {
+    const cp437 = new CP437Font('fonts/cp437-12x12.png', 12, 12);
+    cp437.spriteSheet = document.createElement('canvas');
+    cp437.spriteSheet.width = 192;
+    cp437.spriteSheet.height = 192;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 100;
+    canvas.height = 100;
+    const ctx = canvas.getContext('2d');
+
+    // Should clamp values to 0-255
+    try {
+      cp437.drawGlyph(ctx, 65, 10, 10, [300, -50, 128], [1000, 0, 1000]);
+    } catch (e) {
+      throw new Error(`drawGlyph should clamp colors without throwing: ${e.message}`);
+    }
+  });
+
+  runner.it('should handle drawGlyph with NaN in background color', () => {
+    const cp437 = new CP437Font('fonts/cp437-12x12.png', 12, 12);
+    cp437.spriteSheet = document.createElement('canvas');
+    cp437.spriteSheet.width = 192;
+    cp437.spriteSheet.height = 192;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 100;
+    canvas.height = 100;
+    const ctx = canvas.getContext('2d');
+
+    // Should not throw with NaN in background
+    try {
+      cp437.drawGlyph(ctx, 65, 10, 10, [255, 255, 255], [NaN, 50, NaN]);
+    } catch (e) {
+      throw new Error(`drawGlyph should handle NaN in background without throwing: ${e.message}`);
+    }
+  });
+
+  runner.it('should handle drawGlyph with non-array color (undefined)', () => {
+    const cp437 = new CP437Font('fonts/cp437-12x12.png', 12, 12);
+    cp437.spriteSheet = document.createElement('canvas');
+    cp437.spriteSheet.width = 192;
+    cp437.spriteSheet.height = 192;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 100;
+    canvas.height = 100;
+    const ctx = canvas.getContext('2d');
+
+    // Should not throw with undefined (should default)
+    try {
+      cp437.drawGlyph(ctx, 65, 10, 10, undefined, undefined);
+    } catch (e) {
+      throw new Error(`drawGlyph should handle undefined colors without throwing: ${e.message}`);
+    }
+  });
 });
 
 runner.report();

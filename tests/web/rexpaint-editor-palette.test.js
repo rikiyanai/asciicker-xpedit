@@ -339,6 +339,87 @@ runner.describe('Palette', () => {
     expect(callCount1).toBe(1); // Should not increment after dispose
     expect(callCount2).toBe(0); // Should never fire after dispose
   });
+
+  runner.it('should handle invalid hex string - defaults to white', () => {
+    const palette = new Palette();
+    palette.setForeground('#GGG'); // Invalid hex chars
+    expect(palette.getForeground()).toEqual([255, 255, 255]); // Should default to white
+  });
+
+  runner.it('should handle invalid hex string (too short) - defaults to white', () => {
+    const palette = new Palette();
+    palette.setForeground('#FF0'); // Only 3 chars, not 6
+    expect(palette.getForeground()).toEqual([255, 255, 255]); // Should default to white
+  });
+
+  runner.it('should handle invalid hex string (too long) - defaults to white', () => {
+    const palette = new Palette();
+    palette.setForeground('#FF0000AA'); // 8 chars, not 6
+    expect(palette.getForeground()).toEqual([255, 255, 255]); // Should default to white
+  });
+
+  runner.it('should handle NaN in RGB array - defaults to white', () => {
+    const palette = new Palette();
+    palette.setForeground([NaN, NaN, NaN]); // All NaN
+    expect(palette.getForeground()).toEqual([255, 255, 255]); // Should default to white
+  });
+
+  runner.it('should handle partial NaN in RGB array - clamps to valid values', () => {
+    const palette = new Palette();
+    palette.setForeground([255, NaN, 100]); // Middle value is NaN
+    const fg = palette.getForeground();
+    expect(fg[0]).toBe(255);
+    expect(fg[1]).toBe(255); // NaN should become white (255)
+    expect(fg[2]).toBe(100);
+  });
+
+  runner.it('should clamp out-of-range RGB values', () => {
+    const palette = new Palette();
+    palette.setForeground([300, -50, 128]); // Out of range values
+    expect(palette.getForeground()).toEqual([255, 0, 128]); // Clamped to 0-255
+  });
+
+  runner.it('should round RGB values', () => {
+    const palette = new Palette();
+    palette.setForeground([255.7, 0.2, 128.5]); // Float values
+    expect(palette.getForeground()).toEqual([255, 0, 129]); // Rounded then clamped to [255, 0, 129]
+  });
+
+  runner.it('should handle empty string - defaults to white', () => {
+    const palette = new Palette();
+    palette.setForeground(''); // Empty string
+    expect(palette.getForeground()).toEqual([255, 255, 255]); // Should default to white
+  });
+
+  runner.it('should handle non-string non-array input - defaults to white', () => {
+    const palette = new Palette();
+    palette.setForeground(123); // Number instead of array or string
+    expect(palette.getForeground()).toEqual([255, 255, 255]); // Should default to white
+  });
+
+  runner.it('should handle null in color array - defaults to white', () => {
+    const palette = new Palette();
+    palette.setForeground([null, null, null]); // Null values
+    // null rounds to 0, which is clamped to 0-255, resulting in [0, 0, 0] or similar
+    const fg = palette.getForeground();
+    expect(Array.isArray(fg)).toBe(true);
+    expect(fg.length).toBe(3);
+  });
+
+  runner.it('should handle undefined in color array - defaults to valid values', () => {
+    const palette = new Palette();
+    palette.setForeground([undefined, 128, undefined]); // Undefined values
+    const fg = palette.getForeground();
+    expect(Array.isArray(fg)).toBe(true);
+    expect(fg.length).toBe(3);
+    expect(fg[1]).toBe(128);
+  });
+
+  runner.it('should normalize background color with invalid hex', () => {
+    const palette = new Palette();
+    palette.setBackground('#INVALID'); // Invalid hex
+    expect(palette.getBackground()).toEqual([255, 255, 255]); // Should default to white
+  });
 });
 
 runner.report();

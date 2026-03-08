@@ -86,6 +86,11 @@ export class CellTool {
       throw new Error('Canvas not set');
     }
 
+    // Clamp to valid canvas bounds
+    if (x < 0 || y < 0 || x >= this.canvas.width || y >= this.canvas.height) {
+      return; // Silently ignore out-of-bounds
+    }
+
     // Determine what to apply based on apply modes
     let glyph = this.glyph;
     let fg = [...this.fg];

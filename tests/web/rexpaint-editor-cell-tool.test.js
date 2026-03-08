@@ -162,6 +162,74 @@ runner.describe('Cell Tool', () => {
     // With default modes (all enabled), all should be applied
     expect(canvas.setCell).toHaveBeenCalledWith(5, 10, 65, [255, 0, 0], [0, 0, 0]);
   });
+
+  runner.it('should not crash when painting out-of-bounds (negative x)', () => {
+    const tool = new CellTool();
+    const canvas = { width: 80, height: 25, setCell: vi.fn() };
+    tool.setCanvas(canvas);
+    tool.setGlyph(65);
+    tool.setColors([255, 0, 0], [0, 0, 0]);
+
+    tool.paint(-5, 10); // Out of bounds
+
+    // Should not call setCell
+    expect(canvas.setCell).toHaveBeenCalledTimes(0);
+  });
+
+  runner.it('should not crash when painting out-of-bounds (negative y)', () => {
+    const tool = new CellTool();
+    const canvas = { width: 80, height: 25, setCell: vi.fn() };
+    tool.setCanvas(canvas);
+    tool.setGlyph(65);
+    tool.setColors([255, 0, 0], [0, 0, 0]);
+
+    tool.paint(10, -5); // Out of bounds
+
+    // Should not call setCell
+    expect(canvas.setCell).toHaveBeenCalledTimes(0);
+  });
+
+  runner.it('should not crash when painting out-of-bounds (x >= width)', () => {
+    const tool = new CellTool();
+    const canvas = { width: 80, height: 25, setCell: vi.fn() };
+    tool.setCanvas(canvas);
+    tool.setGlyph(65);
+    tool.setColors([255, 0, 0], [0, 0, 0]);
+
+    tool.paint(1000, 10); // Out of bounds
+
+    // Should not call setCell
+    expect(canvas.setCell).toHaveBeenCalledTimes(0);
+  });
+
+  runner.it('should not crash when painting out-of-bounds (y >= height)', () => {
+    const tool = new CellTool();
+    const canvas = { width: 80, height: 25, setCell: vi.fn() };
+    tool.setCanvas(canvas);
+    tool.setGlyph(65);
+    tool.setColors([255, 0, 0], [0, 0, 0]);
+
+    tool.paint(10, 1000); // Out of bounds
+
+    // Should not call setCell
+    expect(canvas.setCell).toHaveBeenCalledTimes(0);
+  });
+
+  runner.it('should paint valid cells even if drag starts out-of-bounds', () => {
+    const tool = new CellTool();
+    const canvas = { width: 80, height: 25, setCell: vi.fn() };
+    tool.setCanvas(canvas);
+    tool.setGlyph(65);
+    tool.setColors([255, 0, 0], [0, 0, 0]);
+
+    // startDrag with out-of-bounds coords should not paint
+    tool.startDrag(-5, 10);
+    expect(canvas.setCell).toHaveBeenCalledTimes(0);
+
+    // After an out-of-bounds startDrag, endDrag should leave no pending state
+    tool.endDrag();
+    expect(canvas.setCell).toHaveBeenCalledTimes(0);
+  });
 });
 
 runner.report();

@@ -55,6 +55,17 @@ const expect = (value) => ({
       throw new Error(`Expected > ${expected}, got ${value}`);
     }
   },
+  toHaveBeenCalledWith(...args) {
+    if (!this._mockCalls) {
+      throw new Error('toHaveBeenCalledWith called on non-mock');
+    }
+    const callMatches = this._mockCalls.some(callArgs =>
+      JSON.stringify(callArgs) === JSON.stringify(args)
+    );
+    if (!callMatches) {
+      throw new Error(`Expected to be called with ${JSON.stringify(args)}, but calls were: ${JSON.stringify(this._mockCalls)}`);
+    }
+  },
 });
 
 // Mock HTMLCanvasElement for Node.js environment
@@ -85,6 +96,8 @@ if (typeof HTMLCanvasElement === 'undefined') {
       this.textAlign = 'left';
       this.textBaseline = 'top';
       this.pixelData = new Map(); // Store pixel data for getImageData
+      this.strokeRectCalls = []; // Track strokeRect calls for testing
+      this.setLineDashCalls = []; // Track setLineDash calls for testing
     }
 
     fillRect(x, y, w, h) {
@@ -98,14 +111,15 @@ if (typeof HTMLCanvasElement === 'undefined') {
     }
 
     strokeRect(x, y, w, h) {
-      // Mock implementation for selection outline
-      // Just verify it's called correctly
+      // Track calls for testing
+      this.strokeRectCalls.push([x, y, w, h]);
     }
 
     fillText(text, x, y, maxWidth) {}
 
     setLineDash(dash) {
-      // Mock implementation for line dashing
+      // Track calls for testing
+      this.setLineDashCalls.push(dash);
     }
 
     _parseColor(colorStr) {
@@ -329,6 +343,107 @@ runner.describe('Canvas Module', () => {
 
     // Render and verify no errors
     canvas.render();
+
+    // Verify that strokeRect was called with correct pixel bounds
+    // Bounds (x:1, y:1, w:2, h:2) with cellSize 12 = pixels (12, 12, 24, 24)
+    const ctx = canvasElement.getContext('2d');
+    expect(ctx.strokeRectCalls.length).toBeGreaterThan(0);
+
+    // Check that the last strokeRect call matches our expected bounds
+    const lastCall = ctx.strokeRectCalls[ctx.strokeRectCalls.length - 1];
+    expect(lastCall[0]).toBe(1 * 12); // x pixel
+    expect(lastCall[1]).toBe(1 * 12); // y pixel
+    expect(lastCall[2]).toBe(2 * 12); // width pixels
+    expect(lastCall[3]).toBe(2 * 12); // height pixels
+  });
+
+  runner.it('should animate selection outline with marching ants effect', () => {
+    const canvasElement = document.createElement('canvas');
+    const canvas = new Canvas(canvasElement, 4, 4);
+
+    // Create a mock SelectTool with active selection
+    const mockSelectTool = {
+      getSelectionBounds: () => ({
+        x: 0,
+        y: 0,
+        width: 2,
+        height: 2,
+      }),
+    };
+
+    canvas.setSelectionTool(mockSelectTool);
+
+    const ctx = canvasElement.getContext('2d');
+
+    // First render - animation frame 0
+    canvas.render();
+    const firstDashOffsets = [...ctx.setLineDashCalls]; // Copy call history
+    const firstAnimFrame = canvas._animationFrame;
+
+    // Second render - animation frame 1
+    canvas.render();
+    const secondAnimFrame = canvas._animationFrame;
+
+    // Animation frame should increment
+    expect(secondAnimFrame).toBe(firstAnimFrame + 1);
+
+    // With active selection, there should be setLineDash calls
+    expect(ctx.setLineDashCalls.length).toBeGreaterThan(0);
+  });
+
+  runner.it('should use yellow dashed line for selection outline', () => {
+    const canvasElement = document.createElement('canvas');
+    const canvas = new Canvas(canvasElement, 4, 4);
+
+    // Create a mock SelectTool with active selection
+    const mockSelectTool = {
+      getSelectionBounds: () => ({
+        x: 0,
+        y: 0,
+        width: 2,
+        height: 2,
+      }),
+    };
+
+    canvas.setSelectionTool(mockSelectTool);
+    canvas.render();
+
+    const ctx = canvasElement.getContext('2d');
+
+    // Verify yellow stroke style
+    expect(ctx.strokeStyle).toBe('#FFFF00');
+
+    // Verify dashed line pattern (4px dash, 4px gap)
+    expect(ctx.setLineDashCalls.length).toBeGreaterThan(0);
+    const dashPattern = ctx.setLineDashCalls[ctx.setLineDashCalls.length - 2]; // Second to last is the dash pattern
+    expect(JSON.stringify(dashPattern)).toBe(JSON.stringify([4, 4]));
+  });
+
+  runner.it('should not render selection outline when no SelectTool is set', () => {
+    const canvasElement = document.createElement('canvas');
+    const canvas = new Canvas(canvasElement, 4, 4);
+
+    // Don't set a selection tool
+    canvas.render();
+
+    const ctx = canvasElement.getContext('2d');
+    expect(ctx.strokeRectCalls.length).toBe(0);
+  });
+
+  runner.it('should not render selection outline when SelectTool has no selection', () => {
+    const canvasElement = document.createElement('canvas');
+    const canvas = new Canvas(canvasElement, 4, 4);
+
+    // Create a mock SelectTool with NO active selection
+    const mockSelectTool = {
+      getSelectionBounds: () => null,
+    };
+
+    canvas.setSelectionTool(mockSelectTool);
+    canvas.render();
+
+    const ctx = canvasElement.getContext('2d');
+    expect(ctx.strokeRectCalls.length).toBe(0);
   });
 });
 

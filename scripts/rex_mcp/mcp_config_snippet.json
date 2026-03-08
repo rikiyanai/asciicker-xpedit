@@ -1,0 +1,15 @@
+{
+  "_comment": "Add these entries to .mcp.json mcpServers to enable REXPaint MCP tools",
+  "rex-manager": {
+    "command": "python3",
+    "args": ["scripts/rex_mcp/server.py"],
+    "env": {
+      "WINE_PATH": "/Users/r/Desktop/wine-11.0/wine",
+      "REXPAINT_EXE_PATH": "/Users/r/Downloads/REXPaint/REXPaint.exe"
+    }
+  },
+  "xp-tool": {
+    "command": "python3",
+    "args": ["scripts/xp_mcp_server.py"]
+  }
+}

@@ -1,0 +1,403 @@
+=================================================================
+ REXPaint v1.70 - Manual
+=================================================================
+
+A powerful and user-friendly ASCII art editor.
+
+
+-----------------------------------------------------------------
+ Background
+-----------------------------------------------------------------
+
+There are a number of ASCII art editors available on the web, but most suffer from poor usability or small feature sets (one notable exception being eigenbom's awesome fork of ASCII Paint). For development of my own projects, I needed an application equipped with a wide range of tools for quickly drawing and manipulating ASCII art, as well as the ability to easily browse the images created as stored in their native format. Thus REXPaint was born.
+
+Over the years since its first public release, REXPaint has found use as a general purpose ASCII art editor, as well as a roguelike development tool for mockups, mapping, and design. I love seeing what people create with this program, so send me a link/copy if you've made something cool! (Or share it with us on the forums: www.gridsagegames.com/forums/index.php?board=8.0)
+
+
+-----------------------------------------------------------------
+ Features
+-----------------------------------------------------------------
+
+An overview of REXPaint's major features:
+* Edit characters, foreground, and background colors separately
+* Draw shapes and text
+* Copy/cut/paste areas
+* Undo/redo changes
+* Preview effects simply by hovering the cursor over the canvas
+* Palette manipulation
+* Image-wide color tweaking and palette swaps
+* True-color RGB/HSV color picker
+* Create multi-layered images
+* Zooming: Scale an image by changing font size on the fly
+* Custom fonts and support for extended characters and tilesets
+* Browse art assets and begin editing at the press of a button
+* Images highly compressed
+* Export PNGs for use in other programs or on the web
+* Import/export .ANS files for ANSI art
+* Other exportable formats: TXT, CSV, XML, XPM, BBCode, C:DDA
+* Import .TXT files
+* Skinnable interface
+
+
+-----------------------------------------------------------------
+ Table of Contents
+-----------------------------------------------------------------
+
+* Canvas
+    Resizing
+    Shifting
+* Drawing
+    Apply
+    Draw Modes
+    Text Input
+    Preview
+    Undo
+* Fonts
+    Glyphs
+    Glyph Swapping
+    Custom and Extended Fonts
+    Custom Glyph Mirroring
+    Custom Unicode Codepoints
+* Palettes
+    Selection & Editing
+    Color Picker
+    Palette Files
+    Extraction
+    Adding
+    Organization
+    Palette Swapping
+    Transparency
+* Layers
+    Control
+    Active Layer
+    Order
+    Visibility & Locking
+    Merging
+    Extended Layers Mode
+* Browsing
+    File/Image Control
+    Viewing & Editing
+    Saving
+    Exporting
+* Customization
+    Options
+    Skins
+* Commands
+* Appendix A: Known Issues
+* Appendix B: .xp Format Specification
+* Appendix C: External Libraries and Tools
+* Appendix D: ANSI Art (.ans)
+* Appendix E: Exportable Text Formats (.txt, .csv., .xml, BBCode)
+* Appendix F: Importing Text Files
+* Appendix G: Importing PNGs
+* Appendix H: Additional Command Line Options
+* Appendix I: Exporting ANSI art for C:DDA
+
+-----------------------------------------------------------------
+ Canvas
+-----------------------------------------------------------------
+
+The black area to the right of the tool menus is the canvas view where all image editing occurs, and the image itself initially appears as a box outline that defaults to the size of the entire canvas view.
+
+ Resizing
+----------
+Resize the image as necessary (Ctrl-r), ideally before starting to draw so that later changes are not affected by a change in image dimensions. Resizing can be done at any time, but the dimensions are always based from the top-left corner of an image, so make sure the portion of a larger image you wish to retain is based in the top-left corner before shrinking it (move the relevant section with the copy tool).
+
+ Shifting
+----------
+To view different parts of a large image (or reposition a smaller one), hold spacebar while left-clicking on the image and moving the mouse to drag it (Photoshop style). The numpad can also be used for eight-directional shifting of the image, Enter resets its location, and Ctrl-Enter centers it.
+
+
+-----------------------------------------------------------------
+ Drawing
+-----------------------------------------------------------------
+
+ Apply
+-------
+The apply menu determines what is actually produced by the current draw mode when you left-click on the image. Glyphs (characters), foreground color, and background color are each drawn/edited separately, and can be individually toggled on and off via the menu buttons or 'g', 'f', and 'b'. Thus if you activate "glyph" and deactivate "fore" and "back," when you draw only the current glyph will be applied, while the image's colors remain unchanged. Activating all modes will overwrite the glyph and both foreground and background colors when drawing. (Turning all apply modes off would draw... nothing, and be completely pointless!)
+    The colors to be applied are shown to the right of their button, and the current glyph is that highlighted/chosen among the characters in the font box. Change the glyph by left-clicking on a different one in the font box, and change the colors by either left-clicking on the color square (see Color Picker explanation further below) or chosing a color from the palette (LMB choses a color for the foreground, RMB for the background).
+
+ Draw Modes
+------------
+Drawing modes define the shape and area of the image affected while drawing. Only one mode can be active at a time, and some modes have an alternate setting that changes their behavior (left-click on the active mode to toggle its secondary feature, or cycle through them if more than one).
+    Cell ('c'): Applies the effect to a single "cell" (space) on the image. Hold LMB and move the cursor to keep drawing. Alternate mode: Auto-wall/auto-box drawing.
+    Line ('l'): Applies the effect to a line. Left-click at the line's start and release the button at its end, or press RMB/ESC before releasing the button to cancel the line.
+    Rect ('r'): Applies the effect to a rectangular area. Left-click at one corner of the rectangle and release the button at the opposite corner, or press RMB/ESC before releasing the button to cancel the rectangle. Alternate mode: Fills the entire rectangle instead of drawing an outline.
+    Oval ('o'): Like rect mode, but draws ovals. Alternate mode fills the oval. By default ovals are centered on the point chosen; to instead draw from any corner switch the oval drawing method via Alt-o.
+    Fill ('i'): Applies the effect to all like cells attached to the one under the cursor. Alternate Mode: Fill search is performed in 8 directions rather than 4.
+    Text ('t'): Types text onto the image.
+    Copy (Ctrl-c): Copies a rectangular area of the image into the clipboard for later pasting. Alternate mode: Cut (Ctrl-x).
+    Paste (Ctrl-v): Paste the clipboard contents to the image. Alternate modes: Flip clipboard contents horizontally, vertically, or both.
+
+ Preview
+---------
+While the cursor is hovering over the image, applicable draw modes (cell, fill, paste) will show a preview of what the image will look like assuming a left-click at that location.
+
+ Undo
+------
+All image manipulation actions can be undone/redone (Ctrl-z/Ctrl-y, or just z/y). Undo histories are also saved separately for each image.
+
+
+-----------------------------------------------------------------
+ Fonts
+-----------------------------------------------------------------
+
+Images themselves do not store font information, instead remembering only what glyph/character index belongs at each position. This means you can dynamically change the size and/or appearance of an image by simply switching the font (Ctrl-PgUp/Dn or '<'/'>').
+
+ Glyphs
+--------
+Select a glyph to draw with by clicking on it in the font window. Right-click on a cell in the image to pick up its glyph and colors.
+    Toggle highlighting of all used glyphs by pressing 'u'. To see where a specific glyph has been used, hold Alt while hovering over it in the font window.
+
+ Glyph Swapping
+----------------
+To replace every occurence of a glyph in all visible unlocked layers, Shift-LMB on it in the font window, then Shift-LMB on the new glyph to replace it with.
+
+ Custom and Extended Fonts
+---------------------------
+By default, both the GUI and images use a standard 256-glyph Code Page 437 font. REXPaint makes this same font available at several sizes. You can edit these fonts (in the "data/fonts/" directory), and/or add new ones by creating a new .png bitmap and listing it in the "data/fonts/_config.xt" text file. Fonts do not require square glyphs (rectangles are okay), but both the GUI and Art font must use the same glyph dimensions.
+    Although the default number of rows in a font bitmap is 16, fonts with additional rows are supported, essentially allowing space for an unlimited number of glyphs in an image. Simply specify the proper number of rows available for the relevant art font in _config.xt.
+
+
+-----------------------------------------------------------------
+ Palette
+-----------------------------------------------------------------
+
+Palettes in REXPaint are tools intended purely for color selection and organization, thus images themselves do not store palettes (i.e., image colors are not "indexed").
+
+ Selection & Editing
+---------------------
+Left-clicking on a palette color selects it as the foreground color; right-clicking selects it as the background color. Clicking on the same color again will allow you to edit it in the color picker.
+
+ Color Picker
+--------------
+Left-click on a color to select it, and click on it again to accept it. Choose a precise color by specifying HSV/RGB number values (click on the number, or press 'h'/'s'/'v'/'r'/'g'/'b').
+
+ Palette Files
+---------------
+Any number of palettes can be created by clicking on the '+' button (switch between them with the buttons or '['/']' keys). Stored in text format in the "data/palettes/" directory.
+
+ Transparency
+--------------
+Background color 255,0,255 (hot pink) identifies transparent cells. Draw using the transparent background color to create a transparent cell/area.
+
+
+-----------------------------------------------------------------
+ Layers
+-----------------------------------------------------------------
+
+ Control
+---------
+Each image automatically comes with one base layer (required). More can be created with Ctrl-l or by clicking on the layer window's '+' button. A single image can have up to nine separate layers, and all newly created layers are automatically filled with transparent cells (255,0,255).
+
+ Active Layer
+--------------
+The "active layer" is the one which effects are applied to when drawing. Change the active layer by clicking on a different number, pressing 1~9, or using the mouse wheel while the cursor is over the canvas area.
+
+ Order
+-------
+Layers are listed in top to bottom order, and their order determines which are drawn on top. The relative order of layers can be changed by clicking on the arrow buttons.
+
+ Visibility & Locking
+----------------------
+Individual layers can be hidden from view. Locked layers (Shift-# or the "Lck" button) prevent editing.
+
+ Merging
+---------
+Use Ctrl-Shift-m to merge the active layer downward.
+
+
+-----------------------------------------------------------------
+ Browsing
+-----------------------------------------------------------------
+
+Switch between paint mode and browse mode with Tab. Browse mode allows you to view all the images in the "images/" directory and subdirectories.
+
+ File/Image Control
+--------------------
+New images: Ctrl-n or New button. Rename (RMB), duplicate (Shift-LMB) and delete (Ctrl-Shift-Alt-LMB).
+    Reload all image files: Ctrl-Shift-r or the "R" button.
+
+ Viewing & Editing
+-------------------
+Images do not need to be explicitly opened. When the program starts, all images are loaded into memory. Browse through them by clicking on their name or pressing up/down.
+
+ Saving
+--------
+Save with Ctrl-s or the Save button.
+
+ Exporting
+-----------
+Export PNG: Ctrl-e. Export TXT: Ctrl-t. Export CSV: Ctrl-k. Export ANS: Ctrl-a. Export XML: Ctrl-m. Export XPM: Ctrl-p. Export BBCode: Ctrl-b.
+
+
+-----------------------------------------------------------------
+ Commands
+-----------------------------------------------------------------
+
+ Font
+------
+Ctrl-PgUp/Dn / </>      Change Font (Scale Image/UI)
+LMB                     Select Glyph
+Arrows                  Shift Selection
+u                       Toggle Used Glyph Highlighting
+Alt (hold)              Highlight Hovered Glyph in Current Layer
+Shift-LMB x2            Swap Occurences of Glyph 1 with Glyph 2
+
+ Palette
+---------
+[/]                     Change Palette
+LMB (x2)                Set (Edit) Foreground Color
+RMB (x2)                Set (Edit) Background Color
+Shift-LMB x2            Swap Occurences of Color 1 with Color 2
+Ctrl-Shift-o            Organize Palette
+Ctrl-Shift-e            Extract Image Palette
+Ctrl-Shift-p            Purge Unused Colors
+Ctrl-LMB x2             Swap Palette Colors
+
+ Drawing
+---------
+c (x2)                  Cell (Auto-walls)
+l                       Line
+r (x2)                  Rectangle (Filled)
+o (x2)                  Oval (Filled)
+Alt-o                   Toggle oval drawing method (center/corner)
+i (x2)                  Fill (8-direction)
+t                       Text
+Ctrl-c                  Copy
+Ctrl-x                  Cut
+Ctrl-v (x2)             Paste (Flip)
+ESC / RMB               Stop/Cancel
+
+ Text Tool
+-----------
+Enter                   Confirm
+Ctrl-Enter              New line below
+Escape                  Cancel
+Left/Right Arrow        Move caret
+Backspace               Delete before caret
+Delete                  Delete at caret
+Up/Down                 Cycle text history
+Ctrl-v                  Paste from clipboard
+
+ Apply
+-------
+g (G)                   Toggle (Solo) Glyph
+f (F)                   Toggle (Solo) Foreground Color
+b (B)                   Toggle (Solo) Background Color
+RMB                     Add Color to Palette
+Alt-w                   Swap Foreground/Background Colors
+d                       Increment Copy/Cut/Paste Layer Depth
+
+ Canvas
+--------
+Spacebar (hold)         Enter Drag Mode
+LMB                     Hold Canvas to Drag
+RMB                     Copy Cell Contents (Applied Modes Only)
+Shift/Alt (hold)        Hide Preview
+z/Ctrl-z                Undo
+y/Ctrl-y                Redo
+Ctrl-d                  Toggle Rect Dimension Display
+Ctrl-g                  Toggle Grid
+Ctrl-Tab                Switch between current/latest image
+Ctrl-Up/Down            Edit Previous/Next Image
+
+ Layers
+--------
+Ctrl-l                  New Layer
+Wheel                   Cycle Active Layer
+1~9                     Activate Layer
+Ctrl-1~9                Toggle Layer Hide
+Shift-1~9               Toggle Layer Lock
+Ctrl-Shift-m            Merge Active Layer
+Ctrl-Shift-l            Toggle Extended Layers Mode
+
+ Browse
+--------
+Wheel / PgUp/Dn         Scroll List
+LMB                     View Image
+Up/Down                 View Previous/Next Image
+RMB                     Rename Image
+Shift-LMB               Duplicate Image
+Ctrl-Shift-Alt-LMB      Delete Image
+Ctrl-Shift-r            Reload All Image Files
+Home/End                First/Last Image
+
+ Image
+-------
+Ctrl-n                  New (in Base Path)
+Ctrl-r                  Resize
+Ctrl-s                  Save
+Ctrl-e                  Export PNG
+Ctrl-t                  Export TXT
+Ctrl-k                  Export CSV
+Ctrl-a                  Export ANS
+Ctrl-m                  Export XML
+Ctrl-p                  Export XPM
+Ctrl-b                  Export BBCode
+
+ General
+---------
+Tab                     Toggle Paint/Browse
+F1 / ?                  Commands
+F3                      Options
+F4                      Change Skin
+Alt-F4                  Exit
+Alt-Enter               Fullscreen
+
+
+-----------------------------------------------------------------
+ Appendix B: .xp Format Specification
+-----------------------------------------------------------------
+
+The .xp files are deflated with zlib (gzipped); once decompressed the format is binary:
+
+#-----xp format version (32)
+A-----number of layers (32)
+ /----image width (32)
+ |    image height (32)
+ |  /-ASCII code (32) (little-endian!)
+B|  | foreground color red (8)
+ |  | foreground color green (8)
+ |  | foreground color blue (8)
+ | C| background color red (8)
+ |  | background color green (8)
+ \--\-background color blue (8)
+
+Data stored in column-major order. Transparent cells identified by background color 255,0,255.
+
+
+-----------------------------------------------------------------
+ Appendix H: Additional Command Line Options
+-----------------------------------------------------------------
+
+ Exporting PNGs
+----------------
+-exportAll              Export every .xp file as PNG
+-export:XXX             Export individual .xp file as PNG
+
+ Creating/Opening Images
+-------------------------
+-create:XXX             Create new .xp file
+-open:XXX               Open REXPaint with .xp file preselected
+-txt2xp:XXX             Convert .txt file to .xp
+-png2xp:XXX             Convert .png file to .xp (filename must include _WWWxHHH)
+-uniqueGlyphs           Use unique glyphs for different characters in png2xp
+
+
+-----------------------------------------------------------------
+ Key Configuration Reference
+-----------------------------------------------------------------
+
+REXPaint.cfg options:
+* unlimitedFontSize: Load all fonts even if too large for screen
+* txtOutputUTF8: UTF8 encoding for TXT export
+* baseImagePath: Base path for image loading (relative to .exe)
+* exportsToBase: Export to base path vs source subdirectory
+* ignorePath: Paths to exclude from browser
+* ansiMode: Enable ANSI art restrictions
+* fontKeyColorOverride: Override font background color detection
+* glyphScrollRowCount: Mouse scroll rate for glyph area
+* glyphSelectAlwaysAutoscrolls: Auto-scroll to selected glyph
+* noSaveForOutOfBoundsGlyphs: Block saving images with OOB glyphs
+* ansOutputNoCursorShift: Disable cursor shift in ANS export

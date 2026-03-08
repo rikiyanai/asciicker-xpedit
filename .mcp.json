@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "workbench-api": {
+      "command": "python3",
+      "args": ["scripts/workbench_mcp_server.py"],
+      "env": {
+        "WORKBENCH_URL": "http://127.0.0.1:5071"
+      }
+    },
+    "rex-manager": {
+      "command": "python3",
+      "args": ["scripts/rex_mcp/server.py"],
+      "env": {
+        "WINE_PATH": "/Applications/Wine Crossover.app/Contents/Resources/wine/bin/wine",
+        "REXPAINT_EXE_PATH": "/Users/r/Desktop/wine-11.0/REXPaint-v1.70/REXPaint.exe",
+        "WINE_PROCESS_NAME": "wine-preloader"
+      }
+    },
+    "xp-tool": {
+      "command": "python3",
+      "args": ["scripts/xp_mcp_server.py"]
+    }
+  }
+}

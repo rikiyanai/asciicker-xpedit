@@ -171,6 +171,54 @@ runner.describe('Canvas Module', () => {
     expect(pixels.y).toBeGreaterThan(-1);
   });
 
+  runner.it('should return defensive copy from getCell() - mutating returned cell does not corrupt canvas', () => {
+    const canvas = new Canvas(document.createElement('canvas'), 80, 25);
+    canvas.setCell(5, 10, 65, [255, 0, 0], [0, 0, 255]); // 'A' in red on blue
+
+    // Get the cell and mutate the returned object
+    const cell = canvas.getCell(5, 10);
+    cell.glyph = 999;
+    cell.fg[0] = 100;
+    cell.fg[1] = 100;
+    cell.bg[2] = 100;
+
+    // Original cell should be unchanged
+    const original = canvas.getCell(5, 10);
+    expect(original.glyph).toBe(65);
+    expect(original.fg[0]).toBe(255);
+    expect(original.fg[1]).toBe(0);
+    expect(original.fg[2]).toBe(0);
+    expect(original.bg[0]).toBe(0);
+    expect(original.bg[1]).toBe(0);
+    expect(original.bg[2]).toBe(255);
+  });
+
+  runner.it('should return defensive copy from getCell() - mutating returned color arrays does not corrupt canvas', () => {
+    const canvas = new Canvas(document.createElement('canvas'), 80, 25);
+    canvas.setCell(3, 7, 42, [100, 150, 200], [50, 75, 100]); // '#' in custom colors
+
+    // Get the cell and mutate color arrays
+    const cell = canvas.getCell(3, 7);
+    const fg = cell.fg;
+    const bg = cell.bg;
+
+    fg[0] = 0;
+    fg[1] = 0;
+    fg[2] = 0;
+    bg[0] = 255;
+    bg[1] = 255;
+    bg[2] = 255;
+
+    // Original cell colors should be unchanged
+    const original = canvas.getCell(3, 7);
+    expect(original.fg[0]).toBe(100);
+    expect(original.fg[1]).toBe(150);
+    expect(original.fg[2]).toBe(200);
+    expect(original.bg[0]).toBe(50);
+    expect(original.bg[1]).toBe(75);
+    expect(original.bg[2]).toBe(100);
+  });
+
   runner.it('should detach mouse event handlers on dispose()', () => {
     const canvasElement = document.createElement('canvas');
     const listeners = new Map();

@@ -54,14 +54,24 @@ export class UndoStack {
    * Undo the last action.
    * Moves the last action from undo stack to redo stack.
    * Returns the previous state (new top of undo stack).
+   * Validates snapshot structure before returning to prevent race conditions.
    *
-   * @returns {*} The snapshot representing the previous state, or null if undo stack is empty
+   * @returns {*} The snapshot representing the previous state, or null if undo stack is empty or invalid
    */
   undo() {
     if (!this.canUndo()) return null;
+
     const snapshot = this.undoStack.pop();
     this.redoStack.push(snapshot);
-    return this.undoStack[this.undoStack.length - 1];
+
+    // Validate snapshot structure before returning
+    const previousSnapshot = this.undoStack[this.undoStack.length - 1];
+    if (previousSnapshot && typeof previousSnapshot !== 'object') {
+      console.error('Invalid undo snapshot at index', this.undoStack.length - 1);
+      return null;
+    }
+
+    return previousSnapshot || null;
   }
 
   /**

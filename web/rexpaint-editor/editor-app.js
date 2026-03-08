@@ -21,6 +21,7 @@ import { FillTool } from './tools/fill-tool.js';
 import { SelectTool } from './tools/select-tool.js';
 import { KeyboardHandler } from './keyboard-handler.js';
 import { UndoStack } from './undo-stack.js';
+import { LayerStack } from './layer-stack.js';
 
 export class EditorApp {
   /**
@@ -336,6 +337,12 @@ export class EditorApp {
     if (!layerList) {
       return;
     }
+
+    // Create LayerStack with canvas dimensions
+    this.layerStack = new LayerStack(this.canvas.width, this.canvas.height);
+
+    // Wire LayerStack to Canvas for multi-layer composition
+    this.canvas.setLayerStack(this.layerStack);
 
     // Render initial layer list
     this._renderLayerList();

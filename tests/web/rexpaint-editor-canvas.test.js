@@ -6,6 +6,7 @@
  */
 
 import { Canvas } from '../../web/rexpaint-editor/canvas.js';
+import { LayerStack } from '../../web/rexpaint-editor/layer-stack.js';
 
 // Simple test framework (polyfill for vitest-like API)
 class TestRunner {
@@ -444,6 +445,49 @@ runner.describe('Canvas Module', () => {
 
     const ctx = canvasElement.getContext('2d');
     expect(ctx.strokeRectCalls.length).toBe(0);
+  });
+
+  runner.it('should composite multiple visible layers in z-order', () => {
+    const canvas = new Canvas(document.createElement('canvas'), 4, 4);
+    const layerStack = new LayerStack(4, 4);
+
+    layerStack.addLayer('Layer 1');
+    layerStack.addLayer('Layer 2');
+
+    const layers = layerStack.getLayers();
+    const layer1 = layers[0];
+    layer1.setCell(0, 0, 65, [255, 0, 0], [0, 0, 0]); // Red 'A'
+
+    const layer2 = layers[1];
+    layer2.setCell(0, 0, 66, [0, 255, 0], [0, 0, 0]); // Green 'B'
+
+    canvas.setLayerStack(layerStack);
+    canvas.render();
+
+    const renderedCell = canvas.getCell(0, 0);
+    expect(renderedCell.glyph).toBe(66); // Green 'B' from top layer
+  });
+
+  runner.it('should skip hidden layers when compositing', () => {
+    const canvas = new Canvas(document.createElement('canvas'), 4, 4);
+    const layerStack = new LayerStack(4, 4);
+
+    layerStack.addLayer('Layer 1');
+    layerStack.addLayer('Layer 2');
+
+    const layers = layerStack.getLayers();
+    const layer1 = layers[0];
+    layer1.setCell(0, 0, 65, [255, 0, 0], [0, 0, 0]);
+
+    const layer2 = layers[1];
+    layer2.setCell(0, 0, 66, [0, 255, 0], [0, 0, 0]);
+    layer2.setVisible(false); // Hide layer 2
+
+    canvas.setLayerStack(layerStack);
+    canvas.render();
+
+    const renderedCell = canvas.getCell(0, 0);
+    expect(renderedCell.glyph).toBe(65); // Red 'A' from layer 1
   });
 });
 

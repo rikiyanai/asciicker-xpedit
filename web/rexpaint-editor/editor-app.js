@@ -79,6 +79,125 @@ export class EditorApp {
 
     // Set up grid toggle button
     this._setupGridToggle();
+
+    // Set up status bar
+    this._setupStatusBar();
+  }
+
+  /**
+   * Set up status bar display elements and event handlers
+   * Attaches mousemove and click listeners to canvas to update position and cell displays
+   * @private
+   */
+  _setupStatusBar() {
+    // Cache status bar element references
+    this.statusBar = {
+      posDisplay: document.getElementById('posDisplay'),
+      cellDisplay: document.getElementById('cellDisplay'),
+      toolDisplay: document.getElementById('toolDisplay'),
+      modeDisplay: document.getElementById('modeDisplay'),
+    };
+
+    // Only set up if status bar elements exist (REXPaint editor modal)
+    if (!this.statusBar.posDisplay) {
+      return;
+    }
+
+    // Get the canvas element
+    const canvasElement = document.getElementById('rexpaintCanvas');
+    if (!canvasElement) {
+      return;
+    }
+
+    // Handle canvas mousemove to update position and cell display
+    canvasElement.addEventListener('mousemove', (e) => {
+      const rect = canvasElement.getBoundingClientRect();
+      const screenX = e.clientX - rect.left;
+      const screenY = e.clientY - rect.top;
+
+      // Convert screen coordinates to cell coordinates using canvas font size
+      const pixelsPerCell = this.getFontSize() || 12;
+      const cellX = Math.floor(screenX / pixelsPerCell);
+      const cellY = Math.floor(screenY / pixelsPerCell);
+
+      // Update position display
+      this.statusBar.posDisplay.textContent = `Pos: ${cellX}, ${cellY}`;
+
+      // Get current cell from canvas and display glyph info
+      if (this.canvas && typeof this.canvas.getCell === 'function') {
+        const cell = this.canvas.getCell(cellX, cellY);
+        if (cell) {
+          const glyphCode = cell.glyph || 0;
+          const glyphChar = String.fromCharCode(glyphCode);
+          this.statusBar.cellDisplay.textContent = `Cell: ${glyphCode} (${glyphChar})`;
+        } else {
+          this.statusBar.cellDisplay.textContent = 'Cell: (empty)';
+        }
+      }
+    });
+
+    // Handle canvas click to update position display (in addition to mousemove)
+    canvasElement.addEventListener('click', (e) => {
+      const rect = canvasElement.getBoundingClientRect();
+      const screenX = e.clientX - rect.left;
+      const screenY = e.clientY - rect.top;
+
+      const pixelsPerCell = this.getFontSize() || 12;
+      const cellX = Math.floor(screenX / pixelsPerCell);
+      const cellY = Math.floor(screenY / pixelsPerCell);
+
+      this.statusBar.posDisplay.textContent = `Pos: ${cellX}, ${cellY}`;
+    });
+
+    // Initialize tool display with default tool name
+    this._updateToolDisplay();
+
+    // Initialize mode display with current modes
+    this._updateModeDisplay();
+  }
+
+  /**
+   * Update the tool display in the status bar
+   * Called when tool is activated
+   * @private
+   */
+  _updateToolDisplay() {
+    if (!this.statusBar || !this.statusBar.toolDisplay) {
+      return;
+    }
+
+    if (this.activeTool && this.activeTool.name) {
+      // Remove 'Tool' suffix if present (e.g., 'CellTool' -> 'Cell')
+      const toolName = this.activeTool.name.replace(/Tool$/, '');
+      this.statusBar.toolDisplay.textContent = `Tool: ${toolName}`;
+    } else {
+      this.statusBar.toolDisplay.textContent = 'Tool: Cell';
+    }
+  }
+
+  /**
+   * Update the mode display in the status bar with active apply modes
+   * Shows which of G (glyph), F (foreground), B (background) are active
+   * @private
+   */
+  _updateModeDisplay() {
+    if (!this.statusBar || !this.statusBar.modeDisplay) {
+      return;
+    }
+
+    const activeModes = [];
+    if (this.activeApplyModes.glyph) {
+      activeModes.push('G');
+    }
+    if (this.activeApplyModes.foreground) {
+      activeModes.push('F');
+    }
+    if (this.activeApplyModes.background) {
+      activeModes.push('B');
+    }
+
+    const modeText = activeModes.length > 0 ? activeModes.join('|') : 'none';
+    this.statusBar.modeDisplay.textContent = `Mode: ${modeText}`;
   }
 
   /**
@@ -157,6 +276,9 @@ export class EditorApp {
     if (this.activeTool && typeof this.activeTool.setApplyModes === 'function') {
       this.activeTool.setApplyModes(this.activeApplyModes);
     }
+
+    // Update status bar with active modes
+    this._updateModeDisplay();
   }
 
   /**
@@ -202,6 +324,9 @@ export class EditorApp {
         tool.setApplyModes(this.activeApplyModes);
       }
     }
+
+    // Update status bar with active tool name
+    this._updateToolDisplay();
 
     // Tell canvas about the active tool
     if (this.canvas && typeof this.canvas.setActiveTool === 'function') {

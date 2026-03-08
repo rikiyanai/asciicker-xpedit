@@ -186,3 +186,18 @@
 .toggle-btn:hover {
   background: #3e3e3e;
 }
+
+.status-bar {
+  display: flex;
+  gap: 20px;
+  padding: 8px 12px;
+  border-top: 1px solid #444;
+  background: #1e1e1e;
+  font-size: 11px;
+  font-family: 'Courier New', monospace;
+  color: #888;
+}
+
+.status-bar span {
+  padding: 0 4px;
+}

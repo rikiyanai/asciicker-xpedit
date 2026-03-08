@@ -1209,11 +1209,494 @@ Each task includes: failing test → run fail → minimal implementation → run
 
 ---
 
+## Phase 9: Comprehensive XP Recreation Validation Suite
+
+### Task 35: Create end-to-end recreation test with bit-perfect validation
+
+**Files:**
+- Create: `tests/web/xp-recreation-validator.test.js`
+- Create: `scripts/test-xp-recreation.js` (headless batch runner)
+- Create: `tests/fixtures/xp-recreation/` (reference XP files for testing)
+
+**Step 1: Write failing test for XP recreation validation**
+
+Create file `tests/web/xp-recreation-validator.test.js`:
+```javascript
+import { describe, it, expect } from 'vitest';
+import { XPRecreationValidator } from '../../tests/web/xp-recreation-validator.js';
+
+describe('XP Recreation Validation', () => {
+  it('should load reference XP and validate dimensions', async () => {
+    const validator = new XPRecreationValidator();
+    const refXP = await validator.loadXPFile('tests/fixtures/xp-recreation/test-4x4.xp');
+
+    expect(refXP.width).toBe(4);
+    expect(refXP.height).toBe(4);
+    expect(refXP.layers.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('should recreate XP in editor via automation', async () => {
+    const validator = new XPRecreationValidator();
+    const refXP = await validator.loadXPFile('tests/fixtures/xp-recreation/test-4x4.xp');
+
+    // Automate: open editor, load XP, validate state
+    const result = await validator.recreateViaEditor(refXP);
+    expect(result.success).toBe(true);
+    expect(result.stepsExecuted).toBeGreaterThan(0);
+  });
+
+  it('should validate recreated XP with bit-perfect tolerance', async () => {
+    const validator = new XPRecreationValidator();
+    const refXP = await validator.loadXPFile('tests/fixtures/xp-recreation/test-4x4.xp');
+    const recreated = await validator.recreateAndExport(refXP);
+
+    const validation = await validator.validateBitPerfect(refXP, recreated, {
+      tolerance: { rgb: 0, glyphMismatchAllowed: 0 } // 0 = bit-perfect
+    });
+
+    expect(validation.passed).toBe(true);
+    expect(validation.cellsMatched).toBe(refXP.width * refXP.height * refXP.layers.length);
+    expect(validation.errors).toHaveLength(0);
+  });
+
+  it('should generate detailed diff report on mismatch', async () => {
+    const validator = new XPRecreationValidator();
+    const refXP = await validator.loadXPFile('tests/fixtures/xp-recreation/test-4x4.xp');
+    const mockCorrupted = JSON.parse(JSON.stringify(refXP));
+    mockCorrupted.cells[0].glyph = 999; // intentional error
+
+    const validation = await validator.validateBitPerfect(refXP, mockCorrupted, {
+      tolerance: { rgb: 0, glyphMismatchAllowed: 0 }
+    });
+
+    expect(validation.passed).toBe(false);
+    expect(validation.errors).toContainEqual(
+      expect.objectContaining({
+        cell: '0,0,0',
+        field: 'glyph',
+        expected: refXP.cells[0].glyph,
+        actual: 999
+      })
+    );
+  });
+});
+```
+
+**Step 2: Run test to verify it fails**
+
+```bash
+npm test -- tests/web/xp-recreation-validator.test.js
+```
+
+Expected: FAIL with "XPRecreationValidator is not defined"
+
+**Step 3: Implement XP recreation validator**
+
+Create file `tests/web/xp-recreation-validator.js`:
+```javascript
+import { XPFile } from 'mcp__xp-tool__'; // existing codec
+
+/**
+ * XP Recreation Validator - End-to-end testing for XP file recreation
+ * Validates: bit-perfect glyph/color matching, layer count, dimensions
+ */
+export class XPRecreationValidator {
+  constructor() {
+    this.tolerance = {
+      rgb: 0,           // 0 = exact RGB match required
+      glyph: 0,         // 0 = exact glyph code match required
+      layers: 'exact'   // 'exact' = layer count must match
+    };
+  }
+
+  /**
+   * Load reference XP file from disk
+   */
+  async loadXPFile(filePath) {
+    const response = await fetch(filePath);
+    const arrayBuffer = await response.arrayBuffer();
+    const xpFile = new XPFile();
+    xpFile.read(new Uint8Array(arrayBuffer));
+    return this.xpToJSON(xpFile);
+  }
+
+  /**
+   * Convert XPFile object to JSON representation for validation
+   */
+  xpToJSON(xpFile) {
+    const data = {
+      width: xpFile.width,
+      height: xpFile.height,
+      layers: xpFile.layers.length,
+      cells: []
+    };
+
+    for (let layer = 0; layer < xpFile.layers.length; layer++) {
+      for (let y = 0; y < xpFile.height; y++) {
+        for (let x = 0; x < xpFile.width; x++) {
+          const cell = xpFile.getCell(layer, x, y);
+          data.cells.push({
+            key: `${x},${y},${layer}`,
+            x, y, layer,
+            glyph: cell.glyph,
+            fg: [cell.foreground[0], cell.foreground[1], cell.foreground[2]],
+            bg: [cell.background[0], cell.background[1], cell.background[2]]
+          });
+        }
+      }
+    }
+
+    return data;
+  }
+
+  /**
+   * Recreate XP in editor via UI automation
+   * Requires: window.__wb_debug API and Playwright integration
+   */
+  async recreateViaEditor(referenceXP) {
+    const steps = [];
+
+    // Step 1: Load reference XP into editor
+    steps.push(await window.__wb_debug.editorLoadXP(referenceXP));
+
+    // Step 2: For each cell, recreate via automation
+    const totalCells = referenceXP.width * referenceXP.height * referenceXP.layers;
+    let cellsProcessed = 0;
+
+    for (let layer = 0; layer < referenceXP.layers; layer++) {
+      await window.__wb_debug.selectLayer(layer);
+
+      for (let y = 0; y < referenceXP.height; y++) {
+        for (let x = 0; x < referenceXP.width; x++) {
+          const cell = referenceXP.cells.find(c => c.x === x && c.y === y && c.layer === layer);
+          if (cell) {
+            await window.__wb_debug.setCellProperties(x, y, {
+              glyph: cell.glyph,
+              fg: cell.fg,
+              bg: cell.bg
+            });
+            cellsProcessed++;
+          }
+        }
+      }
+    }
+
+    return {
+      success: true,
+      stepsExecuted: steps.length + cellsProcessed,
+      cellsProcessed,
+      totalCells
+    };
+  }
+
+  /**
+   * Recreate XP and export for validation
+   */
+  async recreateAndExport(referenceXP) {
+    await this.recreateViaEditor(referenceXP);
+    const exportedXP = await window.__wb_debug.exportXP();
+    return this.xpToJSON(exportedXP);
+  }
+
+  /**
+   * Validate recreated XP against reference with tolerance
+   * Returns: { passed, cellsMatched, errors: [{cell, field, expected, actual}] }
+   */
+  async validateBitPerfect(referenceXP, recreatedXP, tolerance = this.tolerance) {
+    const errors = [];
+    let cellsMatched = 0;
+
+    // Validate dimensions
+    if (referenceXP.width !== recreatedXP.width) {
+      errors.push({
+        field: 'width',
+        expected: referenceXP.width,
+        actual: recreatedXP.width
+      });
+    }
+
+    if (referenceXP.height !== recreatedXP.height) {
+      errors.push({
+        field: 'height',
+        expected: referenceXP.height,
+        actual: recreatedXP.height
+      });
+    }
+
+    if (tolerance.layers === 'exact' && referenceXP.layers !== recreatedXP.layers) {
+      errors.push({
+        field: 'layers',
+        expected: referenceXP.layers,
+        actual: recreatedXP.layers
+      });
+    }
+
+    // Validate cells
+    for (const refCell of referenceXP.cells) {
+      const recCell = recreatedXP.cells.find(c => c.key === refCell.key);
+
+      if (!recCell) {
+        errors.push({
+          cell: refCell.key,
+          field: 'missing',
+          expected: 'cell present',
+          actual: 'cell not found'
+        });
+        continue;
+      }
+
+      // Check glyph (tolerance = allowable mismatches)
+      if (tolerance.glyph === 0) {
+        if (refCell.glyph !== recCell.glyph) {
+          errors.push({
+            cell: refCell.key,
+            field: 'glyph',
+            expected: refCell.glyph,
+            actual: recCell.glyph
+          });
+        }
+      }
+
+      // Check foreground RGB (tolerance = max delta per channel)
+      if (tolerance.rgb === 0) {
+        for (let i = 0; i < 3; i++) {
+          if (refCell.fg[i] !== recCell.fg[i]) {
+            errors.push({
+              cell: refCell.key,
+              field: `fg[${i}]`,
+              expected: refCell.fg[i],
+              actual: recCell.fg[i]
+            });
+          }
+        }
+
+        // Check background RGB
+        for (let i = 0; i < 3; i++) {
+          if (refCell.bg[i] !== recCell.bg[i]) {
+            errors.push({
+              cell: refCell.key,
+              field: `bg[${i}]`,
+              expected: refCell.bg[i],
+              actual: recCell.bg[i]
+            });
+          }
+        }
+      }
+
+      if (!errors.find(e => e.cell === refCell.key)) {
+        cellsMatched++;
+      }
+    }
+
+    return {
+      passed: errors.length === 0,
+      cellsMatched,
+      errors
+    };
+  }
+
+  /**
+   * Generate human-readable diff report
+   */
+  generateDiffReport(validation, referenceXP) {
+    const report = [];
+    report.push(`## XP Recreation Validation Report`);
+    report.push(`**Status:** ${validation.passed ? 'PASS ✓' : 'FAIL ✗'}`);
+    report.push(`**Cells Matched:** ${validation.cellsMatched} / ${referenceXP.width * referenceXP.height * referenceXP.layers}`);
+    report.push(`**Errors:** ${validation.errors.length}`);
+
+    if (validation.errors.length > 0) {
+      report.push(`\n### Errors by Type`);
+      const errorsByField = {};
+      for (const err of validation.errors) {
+        const field = err.field || 'unknown';
+        if (!errorsByField[field]) {
+          errorsByField[field] = [];
+        }
+        errorsByField[field].push(err);
+      }
+
+      for (const [field, errs] of Object.entries(errorsByField)) {
+        report.push(`**${field}:** ${errs.length} errors`);
+        for (const err of errs.slice(0, 5)) { // Show first 5
+          report.push(`  - Cell ${err.cell}: expected ${err.expected}, got ${err.actual}`);
+        }
+        if (errs.length > 5) {
+          report.push(`  ... and ${errs.length - 5} more`);
+        }
+      }
+    }
+
+    return report.join('\n');
+  }
+}
+```
+
+**Step 4: Create headless batch runner**
+
+Create file `scripts/test-xp-recreation.js`:
+```javascript
+#!/usr/bin/env node
+
+/**
+ * Headless XP Recreation Test Runner
+ * Usage: node scripts/test-xp-recreation.js [--sprite-folder] [--tolerance rgb:0]
+ *
+ * Tests all XP files in a folder for bit-perfect or tolerance-based recreation
+ * Outputs JSON report suitable for CI/CD integration
+ */
+
+import { promises as fs } from 'fs';
+import path from 'path';
+import { XPRecreationValidator } from '../tests/web/xp-recreation-validator.js';
+
+async function runBatchValidation(spriteFolder = 'sprites', options = {}) {
+  const validator = new XPRecreationValidator();
+  const results = [];
+
+  // Set tolerance if provided
+  if (options.tolerance) {
+    const [rgbStr, glyphStr] = options.tolerance.split(':');
+    validator.tolerance.rgb = parseInt(rgbStr) || 0;
+    validator.tolerance.glyph = parseInt(glyphStr) || 0;
+  }
+
+  // Find all .xp files
+  const files = await fs.readdir(spriteFolder);
+  const xpFiles = files.filter(f => f.endsWith('.xp'));
+
+  console.log(`Testing ${xpFiles.length} XP files in ${spriteFolder}...`);
+
+  for (const file of xpFiles) {
+    const filePath = path.join(spriteFolder, file);
+    console.log(`  Testing: ${file}...`);
+
+    try {
+      const refXP = await validator.loadXPFile(filePath);
+      const recreated = await validator.recreateAndExport(refXP);
+      const validation = await validator.validateBitPerfect(refXP, recreated, validator.tolerance);
+
+      results.push({
+        file,
+        passed: validation.passed,
+        cellsMatched: validation.cellsMatched,
+        totalCells: refXP.width * refXP.height * refXP.layers,
+        errorCount: validation.errors.length,
+        errors: validation.errors.slice(0, 10) // Top 10 errors
+      });
+
+      console.log(`    → ${validation.passed ? 'PASS' : 'FAIL'}`);
+    } catch (err) {
+      results.push({
+        file,
+        passed: false,
+        error: err.message
+      });
+      console.log(`    → ERROR: ${err.message}`);
+    }
+  }
+
+  // Summary
+  const passed = results.filter(r => r.passed).length;
+  const failed = results.filter(r => !r.passed).length;
+
+  const report = {
+    timestamp: new Date().toISOString(),
+    total: xpFiles.length,
+    passed,
+    failed,
+    results
+  };
+
+  return report;
+}
+
+// CLI entry point
+const args = process.argv.slice(2);
+const spriteFolder = args.find(a => !a.startsWith('--')) || 'sprites';
+const options = {};
+if (args.find(a => a.startsWith('--tolerance'))) {
+  options.tolerance = args.find(a => a.startsWith('--tolerance')).split('=')[1];
+}
+
+runBatchValidation(spriteFolder, options).then(report => {
+  console.log('\n=== REPORT ===');
+  console.log(JSON.stringify(report, null, 2));
+
+  const exitCode = report.failed === 0 ? 0 : 1;
+  process.exit(exitCode);
+}).catch(err => {
+  console.error('Batch validation failed:', err);
+  process.exit(1);
+});
+```
+
+**Step 5: Create reference test fixtures**
+
+Create minimal test XP files at:
+- `tests/fixtures/xp-recreation/test-4x4.xp` (4x4 grid, 3 layers, simple pattern)
+- `tests/fixtures/xp-recreation/test-80x25.xp` (80x25 grid, 4 layers, full feature test)
+
+**Step 6: Run test to verify it passes**
+
+```bash
+npm test -- tests/web/xp-recreation-validator.test.js
+```
+
+Expected: PASS (all assertions pass, bit-perfect validation confirmed)
+
+**Step 7: Run batch validation script**
+
+```bash
+node scripts/test-xp-recreation.js sprites --tolerance=rgb:0
+```
+
+Expected: JSON report showing PASS/FAIL for each sprite file
+
+**Step 8: Commit**
+
+```bash
+git add tests/web/xp-recreation-validator.test.js tests/web/xp-recreation-validator.js scripts/test-xp-recreation.js tests/fixtures/xp-recreation/
+git commit -m "test: add comprehensive XP recreation validation suite with bit-perfect validation and headless batch runner"
+```
+
+---
+
 ## Execution Strategy
 
-**Total Scope:** 34 bite-sized TDD tasks across 8 phases
-**Estimated Timeline:** 2-3 hours per phase (parallel execution possible for independent modules)
-**Testing:** Each task includes failing test → implementation → passing test → commit
+**Total Scope:** 35 bite-sized TDD tasks across 9 phases
+- Phases 1-8: Editor implementation (34 tasks)
+- Phase 9: Validation suite (Task 35) — **CRITICAL GATE**
+
+**Testing Strategy:**
+- Unit tests: Phases 1-5 (isolated modules)
+- Integration tests: Phases 6-7 (editor + workbench)
+- **Validation gate (Phase 9):** Bit-perfect XP recreation + batch regression suite
+- All tasks use TDD: failing test → implementation → passing test → commit
+
+**Batch Runner Usage:**
+```bash
+# Test single file with bit-perfect tolerance
+node scripts/test-xp-recreation.js sprites/player-0000.xp
+
+# Test entire sprite folder
+node scripts/test-xp-recreation.js sprites --tolerance=rgb:0
+
+# With tolerance (±5 per RGB channel)
+node scripts/test-xp-recreation.js sprites --tolerance=rgb:5
+```
+
+---
+
+## Execution Choice
+
+Plan complete and saved to `docs/plans/2026-03-08-web-rexpaint-editor-implementation.md`. Two execution options:
+
+**1. Subagent-Driven (this session)** — I dispatch fresh subagent per task, review between tasks, fast iteration
+
+**2. Parallel Session (separate)** — Open new session with executing-plans, batch execution with checkpoints
+
+**Which approach?**
 
 ---
 

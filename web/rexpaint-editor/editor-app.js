@@ -88,6 +88,22 @@ export class EditorApp {
     // Store event unsubscribe functions for cleanup
     this._unsubscribers = [];
 
+    // Pan error handler - ensures cursor is restored if exception occurs during panning
+    this._panErrorHandler = (event) => {
+      if (this.panMode) {
+        console.error('Uncaught error during pan mode:', event.error);
+        this.disablePanMode();
+      }
+    };
+
+    // Attach global error listener for pan mode safety
+    if (typeof window !== 'undefined') {
+      window.addEventListener('error', this._panErrorHandler);
+      this._unsubscribers.push(() => {
+        window.removeEventListener('error', this._panErrorHandler);
+      });
+    }
+
     // Create keyboard handler
     this.keyboardHandler = new KeyboardHandler(this);
     if (modalElement) {
@@ -635,6 +651,7 @@ export class EditorApp {
   /**
    * Disable pan mode - called when Space key is released
    * Clears panMode flag and restores cursor to 'crosshair'
+   * Safe to call even if pan mode is not active
    */
   disablePanMode() {
     this.panMode = false;
@@ -664,29 +681,48 @@ export class EditorApp {
 
   /**
    * Continue pan operation, calculating delta and updating canvas offset
+   * Wrapped in try/finally to ensure cursor and pan mode are cleaned up on error
    * @param {number} screenX - Current X coordinate on screen
    * @param {number} screenY - Current Y coordinate on screen
    */
   pan(screenX, screenY) {
-    const deltaX = screenX - this.panStartX;
-    const deltaY = screenY - this.panStartY;
+    try {
+      if (!this.panMode) {
+        return;
+      }
 
-    this.offsetX += deltaX;
-    this.offsetY += deltaY;
+      const deltaX = screenX - this.panStartX;
+      const deltaY = screenY - this.panStartY;
 
-    this.panStartX = screenX;
-    this.panStartY = screenY;
+      this.offsetX += deltaX;
+      this.offsetY += deltaY;
 
-    if (this.canvas && typeof this.canvas.setOffset === 'function') {
-      this.canvas.setOffset(this.offsetX, this.offsetY);
+      this.panStartX = screenX;
+      this.panStartY = screenY;
+
+      if (this.canvas && typeof this.canvas.setOffset === 'function') {
+        this.canvas.setOffset(this.offsetX, this.offsetY);
+      }
+    } catch (error) {
+      console.error('Error during pan operation:', error);
+      // Force cleanup on error - disable pan mode and restore cursor
+      this.disablePanMode();
+      throw error; // Re-throw for test verification and higher-level handling
     }
   }
 
   /**
    * End the pan operation
+   * Safely disables pan mode and restores cursor
    */
   endPan() {
-    this.panMode = false;
+    try {
+      this.disablePanMode();
+    } catch (error) {
+      console.error('Error ending pan operation:', error);
+      // Ensure pan mode is disabled even if there's an error
+      this.panMode = false;
+    }
   }
 
   /**

@@ -110,46 +110,70 @@ export class Canvas {
 
   /**
    * Handle mousedown event
+   * Includes error handling to prevent unhandled exceptions from disrupting user interaction
    * @private
    */
   _onMouseDown(event) {
-    // Check for pan mode
-    if (this.editorApp && this.editorApp.panMode) {
+    try {
+      // Check for pan mode
+      if (this.editorApp && this.editorApp.panMode) {
+        const rect = this.canvasElement.getBoundingClientRect();
+        const pixelX = event.clientX - rect.left;
+        const pixelY = event.clientY - rect.top;
+        this.editorApp.startPan(pixelX, pixelY);
+        return;
+      }
+
+      if (!this.activeTool) {
+        return;
+      }
+
       const rect = this.canvasElement.getBoundingClientRect();
       const pixelX = event.clientX - rect.left;
       const pixelY = event.clientY - rect.top;
-      this.editorApp.startPan(pixelX, pixelY);
-      return;
-    }
+      const coords = this.pixelToCellCoords(pixelX, pixelY);
 
-    if (!this.activeTool) {
-      return;
-    }
+      // Check bounds
+      if (coords.x < 0 || coords.x >= this.width || coords.y < 0 || coords.y >= this.height) {
+        return;
+      }
 
-    const rect = this.canvasElement.getBoundingClientRect();
-    const pixelX = event.clientX - rect.left;
-    const pixelY = event.clientY - rect.top;
-    const coords = this.pixelToCellCoords(pixelX, pixelY);
-
-    // Check bounds
-    if (coords.x < 0 || coords.x >= this.width || coords.y < 0 || coords.y >= this.height) {
-      return;
-    }
-
-    // Notify tool of drag start
-    if (this.activeTool.startDrag) {
-      this.activeTool.startDrag(coords.x, coords.y);
-      this.render();
+      // Notify tool of drag start
+      if (this.activeTool.startDrag) {
+        this.activeTool.startDrag(coords.x, coords.y);
+        this.render();
+      }
+    } catch (error) {
+      console.error('Error in mousedown handler:', error);
+      throw error; // Re-throw for test verification
     }
   }
 
   /**
    * Handle mousemove event
+   * Includes error handling to prevent unhandled exceptions from disrupting user interaction
    * @private
    */
   _onMouseMove(event) {
-    // Check for pan mode
-    if (this.editorApp && this.editorApp.panMode) {
+    try {
+      // Check for pan mode
+      if (this.editorApp && this.editorApp.panMode) {
+        // Check if mouse button is pressed
+        if (event.buttons === 0) {
+          return;
+        }
+
+        const rect = this.canvasElement.getBoundingClientRect();
+        const pixelX = event.clientX - rect.left;
+        const pixelY = event.clientY - rect.top;
+        this.editorApp.pan(pixelX, pixelY);
+        return;
+      }
+
+      if (!this.activeTool || !this.activeTool.drag) {
+        return;
+      }
+
       // Check if mouse button is pressed
       if (event.buttons === 0) {
         return;
@@ -158,32 +182,20 @@ export class Canvas {
       const rect = this.canvasElement.getBoundingClientRect();
       const pixelX = event.clientX - rect.left;
       const pixelY = event.clientY - rect.top;
-      this.editorApp.pan(pixelX, pixelY);
-      return;
+      const coords = this.pixelToCellCoords(pixelX, pixelY);
+
+      // Check bounds
+      if (coords.x < 0 || coords.x >= this.width || coords.y < 0 || coords.y >= this.height) {
+        return;
+      }
+
+      // Notify tool of drag continuation
+      this.activeTool.drag(coords.x, coords.y);
+      this.render();
+    } catch (error) {
+      console.error('Error in mousemove handler:', error);
+      throw error; // Re-throw for test verification
     }
-
-    if (!this.activeTool || !this.activeTool.drag) {
-      return;
-    }
-
-    // Check if mouse button is pressed
-    if (event.buttons === 0) {
-      return;
-    }
-
-    const rect = this.canvasElement.getBoundingClientRect();
-    const pixelX = event.clientX - rect.left;
-    const pixelY = event.clientY - rect.top;
-    const coords = this.pixelToCellCoords(pixelX, pixelY);
-
-    // Check bounds
-    if (coords.x < 0 || coords.x >= this.width || coords.y < 0 || coords.y >= this.height) {
-      return;
-    }
-
-    // Notify tool of drag continuation
-    this.activeTool.drag(coords.x, coords.y);
-    this.render();
   }
 
   /**

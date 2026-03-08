@@ -17,6 +17,8 @@
  * - Canvas emits mouse events → EditorApp routes to activeTool.paint/startDrag/drag/endDrag
  */
 
+import { FillTool } from './tools/fill-tool.js';
+
 export class EditorApp {
   /**
    * Create a new EditorApp instance
@@ -179,6 +181,29 @@ export class EditorApp {
       return this.canvas.getFontSize();
     }
     return 12; // Default
+  }
+
+  /**
+   * Activate the fill tool
+   * Instantiates a FillTool, adds it to the tools array, and activates it
+   * @returns {FillTool} The activated fill tool
+   */
+  activateFillTool() {
+    const fillTool = new FillTool();
+    fillTool.setCanvas(this.canvas);
+    fillTool.setGlyph(this.activeGlyph);
+    fillTool.setColors(this.activeFg, this.activeBg);
+    fillTool.setApplyModes(this.activeApplyModes);
+
+    // Add to tools array if not already present
+    if (!this.tools.includes(fillTool)) {
+      this.tools.push(fillTool);
+    }
+
+    // Activate the tool
+    this.activateTool(fillTool);
+
+    return fillTool;
   }
 
   /**

@@ -76,6 +76,9 @@ export class EditorApp {
 
     // Set up apply mode toggle buttons
     this._setupApplyModeToggles();
+
+    // Set up grid toggle button
+    this._setupGridToggle();
   }
 
   /**
@@ -153,6 +156,23 @@ export class EditorApp {
   _syncApplyModesToTools() {
     if (this.activeTool && typeof this.activeTool.setApplyModes === 'function') {
       this.activeTool.setApplyModes(this.activeApplyModes);
+    }
+  }
+
+  /**
+   * Set up click handler for grid toggle button
+   * @private
+   */
+  _setupGridToggle() {
+    const gridToggleBtn = document.getElementById('gridToggle');
+    if (gridToggleBtn) {
+      gridToggleBtn.addEventListener('click', () => {
+        if (this.canvas && typeof this.canvas.setGridVisible === 'function') {
+          const newState = !this.canvas.showGrid;
+          this.canvas.setGridVisible(newState);
+          gridToggleBtn.classList.toggle('active');
+        }
+      });
     }
   }
 

@@ -1239,6 +1239,7 @@ describe('XP Recreation Validation', () => {
     const validator = new XPRecreationValidator();
     const refXP = await validator.loadXPFile('tests/fixtures/xp-recreation/test-4x4.xp');
 
+    // ===== RECREATE IN EDITOR VIA UI AUTOMATION =====
     // Automate: open editor, load XP, validate state
     const result = await validator.recreateViaEditor(refXP);
     expect(result.success).toBe(true);
@@ -1350,16 +1351,24 @@ export class XPRecreationValidator {
   }
 
   /**
-   * Recreate XP in editor via UI automation
+   * ===== RECREATE IN EDITOR VIA UI AUTOMATION =====
+   *
+   * Automates full XP recreation using window.__wb_debug API
    * Requires: window.__wb_debug API and Playwright integration
+   *
+   * Process:
+   * 1. Load reference XP into editor state
+   * 2. For each layer: select layer, then for each cell: set glyph + colors
+   * 3. Track progress: steps executed, cells processed, total cells
+   * 4. Return success status with metrics
    */
   async recreateViaEditor(referenceXP) {
     const steps = [];
 
-    // Step 1: Load reference XP into editor
+    // ===== STEP 1: Load Reference XP =====
     steps.push(await window.__wb_debug.editorLoadXP(referenceXP));
 
-    // Step 2: For each cell, recreate via automation
+    // ===== STEP 2: Iterate Layers & Cells =====
     const totalCells = referenceXP.width * referenceXP.height * referenceXP.layers;
     let cellsProcessed = 0;
 
@@ -1381,6 +1390,7 @@ export class XPRecreationValidator {
       }
     }
 
+    // ===== STEP 3: Return Metrics =====
     return {
       success: true,
       stepsExecuted: steps.length + cellsProcessed,

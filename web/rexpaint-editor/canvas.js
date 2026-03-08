@@ -38,6 +38,10 @@ export class Canvas {
     // Store bound event handlers for cleanup
     this._boundHandlers = null;
 
+    // Pan/offset state
+    this.offsetX = 0;
+    this.offsetY = 0;
+
     // Initialize with default cells (transparent, white on black)
     this._initializeCells();
 
@@ -342,6 +346,25 @@ export class Canvas {
         }
       }
     }
+  }
+
+  /**
+   * Set canvas offset for pan/drag operations
+   * Clamps offset to prevent over-panning
+   * @param {number} x - X offset in pixels
+   * @param {number} y - Y offset in pixels
+   */
+  setOffset(x, y) {
+    // Calculate maximum allowed offsets
+    const maxOffsetX = this.width * this.cellSizePixels - this.canvasElement.width;
+    const maxOffsetY = this.height * this.cellSizePixels - this.canvasElement.height;
+
+    // Clamp offset to valid range [0, maxOffset]
+    this.offsetX = Math.max(0, Math.min(x, maxOffsetX));
+    this.offsetY = Math.max(0, Math.min(y, maxOffsetY));
+
+    // Re-render with new offset
+    this.render();
   }
 
   /**

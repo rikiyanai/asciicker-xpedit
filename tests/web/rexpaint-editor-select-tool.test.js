@@ -137,8 +137,8 @@ runner.describe('Selection Tool', () => {
     expect(bounds.height).toBe(5); // 7 - 3 + 1
   });
 
-  // Test 5: Get selected cells within bounds
-  runner.it('should get selected cells within bounds', () => {
+  // Test 5: Get selected cells within bounds - comprehensive verification
+  runner.it('should get selected cells within bounds with exact coordinates', () => {
     const tool = new SelectTool();
     const canvas = {
       width: 80,
@@ -154,10 +154,19 @@ runner.describe('Selection Tool', () => {
     // 3x2 selection should return 6 cells
     expect(cells.length).toBe(6);
 
-    // Verify cells include expected coordinates
+    // Verify all expected coordinates are present
     const cellCoords = cells.map((c) => `${c.x},${c.y}`);
-    expect(cellCoords.includes('0,0')).toBeTruthy();
-    expect(cellCoords.includes('2,1')).toBeTruthy();
+    const expectedCoords = ['0,0', '1,0', '2,0', '0,1', '1,1', '2,1'];
+    for (const coord of expectedCoords) {
+      expect(cellCoords.includes(coord)).toBeTruthy(`Expected ${coord} in selection`);
+    }
+
+    // Verify each cell has correct glyph data
+    for (const cell of cells) {
+      expect(cell.glyph).toBe(65 + cell.x + cell.y);
+      expect(cell.fg).toEqual([255, 255, 255]);
+      expect(cell.bg).toEqual([0, 0, 0]);
+    }
   });
 
   // Test 6: Clear selection
@@ -193,8 +202,8 @@ runner.describe('Selection Tool', () => {
     expect(bounds.height).toBe(6);
   });
 
-  // Test 8: Query if cell is selected
-  runner.it('should query if cell is selected', () => {
+  // Test 8: Query if cell is selected - comprehensive boundary check
+  runner.it('should query if cell is selected with complete boundary verification', () => {
     const tool = new SelectTool();
     const canvas = { width: 80, height: 24 };
     tool.setCanvas(canvas);
@@ -202,11 +211,26 @@ runner.describe('Selection Tool', () => {
     tool.startSelection(2, 2);
     tool.updateSelection(5, 5);
 
-    expect(tool.isSelected(2, 2)).toBeTruthy(); // Top-left
-    expect(tool.isSelected(3, 3)).toBeTruthy(); // Middle
-    expect(tool.isSelected(5, 5)).toBeTruthy(); // Bottom-right
-    expect(tool.isSelected(1, 2)).toBeFalsy(); // Outside left
-    expect(tool.isSelected(6, 3)).toBeFalsy(); // Outside right
+    // Verify all cells within bounds return true
+    for (let x = 2; x <= 5; x++) {
+      for (let y = 2; y <= 5; y++) {
+        expect(tool.isSelected(x, y)).toBeTruthy(`Cell (${x},${y}) should be selected`);
+      }
+    }
+
+    // Verify cells just outside bounds return false
+    expect(tool.isSelected(1, 2)).toBeFalsy(); // Left edge
+    expect(tool.isSelected(1, 3)).toBeFalsy(); // Left middle
+    expect(tool.isSelected(1, 5)).toBeFalsy(); // Left bottom
+    expect(tool.isSelected(6, 2)).toBeFalsy(); // Right edge
+    expect(tool.isSelected(6, 3)).toBeFalsy(); // Right middle
+    expect(tool.isSelected(6, 5)).toBeFalsy(); // Right bottom
+    expect(tool.isSelected(2, 1)).toBeFalsy(); // Top edge
+    expect(tool.isSelected(3, 1)).toBeFalsy(); // Top middle
+    expect(tool.isSelected(5, 1)).toBeFalsy(); // Top right
+    expect(tool.isSelected(2, 6)).toBeFalsy(); // Bottom edge
+    expect(tool.isSelected(3, 6)).toBeFalsy(); // Bottom middle
+    expect(tool.isSelected(5, 6)).toBeFalsy(); // Bottom right
   });
 
   // Test 9: Return null bounds when no selection
@@ -230,6 +254,68 @@ runner.describe('Selection Tool', () => {
     tool.deactivate();
 
     expect(tool.getSelectionBounds()).toBeNull();
+  });
+
+  // Test 11: Selection with large canvas and verify all coordinates
+  runner.it('should handle large selections and verify all cell coordinates', () => {
+    const tool = new SelectTool();
+    const canvas = {
+      width: 200,
+      height: 100,
+      getCell: (x, y) => ({ glyph: 42, fg: [255, 255, 255], bg: [0, 0, 0] }),
+    };
+    tool.setCanvas(canvas);
+
+    tool.startSelection(10, 10);
+    tool.updateSelection(12, 12);
+
+    const bounds = tool.getSelectionBounds();
+    expect(bounds.x).toBe(10);
+    expect(bounds.y).toBe(10);
+    expect(bounds.width).toBe(3); // 12 - 10 + 1
+    expect(bounds.height).toBe(3);
+
+    // Verify all cells in selection
+    const cells = tool.getSelectedCells();
+    expect(cells.length).toBe(9); // 3x3 grid
+
+    // Verify coordinates are correct
+    const cellCoords = new Set(cells.map(c => `${c.x},${c.y}`));
+    for (let x = 10; x <= 12; x++) {
+      for (let y = 10; y <= 12; y++) {
+        expect(cellCoords.has(`${x},${y}`)).toBeTruthy(`Expected (${x},${y}) in selection`);
+      }
+    }
+  });
+
+  // Test 12: Multiple selection updates and verify consistency
+  runner.it('should maintain consistent state across multiple updates', () => {
+    const tool = new SelectTool();
+    const canvas = { width: 80, height: 24 };
+    tool.setCanvas(canvas);
+
+    // First selection
+    tool.startSelection(0, 0);
+    tool.updateSelection(2, 2);
+    let bounds = tool.getSelectionBounds();
+    expect(bounds.width).toBe(3);
+    expect(bounds.height).toBe(3);
+
+    // Update to different bounds
+    tool.clearSelection();
+    tool.startSelection(5, 5);
+    tool.updateSelection(10, 10);
+    bounds = tool.getSelectionBounds();
+    expect(bounds.x).toBe(5);
+    expect(bounds.y).toBe(5);
+    expect(bounds.width).toBe(6); // 10 - 5 + 1
+    expect(bounds.height).toBe(6);
+
+    // Verify isSelected works with new bounds
+    expect(tool.isSelected(5, 5)).toBeTruthy();
+    expect(tool.isSelected(10, 10)).toBeTruthy();
+    expect(tool.isSelected(0, 0)).toBeFalsy(); // Outside new bounds
+    expect(tool.isSelected(2, 2)).toBeFalsy(); // Outside new bounds
   });
 });
 

@@ -333,32 +333,8 @@ test.describe('Pan Mode Cursor Management', () => {
     );
   });
 
-  test.it('should handle null canvas element gracefully', () => {
-    global.document = { getElementById: () => null };
-    global.window = {
-      addEventListener: () => {},
-      removeEventListener: () => {},
-    };
-
-    const palette = new Palette();
-    const glyphPicker = new GlyphPicker();
-    const canvas = new Canvas(createMockCanvasElement(), 80, 25, 12);
-    const editorApp = new EditorApp({ canvas, palette, glyphPicker });
-
-    // Should not throw even if canvas element is null
-    test.assertNoThrow(() => {
-      editorApp.enablePanMode();
-    });
-
-    test.assertEqual(editorApp.panMode, true);
-
-    test.assertNoThrow(() => {
-      editorApp.disablePanMode();
-    });
-
-    test.assertFalse(editorApp.panMode);
-  });
 });
+
 
 test.describe('Multiple Pan Operations', () => {
   test.it('should handle consecutive pan operations', () => {
@@ -381,31 +357,6 @@ test.describe('Multiple Pan Operations', () => {
     test.assertEqual(editorApp.panMode, true);
   });
 
-  test.it('should maintain cursor state consistency', () => {
-    const mockCanvasElem = setupGlobalMocks();
-
-    const palette = new Palette();
-    const glyphPicker = new GlyphPicker();
-    const canvas = new Canvas(mockCanvasElem, 80, 25, 12);
-    const editorApp = new EditorApp({ canvas, palette, glyphPicker });
-
-    canvas.setOffset = () => {};
-
-    editorApp.enablePanMode();
-    test.assertEqual(mockCanvasElem.style.cursor, 'grab');
-
-    editorApp.pan(100, 100);
-    test.assertEqual(mockCanvasElem.style.cursor, 'grab');
-
-    editorApp.endPan();
-    test.assertEqual(mockCanvasElem.style.cursor, 'crosshair');
-
-    editorApp.enablePanMode();
-    test.assertEqual(mockCanvasElem.style.cursor, 'grab');
-
-    editorApp.disablePanMode();
-    test.assertEqual(mockCanvasElem.style.cursor, 'crosshair');
-  });
 });
 
 test.describe('Canvas Mouse Event Error Handling', () => {

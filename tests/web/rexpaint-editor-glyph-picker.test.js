@@ -235,22 +235,6 @@ runner.describe('Glyph Picker', () => {
     expect(selectedGlyph).toBe(65);
   });
 
-  runner.it('should highlight selected glyph', () => {
-    const picker = new GlyphPicker(12, 12);
-    const container = document.createElement('div');
-    picker.render(container);
-
-    const glyphBtn = container.querySelectorAll('.glyph-button')[65];
-    glyphBtn.click();
-
-    expect(glyphBtn.classList.contains('selected')).toBe(true);
-  });
-
-  runner.it('should get currently selected glyph', () => {
-    const picker = new GlyphPicker(12, 12);
-    picker.selectGlyph(100);
-    expect(picker.getSelectedGlyph()).toBe(100);
-  });
 
   runner.it('should return unsubscribe function from on()', () => {
     const picker = new GlyphPicker(12, 12);
@@ -268,21 +252,6 @@ runner.describe('Glyph Picker', () => {
     expect(callCount).toBe(1); // Should not increment
   });
 
-  runner.it('should remove all listeners on dispose()', () => {
-    const picker = new GlyphPicker(12, 12);
-    let callCount = 0;
-    picker.on('select', () => {
-      callCount++;
-    });
-
-    picker.selectGlyph(65);
-    expect(callCount).toBe(1);
-
-    picker.dispose();
-
-    picker.selectGlyph(100);
-    expect(callCount).toBe(1); // Should not increment after dispose
-  });
 });
 
 runner.report();

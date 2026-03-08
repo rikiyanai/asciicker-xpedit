@@ -17,6 +17,7 @@ export class Layer {
     this.id = id;
     this.name = name;
     this.visible = true;
+    this.opacity = 1; // 0-1 range, 1 = fully opaque
     this.width = width;
     this.height = height;
 

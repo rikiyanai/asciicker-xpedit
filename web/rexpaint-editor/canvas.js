@@ -51,6 +51,7 @@ export class Canvas {
     // Selection visualization state
     this.selectionTool = null;
     this._animationFrame = 0; // For marching ants animation
+    this._animationFrameId = null; // For requestAnimationFrame cancellation
 
     // Initialize with default cells (transparent, white on black)
     this._initializeCells();
@@ -496,7 +497,18 @@ export class Canvas {
     // Schedule next animation frame for marching ants
     this._animationFrame++;
     if (this.selectionTool && this.selectionTool.getSelectionBounds()) {
-      requestAnimationFrame(() => this.render());
+      // Cancel any previous pending animation frame
+      if (this._animationFrameId) {
+        cancelAnimationFrame(this._animationFrameId);
+      }
+      // Schedule next render for marching ants animation
+      this._animationFrameId = requestAnimationFrame(() => this.render());
+    } else {
+      // Clear animation frame ID when selection is deselected
+      if (this._animationFrameId) {
+        cancelAnimationFrame(this._animationFrameId);
+        this._animationFrameId = null;
+      }
     }
   }
 
@@ -702,6 +714,12 @@ export class Canvas {
    * Call this when the canvas is no longer needed (e.g., modal closes)
    */
   dispose() {
+    // Cancel any pending animation frame
+    if (this._animationFrameId) {
+      cancelAnimationFrame(this._animationFrameId);
+      this._animationFrameId = null;
+    }
+
     if (!this.canvasElement.removeEventListener || !this._boundHandlers) {
       return;
     }

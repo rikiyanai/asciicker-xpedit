@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Pipeline V2 Workbench</title>
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="rexpaint-editor/styles.css">
 </head>
 <body>
 <div class="wrap">
@@ -388,6 +389,48 @@
     <div id="inspectorToolHint" class="small">Double-click a grid cell to inspect. Visual layer only. Tools: Select/Glyph/Paint/Erase/Dropper. Shortcuts: G/S/P/E/I tools, Q/R angle nav, A/D frame nav, C/X/V selection ops, Ctrl/Cmd+A select all.</div>
     <canvas id="cellInspectorCanvas" width="320" height="320"></canvas>
     <div id="cellInspectorInfo" class="small"></div>
+  </div>
+
+  <!-- REXPaint Editor Modal -->
+  <div id="rexpaintEditorModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>REXPaint Editor</h2>
+        <button id="rexpaintEditorClose" class="close-btn">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="editor-container">
+          <!-- Left sidebar -->
+          <div class="editor-sidebar">
+            <div class="sidebar-section">
+              <h3>Font</h3>
+              <div id="glyphPickerContainer"></div>
+            </div>
+            <div class="sidebar-section">
+              <h3>Tools</h3>
+              <div id="toolsPanel"></div>
+            </div>
+            <div class="sidebar-section">
+              <h3>Palette</h3>
+              <div id="palettePanel"></div>
+            </div>
+            <div class="sidebar-section">
+              <h3>Layers</h3>
+              <div id="layersPanel"></div>
+            </div>
+          </div>
+
+          <!-- Canvas area -->
+          <div class="editor-canvas-area">
+            <canvas id="rexpaintCanvas" width="960" height="300"></canvas>
+            <div class="editor-info">
+              <span id="coordInfo">X: 0 Y: 0</span>
+              <span id="glyphInfo">Glyph: 0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 <script src="/workbench.js"></script>

@@ -19,6 +19,7 @@
 
 import { FillTool } from './tools/fill-tool.js';
 import { KeyboardHandler } from './keyboard-handler.js';
+import { UndoStack } from './undo-stack.js';
 
 export class EditorApp {
   /**
@@ -68,6 +69,13 @@ export class EditorApp {
     this.pasteOffset = { x: 0, y: 0 }; // Offset for paste cursor tracking
     this._pasteMoveListener = null; // Reference to mousemove listener for cleanup
     this._pasteClickListener = null; // Reference to click listener for cleanup
+
+    // Bundle mode / action context (for workbench grid integration)
+    this.currentAction = 'idle'; // Current action: 'idle', 'attack', 'death'
+    this.bundleMode = false; // Whether editor is in bundle mode
+
+    // Undo/Redo stack
+    this.undoStack = new UndoStack(50);
 
     // Store event unsubscribe functions for cleanup
     this._unsubscribers = [];
@@ -758,9 +766,12 @@ export class EditorApp {
       return;
     }
 
-    // Create undo snapshot (simplified - just snapshot the canvas state)
-    // In a full implementation, this would integrate with UndoStack
-    const before = new Map(this.canvas.cells);
+    // Capture current canvas state for undo
+    const snapshot = {
+      action: 'paste',
+      cells: this._captureCanvasSnapshot(),
+    };
+    this.undoStack.push(snapshot);
 
     // Apply pasted cells
     const { cells } = this.clipboard;
@@ -784,6 +795,21 @@ export class EditorApp {
     // Exit paste mode and re-render
     this.cancelPaste();
     this.canvas.render();
+  }
+
+  /**
+   * Capture current canvas state for undo/redo
+   * @private
+   * @returns {Object} Canvas snapshot
+   */
+  _captureCanvasSnapshot() {
+    if (!this.canvas) return null;
+    // Return reference to active layer data
+    return {
+      width: this.canvas.width,
+      height: this.canvas.height,
+      cells: this.canvas.cells.map(row => [...row]),
+    };
   }
 
   /**

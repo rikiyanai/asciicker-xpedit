@@ -55,6 +55,13 @@ export class EditorApp {
     };
     this.activeTool = null;
 
+    // Pan/drag state
+    this.panMode = false;
+    this.panStartX = 0;
+    this.panStartY = 0;
+    this.offsetX = 0;
+    this.offsetY = 0;
+
     // Store event unsubscribe functions for cleanup
     this._unsubscribers = [];
 
@@ -244,6 +251,51 @@ export class EditorApp {
       return this.canvas.getFontSize();
     }
     return 12; // Default
+  }
+
+  /**
+   * Set pan mode on/off
+   * @param {boolean} enabled - Whether pan mode is active
+   */
+  setPanMode(enabled) {
+    this.panMode = enabled;
+  }
+
+  /**
+   * Start a pan operation at the given screen coordinates
+   * @param {number} screenX - Starting X coordinate on screen
+   * @param {number} screenY - Starting Y coordinate on screen
+   */
+  startPan(screenX, screenY) {
+    this.panStartX = screenX;
+    this.panStartY = screenY;
+  }
+
+  /**
+   * Continue pan operation, calculating delta and updating canvas offset
+   * @param {number} screenX - Current X coordinate on screen
+   * @param {number} screenY - Current Y coordinate on screen
+   */
+  pan(screenX, screenY) {
+    const deltaX = screenX - this.panStartX;
+    const deltaY = screenY - this.panStartY;
+
+    this.offsetX += deltaX;
+    this.offsetY += deltaY;
+
+    this.panStartX = screenX;
+    this.panStartY = screenY;
+
+    if (this.canvas && typeof this.canvas.setOffset === 'function') {
+      this.canvas.setOffset(this.offsetX, this.offsetY);
+    }
+  }
+
+  /**
+   * End the pan operation
+   */
+  endPan() {
+    this.panMode = false;
   }
 
   /**

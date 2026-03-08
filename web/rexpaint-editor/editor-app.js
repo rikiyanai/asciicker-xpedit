@@ -82,6 +82,9 @@ export class EditorApp {
 
     // Set up status bar
     this._setupStatusBar();
+
+    // Set up layer panel
+    this._setupLayerPanel();
   }
 
   /**
@@ -295,6 +298,190 @@ export class EditorApp {
           gridToggleBtn.classList.toggle('active');
         }
       });
+    }
+  }
+
+  /**
+   * Set up layer panel UI with layer list, visibility toggles, opacity sliders, and add/remove buttons
+   * Renders the layer list and attaches event handlers for layer management
+   * @private
+   */
+  _setupLayerPanel() {
+    const layerList = document.getElementById('layerList');
+    const addLayerBtn = document.getElementById('addLayerBtn');
+    const removeLayerBtn = document.getElementById('removeLayerBtn');
+
+    if (!layerList) {
+      return;
+    }
+
+    // Render initial layer list
+    this._renderLayerList();
+
+    // Attach event handlers
+    if (addLayerBtn) {
+      addLayerBtn.addEventListener('click', () => this._addNewLayer());
+    }
+
+    if (removeLayerBtn) {
+      removeLayerBtn.addEventListener('click', () => this._removeActiveLayer());
+    }
+  }
+
+  /**
+   * Render the complete layer list in the UI
+   * @private
+   */
+  _renderLayerList() {
+    const layerList = document.getElementById('layerList');
+    if (!layerList) {
+      return;
+    }
+
+    // Get layers from canvas (which should have a LayerStack reference)
+    // For now, we'll create a placeholder structure
+    // This will be populated when the canvas is properly wired with LayerStack
+    layerList.innerHTML = '';
+
+    // Create layer items (placeholder for now - will be populated by canvas)
+    if (this.canvas && this.canvas.layerStack) {
+      const layers = this.canvas.layerStack.getLayers();
+      layers.forEach((layer, index) => {
+        const layerItem = this._createLayerItem(layer, index);
+        layerList.appendChild(layerItem);
+      });
+    }
+  }
+
+  /**
+   * Create a single layer item element with visibility toggle and opacity slider
+   * @param {Layer} layer - The layer object
+   * @param {number} index - The layer index
+   * @returns {HTMLElement} The layer item DOM element
+   * @private
+   */
+  _createLayerItem(layer, index) {
+    const item = document.createElement('div');
+    item.className = 'layer-item';
+    if (this.canvas && this.canvas.layerStack && this.canvas.layerStack.activeIndex === index) {
+      item.classList.add('active');
+    }
+
+    // Layer name label
+    const nameLabel = document.createElement('div');
+    nameLabel.className = 'layer-item-name';
+    nameLabel.textContent = layer.name;
+    nameLabel.addEventListener('click', () => this._selectLayer(index));
+
+    // Visibility toggle button
+    const visibilityBtn = document.createElement('button');
+    visibilityBtn.className = 'layer-visibility-toggle';
+    if (layer.visible) {
+      visibilityBtn.classList.add('visible');
+      visibilityBtn.textContent = '👁';
+    } else {
+      visibilityBtn.textContent = '👁‍🗨';
+    }
+    visibilityBtn.title = layer.visible ? 'Hide layer' : 'Show layer';
+    visibilityBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._toggleLayerVisibility(index);
+    });
+
+    // Opacity slider
+    const opacitySlider = document.createElement('input');
+    opacitySlider.type = 'range';
+    opacitySlider.className = 'layer-opacity-slider';
+    opacitySlider.min = '0';
+    opacitySlider.max = '100';
+    opacitySlider.value = '100'; // Default full opacity
+    opacitySlider.title = `Opacity: 100%`;
+    opacitySlider.addEventListener('change', (e) => {
+      e.stopPropagation();
+      this._setLayerOpacity(index, parseInt(e.target.value));
+    });
+    opacitySlider.addEventListener('input', (e) => {
+      opacitySlider.title = `Opacity: ${e.target.value}%`;
+    });
+
+    item.appendChild(nameLabel);
+    item.appendChild(visibilityBtn);
+    item.appendChild(opacitySlider);
+
+    return item;
+  }
+
+  /**
+   * Select a layer by index
+   * @param {number} index - The layer index to select
+   * @private
+   */
+  _selectLayer(index) {
+    if (this.canvas && this.canvas.layerStack) {
+      this.canvas.layerStack.selectLayer(index);
+      this._renderLayerList();
+      this.canvas.render();
+    }
+  }
+
+  /**
+   * Toggle layer visibility
+   * @param {number} index - The layer index
+   * @private
+   */
+  _toggleLayerVisibility(index) {
+    if (this.canvas && this.canvas.layerStack) {
+      const layer = this.canvas.layerStack.layers[index];
+      if (layer) {
+        layer.setVisible(!layer.visible);
+        this._renderLayerList();
+        this.canvas.render();
+      }
+    }
+  }
+
+  /**
+   * Set layer opacity
+   * @param {number} index - The layer index
+   * @param {number} opacity - Opacity value (0-100)
+   * @private
+   */
+  _setLayerOpacity(index, opacity) {
+    if (this.canvas && this.canvas.layerStack) {
+      const layer = this.canvas.layerStack.layers[index];
+      if (layer) {
+        layer.opacity = opacity / 100; // Convert to 0-1 range
+        this.canvas.render();
+      }
+    }
+  }
+
+  /**
+   * Add a new layer to the layer stack
+   * @private
+   */
+  _addNewLayer() {
+    if (this.canvas && this.canvas.layerStack) {
+      const newIndex = this.canvas.layerStack.layers.length;
+      const newName = `Layer ${newIndex}`;
+      this.canvas.layerStack.addLayer(newName);
+      this._renderLayerList();
+      this.canvas.render();
+    }
+  }
+
+  /**
+   * Remove the currently active layer from the layer stack
+   * @private
+   */
+  _removeActiveLayer() {
+    if (this.canvas && this.canvas.layerStack) {
+      if (this.canvas.layerStack.layers.length > 1) {
+        const activeIndex = this.canvas.layerStack.activeIndex;
+        this.canvas.layerStack.removeLayer(activeIndex);
+        this._renderLayerList();
+        this.canvas.render();
+      }
     }
   }
 

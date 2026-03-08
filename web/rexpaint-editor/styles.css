@@ -124,3 +124,37 @@
 .hidden {
   display: none !important;
 }
+
+.glyph-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(16, 1fr);
+  gap: 2px;
+  background: #222;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.glyph-button {
+  width: 18px;
+  height: 18px;
+  padding: 1px;
+  margin: 1px;
+  background: #333;
+  color: #0f0;
+  border: 1px solid #555;
+  cursor: pointer;
+  font-size: 9px;
+  font-family: monospace;
+}
+
+.glyph-button:hover {
+  background: #444;
+  border-color: #777;
+}
+
+.glyph-button.selected {
+  background: #0f0;
+  color: #000;
+  border-color: #0f0;
+  font-weight: bold;
+}

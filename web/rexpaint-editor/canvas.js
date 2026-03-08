@@ -29,6 +29,9 @@ export class Canvas {
     // Cell data storage: key is "x,y", value is {glyph, fg, bg}
     this.cells = new Map();
 
+    // CP437 font renderer (optional, fallback to monospace if not set)
+    this.cp437Font = null;
+
     // Initialize with default cells (transparent, white on black)
     this._initializeCells();
   }
@@ -119,6 +122,18 @@ export class Canvas {
   }
 
   /**
+   * Set the CP437 font renderer
+   * @param {CP437Font} cp437Font - The CP437Font instance to use for rendering
+   * @returns {Promise<void>}
+   */
+  async setFont(cp437Font) {
+    this.cp437Font = cp437Font;
+    if (cp437Font) {
+      await cp437Font.load();
+    }
+  }
+
+  /**
    * Draw a single cell with its glyph and colors
    * @param {number} x - Cell column
    * @param {number} y - Cell row
@@ -128,6 +143,25 @@ export class Canvas {
     const cell = this.getCell(x, y);
     const pixelCoords = this.cellToPixelCoords(x, y);
 
+    // Use CP437 font renderer if available and loaded
+    if (this.cp437Font && this.cp437Font.spriteSheet) {
+      try {
+        this.cp437Font.drawGlyph(
+          this.ctx,
+          cell.glyph,
+          pixelCoords.x,
+          pixelCoords.y,
+          cell.fg,
+          cell.bg
+        );
+        return;
+      } catch (e) {
+        // Fallback to monospace text if glyph rendering fails
+        console.warn(`Failed to render glyph ${cell.glyph}: ${e.message}`);
+      }
+    }
+
+    // Fallback: render with monospace text
     // Draw background
     const bgColor = `rgb(${cell.bg[0]}, ${cell.bg[1]}, ${cell.bg[2]})`;
     this.ctx.fillStyle = bgColor;
@@ -138,15 +172,13 @@ export class Canvas {
       this.cellSizePixels
     );
 
-    // Draw glyph (placeholder: render glyph code as text for now)
-    // Full CP437 font rendering will be implemented in cp437-font.js
+    // Draw glyph as character (basic ASCII support)
     const fgColor = `rgb(${cell.fg[0]}, ${cell.fg[1]}, ${cell.fg[2]})`;
     this.ctx.fillStyle = fgColor;
     this.ctx.font = `${this.cellSizePixels}px monospace`;
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'top';
 
-    // Render glyph as character (basic ASCII support)
     if (cell.glyph > 0 && cell.glyph < 256) {
       try {
         const char = String.fromCharCode(cell.glyph);

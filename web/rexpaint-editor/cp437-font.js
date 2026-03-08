@@ -1,46 +1,179 @@
 /**
- * CP437 Font Module - Handles CP437 glyph rendering
+ * CP437 Font Module - Handles CP437 glyph rendering from bitmap spritesheet
  *
- * This module will provide CP437 font support for the web REXPaint editor.
- * Full font rendering will be implemented in a subsequent task.
+ * Loads a CP437 spritesheet (16x16 grid of glyphs) and provides methods to:
+ * - Extract individual glyphs with caching
+ * - Draw glyphs to canvas contexts with color blending
+ * - Support variable glyph dimensions (12x12, 16x16, etc.)
  */
 
 export class CP437Font {
   /**
-   * Create a CP437 font renderer
-   * @param {CanvasRenderingContext2D} ctx - Canvas 2D context
-   * @param {number} cellSizePixels - Size of each cell in pixels
+   * Create a CP437 font renderer from a spritesheet
+   * @param {string} spriteSheetUrl - URL to the CP437 spritesheet PNG
+   * @param {number} glyphWidth - Width of each glyph in pixels (default 12)
+   * @param {number} glyphHeight - Height of each glyph in pixels (default 12)
    */
-  constructor(ctx, cellSizePixels = 12) {
-    this.ctx = ctx;
-    this.cellSizePixels = cellSizePixels;
-    this.glyphCache = new Map();
+  constructor(spriteSheetUrl, glyphWidth = 12, glyphHeight = 12) {
+    this.spriteSheetUrl = spriteSheetUrl;
+    this.glyphWidth = glyphWidth;
+    this.glyphHeight = glyphHeight;
+    this.spriteSheet = null;
+    this.glyphCache = new Map(); // Maps glyph code (0-255) to extracted ImageData
+    this.loadPromise = null;
   }
 
   /**
-   * Render a CP437 glyph at the specified position
-   * @param {number} glyph - CP437 glyph code (0-255)
-   * @param {number} x - Pixel X coordinate
-   * @param {number} y - Pixel Y coordinate
-   * @param {Array<number>} fgColor - Foreground color [R, G, B]
+   * Load the CP437 spritesheet image
+   * @returns {Promise<void>}
    */
-  renderGlyph(glyph, x, y, fgColor) {
-    // Placeholder: will be replaced with actual CP437 font rendering
-    // For now, use basic monospace text rendering
-    const color = `rgb(${fgColor[0]}, ${fgColor[1]}, ${fgColor[2]})`;
-    this.ctx.fillStyle = color;
-    this.ctx.font = `${this.cellSizePixels}px monospace`;
-    this.ctx.textAlign = 'left';
-    this.ctx.textBaseline = 'top';
+  async load() {
+    if (this.loadPromise) {
+      return this.loadPromise;
+    }
 
-    if (glyph > 0 && glyph < 256) {
-      try {
-        const char = String.fromCharCode(glyph);
-        this.ctx.fillText(char, x, y, this.cellSizePixels);
-      } catch (e) {
-        // Silently skip invalid glyphs
+    this.loadPromise = new Promise((resolve, reject) => {
+      const image = new Image();
+      image.crossOrigin = 'anonymous';
+
+      image.onload = () => {
+        // Create a canvas copy of the loaded image for efficient access
+        const canvas = document.createElement('canvas');
+        canvas.width = image.width;
+        canvas.height = image.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(image, 0, 0);
+
+        this.spriteSheet = canvas;
+        resolve();
+      };
+
+      image.onerror = () => {
+        reject(new Error(`Failed to load CP437 spritesheet: ${this.spriteSheetUrl}`));
+      };
+
+      image.src = this.spriteSheetUrl;
+    });
+
+    return this.loadPromise;
+  }
+
+  /**
+   * Extract a single glyph from the spritesheet
+   * Spritesheet layout: 16 glyphs per row (columns 0-15)
+   * Code 0-15 → row 0, 16-31 → row 1, etc.
+   *
+   * @param {number} code - CP437 glyph code (0-255)
+   * @returns {ImageData} Image data for the glyph (dimensions: glyphWidth x glyphHeight)
+   * @throws {Error} If code is outside 0-255 range or spritesheet not loaded
+   */
+  getGlyph(code) {
+    // Validate code range
+    if (code < 0 || code > 255) {
+      throw new Error(`Invalid glyph code ${code}. Must be 0-255.`);
+    }
+
+    // Return cached glyph if available
+    if (this.glyphCache.has(code)) {
+      return this.glyphCache.get(code);
+    }
+
+    // Ensure spritesheet is loaded
+    if (!this.spriteSheet) {
+      throw new Error('Spritesheet not loaded. Call load() first.');
+    }
+
+    // Calculate spritesheet coordinates
+    // Code: 0-15 (row 0), 16-31 (row 1), ..., 240-255 (row 15)
+    const col = code % 16;
+    const row = Math.floor(code / 16);
+    const sx = col * this.glyphWidth;
+    const sy = row * this.glyphHeight;
+
+    // Extract glyph from spritesheet using a temporary canvas
+    const glyphCanvas = document.createElement('canvas');
+    glyphCanvas.width = this.glyphWidth;
+    glyphCanvas.height = this.glyphHeight;
+    const glyphCtx = glyphCanvas.getContext('2d');
+
+    glyphCtx.drawImage(
+      this.spriteSheet,
+      sx,
+      sy,
+      this.glyphWidth,
+      this.glyphHeight,
+      0,
+      0,
+      this.glyphWidth,
+      this.glyphHeight
+    );
+
+    // Get image data and cache it
+    const imageData = glyphCtx.getImageData(0, 0, this.glyphWidth, this.glyphHeight);
+    this.glyphCache.set(code, imageData);
+
+    return imageData;
+  }
+
+  /**
+   * Draw a glyph to a canvas context with color blending
+   * Uses the glyph's alpha channel to blend the foreground color.
+   *
+   * @param {CanvasRenderingContext2D} ctx - Target canvas context
+   * @param {number} code - CP437 glyph code (0-255)
+   * @param {number} x - Pixel X coordinate to draw at
+   * @param {number} y - Pixel Y coordinate to draw at
+   * @param {Array<number>} fg - Foreground color [R, G, B] (0-255)
+   * @param {Array<number>} bg - Background color [R, G, B] (0-255)
+   * @throws {Error} If code is invalid or glyph not available
+   */
+  drawGlyph(ctx, code, x, y, fg, bg) {
+    // Validate inputs
+    if (code < 0 || code > 255) {
+      throw new Error(`Invalid glyph code ${code}. Must be 0-255.`);
+    }
+
+    if (!Array.isArray(fg) || fg.length !== 3 || !Array.isArray(bg) || bg.length !== 3) {
+      throw new Error('Foreground and background colors must be [R, G, B] arrays.');
+    }
+
+    // Draw background rectangle
+    ctx.fillStyle = `rgb(${bg[0]}, ${bg[1]}, ${bg[2]})`;
+    ctx.fillRect(x, y, this.glyphWidth, this.glyphHeight);
+
+    // Get glyph data
+    const glyphData = this.getGlyph(code);
+    const data = glyphData.data;
+
+    // Create a blended canvas with foreground color applied
+    const blendedCanvas = document.createElement('canvas');
+    blendedCanvas.width = this.glyphWidth;
+    blendedCanvas.height = this.glyphHeight;
+    const blendCtx = blendedCanvas.getContext('2d');
+
+    // Create image data with blended colors
+    const blendedData = blendCtx.createImageData(this.glyphWidth, this.glyphHeight);
+    const blendedPixels = blendedData.data;
+
+    // Apply foreground color where glyph has alpha > 0
+    for (let i = 0; i < data.length; i += 4) {
+      const alpha = data[i + 3]; // Alpha channel
+
+      if (alpha > 0) {
+        // Non-transparent pixel: use foreground color with glyph's alpha
+        blendedPixels[i] = fg[0]; // Red
+        blendedPixels[i + 1] = fg[1]; // Green
+        blendedPixels[i + 2] = fg[2]; // Blue
+        blendedPixels[i + 3] = alpha; // Preserve original alpha
+      } else {
+        // Transparent pixel: keep transparent
+        blendedPixels[i + 3] = 0;
       }
     }
+
+    // Draw the blended glyph to the context
+    blendCtx.putImageData(blendedData, 0, 0);
+    ctx.drawImage(blendedCanvas, x, y);
   }
 
   /**

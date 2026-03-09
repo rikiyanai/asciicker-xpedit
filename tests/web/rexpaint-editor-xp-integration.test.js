@@ -32,6 +32,7 @@ import { EditorApp } from '../../web/rexpaint-editor/editor-app.js';
 import { Canvas } from '../../web/rexpaint-editor/canvas.js';
 import { Palette } from '../../web/rexpaint-editor/palette.js';
 import { GlyphPicker } from '../../web/rexpaint-editor/glyph-picker.js';
+import { LayerStack } from '../../web/rexpaint-editor/layer-stack.js';
 
 // Simple test framework
 class TestRunner {
@@ -439,6 +440,75 @@ runner.describe('EditorApp XP File Integration', () => {
     // Verify canvas is now using LayerStack
     runner.assertTrue(app.canvas.useLayerStack, 'Canvas should use LayerStack after load');
     runner.assertTrue(app.canvas.layerStack === app.layerStack, 'Canvas should reference the same LayerStack');
+  });
+
+  runner.it('should save canvas to XP file', () => {
+    const mockElement = createMockCanvasElement();
+    const canvas = new Canvas(mockElement, 10, 5);
+    const palette = new Palette();
+    const glyphPicker = new GlyphPicker();
+
+    const app = new EditorApp({ canvas, palette, glyphPicker });
+
+    // Verify method exists
+    runner.assertTrue(
+      typeof app.saveAsXP === 'function',
+      'EditorApp should have saveAsXP method'
+    );
+
+    // Initialize LayerStack manually (normally done by _setupLayerPanel with DOM)
+    app.layerStack = new LayerStack(10, 5);
+    app.canvas.setLayerStack(app.layerStack);
+
+    // Create test data by setting a cell
+    app.layerStack.getActiveLayer().setCell(0, 0, 65, [255, 0, 0], [0, 0, 0]); // Red 'A'
+
+    // Save to XP buffer
+    const buffer = app.saveAsXP();
+
+    runner.assertTrue(buffer !== undefined, 'Buffer should be defined');
+    runner.assertTrue(buffer instanceof ArrayBuffer, 'Should return ArrayBuffer');
+    runner.assertGreaterThan(buffer.byteLength, 0, 'Buffer should have content');
+  });
+
+  runner.it('should roundtrip: load → save → load', () => {
+    // Create original XP buffer
+    const original = createValidXPBufferWithLayerData();
+
+    // Load into first app
+    const mockElement1 = createMockCanvasElement();
+    const canvas1 = new Canvas(mockElement1, 80, 25);
+    const palette1 = new Palette();
+    const glyphPicker1 = new GlyphPicker();
+    const app1 = new EditorApp({ canvas: canvas1, palette: palette1, glyphPicker: glyphPicker1 });
+    app1.loadXPFile(original);
+
+    // Verify cell data was loaded
+    const cell1Before = app1.layerStack.getActiveLayer().getCell(0, 0);
+    runner.assertTrue(cell1Before !== null, 'Cell1 should be loaded from original');
+    runner.assertEqual(cell1Before.glyph, 65, 'Original cell glyph should be 65 (A)');
+
+    // Save from first app
+    const saved = app1.saveAsXP();
+    runner.assertGreaterThan(saved.byteLength, 0, 'Saved buffer should have content');
+
+    // Load into second app
+    const mockElement2 = createMockCanvasElement();
+    const canvas2 = new Canvas(mockElement2, 80, 25);
+    const palette2 = new Palette();
+    const glyphPicker2 = new GlyphPicker();
+    const app2 = new EditorApp({ canvas: canvas2, palette: palette2, glyphPicker: glyphPicker2 });
+    app2.loadXPFile(saved);
+
+    // Verify cells match at position (0, 0) - guaranteed to have data
+    const cell1 = app1.layerStack.getActiveLayer().getCell(0, 0);
+    const cell2 = app2.layerStack.getActiveLayer().getCell(0, 0);
+
+    runner.assertTrue(cell1 !== null, 'Cell1 should exist');
+    runner.assertTrue(cell2 !== null, 'Cell2 should exist');
+    runner.assertEqual(cell1.glyph, cell2.glyph, 'Glyphs should match');
+    runner.assertArrayEquals(cell1.fg, cell2.fg, 'Foreground colors should match');
+    runner.assertArrayEquals(cell1.bg, cell2.bg, 'Background colors should match');
   });
 });
 

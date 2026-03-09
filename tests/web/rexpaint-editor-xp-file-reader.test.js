@@ -367,6 +367,284 @@ runner.describe('Boundary Cases', () => {
   });
 });
 
+// Test suite: Layer Decompression and Cell Parsing
+runner.describe('Layer Decompression and Cell Parsing', () => {
+  runner.it('should decompress and parse layer data', () => {
+    const buffer = createValidXPBufferWithLayerData();
+    const reader = new XPFileReader(buffer);
+    const layers = reader.getLayers();
+
+    runner.assertEqual(layers.length, 1, 'Should have 1 layer');
+    runner.assertEqual(layers[0].width, 10, 'Layer width should be 10');
+    runner.assertEqual(layers[0].height, 5, 'Layer height should be 5');
+    runner.assertTrue(layers[0].data !== undefined, 'Layer data should be defined');
+  });
+
+  runner.it('should parse cells with correct glyph and colors', () => {
+    const buffer = createValidXPBufferWithLayerData();
+    const reader = new XPFileReader(buffer);
+    const layers = reader.getLayers();
+    const cell = layers[0].data[0][0];
+
+    runner.assertEqual(cell.glyph, 65, 'Glyph should be 65 (A)');
+    runner.assertEqual(cell.fg[0], 255, 'FG red should be 255');
+    runner.assertEqual(cell.fg[1], 0, 'FG green should be 0');
+    runner.assertEqual(cell.fg[2], 0, 'FG blue should be 0');
+    runner.assertEqual(cell.bg[0], 0, 'BG red should be 0');
+    runner.assertEqual(cell.bg[1], 0, 'BG green should be 0');
+    runner.assertEqual(cell.bg[2], 255, 'BG blue should be 255');
+  });
+
+  runner.it('should handle column-major to row-major transposition', () => {
+    const buffer = createColumnMajorTestBuffer();
+    const reader = new XPFileReader(buffer);
+    const layers = reader.getLayers();
+
+    // Column-major disk order: x=0,y=0 then x=0,y=1 then x=1,y=0 then x=1,y=1
+    // Should be transposed to row-major: [0][0], [0][1], [1][0], [1][1]
+    runner.assertEqual(layers[0].data[0][0].glyph, 1, 'Cell (0,0) should have glyph 1');
+    runner.assertEqual(layers[0].data[1][0].glyph, 2, 'Cell (0,1) should have glyph 2');
+    runner.assertEqual(layers[0].data[0][1].glyph, 3, 'Cell (1,0) should have glyph 3');
+    runner.assertEqual(layers[0].data[1][1].glyph, 4, 'Cell (1,1) should have glyph 4');
+  });
+
+  runner.it('should cache layer data on subsequent calls', () => {
+    const buffer = createValidXPBufferWithLayerData();
+    const reader = new XPFileReader(buffer);
+    const layers1 = reader.getLayers();
+    const layers2 = reader.getLayers();
+
+    runner.assertTrue(layers1 === layers2, 'getLayers() should return cached instance');
+  });
+
+  runner.it('should provide getCell() convenience method', () => {
+    const buffer = createValidXPBufferWithLayerData();
+    const reader = new XPFileReader(buffer);
+    const layers = reader.getLayers();
+    const cell = layers[0].getCell(0, 0);
+
+    runner.assertTrue(cell !== null, 'getCell should return a cell');
+    runner.assertEqual(cell.glyph, 65, 'getCell should return correct cell');
+  });
+
+  runner.it('should handle multiple layers', () => {
+    const buffer = createValidXPBufferWithMultipleLayers();
+    const reader = new XPFileReader(buffer);
+    const layers = reader.getLayers();
+
+    runner.assertEqual(layers.length, 3, 'Should have 3 layers');
+    runner.assertEqual(layers[0].width, 5, 'Layer 0 width should be 5');
+    runner.assertEqual(layers[1].width, 5, 'Layer 1 width should be 5');
+    runner.assertEqual(layers[2].width, 5, 'Layer 2 width should be 5');
+  });
+
+  runner.it('should parse cells across entire layer', () => {
+    const buffer = createValidXPBufferWithLayerData();
+    const reader = new XPFileReader(buffer);
+    const layers = reader.getLayers();
+    const layer = layers[0];
+
+    // Check corners
+    runner.assertTrue(layer.data[0][0] !== undefined, 'Top-left should exist');
+    runner.assertTrue(layer.data[layer.height - 1][layer.width - 1] !== undefined, 'Bottom-right should exist');
+  });
+
+  runner.it('should handle empty/transparent cells', () => {
+    const buffer = createBufferWithTransparentCells();
+    const reader = new XPFileReader(buffer);
+    const layers = reader.getLayers();
+    const cell = layers[0].data[0][0];
+
+    // Transparent cell: glyph=0, bg=(255,0,255)
+    runner.assertEqual(cell.glyph, 0, 'Transparent glyph should be 0');
+    runner.assertEqual(cell.bg[0], 255, 'Transparent BG red should be 255');
+    runner.assertEqual(cell.bg[1], 0, 'Transparent BG green should be 0');
+    runner.assertEqual(cell.bg[2], 255, 'Transparent BG blue should be 255');
+  });
+});
+
+// Helper function: Create XP buffer with actual layer data (gzipped)
+function createValidXPBufferWithLayerData() {
+  // Header: 10x5 canvas, 1 layer
+  const headerBuffer = new ArrayBuffer(20);
+  const headerView = new DataView(headerBuffer);
+  headerView.setUint32(0, 0x50584552, true); // Magic
+  headerView.setInt32(4, 1, true); // Version
+  headerView.setInt32(8, 10, true); // Width
+  headerView.setInt32(12, 5, true); // Height
+  headerView.setInt32(16, 1, true); // Layer count
+
+  // Build uncompressed cell data: 10x5 canvas = 50 cells
+  // Column-major order: x=0 (y=0..4), x=1 (y=0..4), etc.
+  // Each cell: 7 bytes (glyph + fg_rgb + bg_rgb)
+  const layerDataSize = 10 * 5 * 7; // 350 bytes
+  const cellData = new Uint8Array(layerDataSize);
+  let offset = 0;
+  for (let x = 0; x < 10; x++) {
+    for (let y = 0; y < 5; y++) {
+      cellData[offset] = 65; // glyph 'A'
+      cellData[offset + 1] = 255; // fg_r
+      cellData[offset + 2] = 0; // fg_g
+      cellData[offset + 3] = 0; // fg_b
+      cellData[offset + 4] = 0; // bg_r
+      cellData[offset + 5] = 0; // bg_g
+      cellData[offset + 6] = 255; // bg_b
+      offset += 7;
+    }
+  }
+
+  // Compress with gzip
+  const compressed = compressWithGzip(cellData);
+
+  // Combine header + layer header + compressed data
+  const fullBuffer = new ArrayBuffer(20 + 12 + compressed.length);
+  const fullView = new Uint8Array(fullBuffer);
+  fullView.set(new Uint8Array(headerBuffer), 0);
+
+  // Write layer header at offset 20
+  const layerHeaderView = new DataView(fullBuffer, 20, 12);
+  layerHeaderView.setInt32(0, 10, true); // layer width
+  layerHeaderView.setInt32(4, 5, true); // layer height
+  layerHeaderView.setInt32(8, compressed.length, true); // compressed_size
+
+  // Write compressed data at offset 32
+  fullView.set(new Uint8Array(compressed), 32);
+
+  return fullBuffer;
+}
+
+// Helper function: Create buffer with column-major test data
+function createColumnMajorTestBuffer() {
+  const headerBuffer = new ArrayBuffer(20);
+  const headerView = new DataView(headerBuffer);
+  headerView.setUint32(0, 0x50584552, true);
+  headerView.setInt32(4, 1, true);
+  headerView.setInt32(8, 2, true); // 2x2 canvas
+  headerView.setInt32(12, 2, true);
+  headerView.setInt32(16, 1, true);
+
+  // Column-major order for 2x2:
+  // x=0: y=0 (glyph=1), y=1 (glyph=2)
+  // x=1: y=0 (glyph=3), y=1 (glyph=4)
+  const cellData = new Uint8Array(2 * 2 * 7);
+  const cells = [
+    { glyph: 1, fg: [255, 0, 0], bg: [0, 0, 0] },
+    { glyph: 2, fg: [0, 255, 0], bg: [0, 0, 0] },
+    { glyph: 3, fg: [0, 0, 255], bg: [0, 0, 0] },
+    { glyph: 4, fg: [255, 255, 0], bg: [0, 0, 0] }
+  ];
+
+  for (let i = 0; i < 4; i++) {
+    const cell = cells[i];
+    cellData[i * 7] = cell.glyph;
+    cellData[i * 7 + 1] = cell.fg[0];
+    cellData[i * 7 + 2] = cell.fg[1];
+    cellData[i * 7 + 3] = cell.fg[2];
+    cellData[i * 7 + 4] = cell.bg[0];
+    cellData[i * 7 + 5] = cell.bg[1];
+    cellData[i * 7 + 6] = cell.bg[2];
+  }
+
+  const compressed = compressWithGzip(cellData);
+
+  const fullBuffer = new ArrayBuffer(20 + 12 + compressed.length);
+  const fullView = new Uint8Array(fullBuffer);
+  fullView.set(new Uint8Array(headerBuffer), 0);
+
+  const layerHeaderView = new DataView(fullBuffer, 20, 12);
+  layerHeaderView.setInt32(0, 2, true); // width
+  layerHeaderView.setInt32(4, 2, true); // height
+  layerHeaderView.setInt32(8, compressed.length, true);
+
+  fullView.set(new Uint8Array(compressed), 32);
+
+  return fullBuffer;
+}
+
+// Helper function: Create buffer with multiple layers
+function createValidXPBufferWithMultipleLayers() {
+  const headerBuffer = new ArrayBuffer(20);
+  const headerView = new DataView(headerBuffer);
+  headerView.setUint32(0, 0x50584552, true);
+  headerView.setInt32(4, 1, true);
+  headerView.setInt32(8, 5, true); // 5 wide
+  headerView.setInt32(12, 3, true); // 3 tall
+  headerView.setInt32(16, 3, true); // 3 layers
+
+  // Calculate total size: header + (layer_header + compressed_data) * 3
+  let totalSize = 20;
+  const compressedLayers = [];
+
+  // Prepare all layers first to calculate size
+  for (let l = 0; l < 3; l++) {
+    const cellData = new Uint8Array(5 * 3 * 7);
+    for (let i = 0; i < cellData.length; i++) {
+      cellData[i] = 65 + l; // different glyph per layer
+    }
+    const compressed = compressWithGzip(cellData);
+    compressedLayers.push(compressed);
+    totalSize += 12 + compressed.length;
+  }
+
+  // Build full buffer
+  const fullBuffer = new ArrayBuffer(totalSize);
+  const fullView = new Uint8Array(fullBuffer);
+  fullView.set(new Uint8Array(headerBuffer), 0);
+
+  // Write each layer
+  let offset = 20;
+  for (let l = 0; l < 3; l++) {
+    const layerHeaderView = new DataView(fullBuffer, offset, 12);
+    layerHeaderView.setInt32(0, 5, true); // width
+    layerHeaderView.setInt32(4, 3, true); // height
+    layerHeaderView.setInt32(8, compressedLayers[l].length, true);
+    offset += 12;
+
+    fullView.set(new Uint8Array(compressedLayers[l]), offset);
+    offset += compressedLayers[l].length;
+  }
+
+  return fullBuffer;
+}
+
+// Helper function: Create buffer with transparent cells
+function createBufferWithTransparentCells() {
+  const headerBuffer = new ArrayBuffer(20);
+  const headerView = new DataView(headerBuffer);
+  headerView.setUint32(0, 0x50584552, true);
+  headerView.setInt32(4, 1, true);
+  headerView.setInt32(8, 2, true);
+  headerView.setInt32(12, 2, true);
+  headerView.setInt32(16, 1, true);
+
+  // Transparent cell: glyph=0, bg=(255,0,255)
+  const cellData = new Uint8Array(2 * 2 * 7);
+  for (let i = 0; i < 4; i++) {
+    cellData[i * 7] = 0; // transparent glyph
+    cellData[i * 7 + 1] = 0; // fg_r
+    cellData[i * 7 + 2] = 0; // fg_g
+    cellData[i * 7 + 3] = 0; // fg_b
+    cellData[i * 7 + 4] = 255; // bg_r (magenta)
+    cellData[i * 7 + 5] = 0; // bg_g
+    cellData[i * 7 + 6] = 255; // bg_b
+  }
+
+  const compressed = compressWithGzip(cellData);
+
+  const fullBuffer = new ArrayBuffer(20 + 12 + compressed.length);
+  const fullView = new Uint8Array(fullBuffer);
+  fullView.set(new Uint8Array(headerBuffer), 0);
+
+  const layerHeaderView = new DataView(fullBuffer, 20, 12);
+  layerHeaderView.setInt32(0, 2, true);
+  layerHeaderView.setInt32(4, 2, true);
+  layerHeaderView.setInt32(8, compressed.length, true);
+
+  fullView.set(new Uint8Array(compressed), 32);
+
+  return fullBuffer;
+}
+
 // Run summary
 console.log('\n' + '='.repeat(60));
 const success = runner.summary();

@@ -22,6 +22,7 @@ import { SelectTool } from './tools/select-tool.js';
 import { KeyboardHandler } from './keyboard-handler.js';
 import { UndoStack } from './undo-stack.js';
 import { LayerStack } from './layer-stack.js';
+import { XPFileReader } from './xp-file-reader.js';
 
 export class EditorApp {
   /**

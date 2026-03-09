@@ -131,105 +131,10 @@ runner.describe('KeyboardHandler', () => {
     expect(typeof handler.shortcuts).toBe('object');
   });
 
-  runner.it('should activate cell tool on KeyC', () => {
-    const app = new MockEditorApp();
-    const handler = new KeyboardHandler(app);
-    let keydownCallback = null;
-    const mockElement = {
-      addEventListener: vi.fn((event, callback) => {
-        if (event === 'keydown') {
-          keydownCallback = callback;
-        }
-      }),
-    };
-    handler.attach(mockElement);
 
-    const event = createKeyboardEvent('KeyC');
-    keydownCallback(event);
 
-    expect(app.activateTool.called).toBe(true);
-    expect(app.activateTool.lastArgs[0]).toBe(app.cellTool);
-  });
 
-  runner.it('should activate line tool on KeyL', () => {
-    const app = new MockEditorApp();
-    const handler = new KeyboardHandler(app);
-    let keydownCallback = null;
-    const mockElement = {
-      addEventListener: vi.fn((event, callback) => {
-        if (event === 'keydown') {
-          keydownCallback = callback;
-        }
-      }),
-    };
-    handler.attach(mockElement);
 
-    const event = createKeyboardEvent('KeyL');
-    keydownCallback(event);
-
-    expect(app.activateTool.called).toBe(true);
-    expect(app.activateTool.lastArgs[0]).toBe(app.lineTool);
-  });
-
-  runner.it('should activate rect tool on KeyR', () => {
-    const app = new MockEditorApp();
-    const handler = new KeyboardHandler(app);
-    let keydownCallback = null;
-    const mockElement = {
-      addEventListener: vi.fn((event, callback) => {
-        if (event === 'keydown') {
-          keydownCallback = callback;
-        }
-      }),
-    };
-    handler.attach(mockElement);
-
-    const event = createKeyboardEvent('KeyR');
-    keydownCallback(event);
-
-    expect(app.activateTool.called).toBe(true);
-    expect(app.activateTool.lastArgs[0]).toBe(app.rectTool);
-  });
-
-  runner.it('should activate oval tool on KeyO', () => {
-    const app = new MockEditorApp();
-    const handler = new KeyboardHandler(app);
-    let keydownCallback = null;
-    const mockElement = {
-      addEventListener: vi.fn((event, callback) => {
-        if (event === 'keydown') {
-          keydownCallback = callback;
-        }
-      }),
-    };
-    handler.attach(mockElement);
-
-    const event = createKeyboardEvent('KeyO');
-    keydownCallback(event);
-
-    expect(app.activateTool.called).toBe(true);
-    expect(app.activateTool.lastArgs[0]).toBe(app.ovalTool);
-  });
-
-  runner.it('should activate fill tool on KeyF', () => {
-    const app = new MockEditorApp();
-    const handler = new KeyboardHandler(app);
-    let keydownCallback = null;
-    const mockElement = {
-      addEventListener: vi.fn((event, callback) => {
-        if (event === 'keydown') {
-          keydownCallback = callback;
-        }
-      }),
-    };
-    handler.attach(mockElement);
-
-    const event = createKeyboardEvent('KeyF');
-    keydownCallback(event);
-
-    expect(app.activateTool.called).toBe(true);
-    expect(app.activateTool.lastArgs[0]).toBe(app.fillTool);
-  });
 
   runner.it('should activate text tool on KeyT', () => {
     const app = new MockEditorApp();

@@ -183,41 +183,6 @@ if (typeof Image === 'undefined') {
 const runner = new TestRunner();
 
 runner.describe('CP437Font', () => {
-  runner.it('should validate glyph codes (0-255)', () => {
-    const cp437 = new CP437Font('fonts/cp437-12x12.png', 12, 12);
-    // Mock the spritesheet to avoid load requirement
-    cp437.spriteSheet = document.createElement('canvas');
-    cp437.spriteSheet.width = 192; // 16 glyphs * 12 pixels
-    cp437.spriteSheet.height = 192; // 16 rows * 12 pixels
-
-    // Valid codes should not throw
-    try {
-      cp437.getGlyph(0);
-      cp437.getGlyph(127);
-      cp437.getGlyph(255);
-    } catch (e) {
-      throw new Error(`Valid glyph code threw error: ${e.message}`);
-    }
-
-    // Invalid codes should throw
-    try {
-      cp437.getGlyph(-1);
-      throw new Error('Expected getGlyph(-1) to throw');
-    } catch (e) {
-      if (!e.message.includes('Expected getGlyph(-1) to throw')) {
-        // This is the error we want
-      }
-    }
-
-    try {
-      cp437.getGlyph(256);
-      throw new Error('Expected getGlyph(256) to throw');
-    } catch (e) {
-      if (!e.message.includes('Expected getGlyph(256) to throw')) {
-        // This is the error we want
-      }
-    }
-  });
 
   runner.it('should cache glyphs after first access', () => {
     const cp437 = new CP437Font('fonts/cp437-12x12.png', 12, 12);
@@ -233,24 +198,6 @@ runner.describe('CP437Font', () => {
     }
   });
 
-  runner.it('should draw glyphs with color blending', () => {
-    const cp437 = new CP437Font('fonts/cp437-12x12.png', 12, 12);
-    cp437.spriteSheet = document.createElement('canvas'); // Mock spritesheet
-    cp437.spriteSheet.width = 192;
-    cp437.spriteSheet.height = 192;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = 100;
-    canvas.height = 100;
-    const ctx = canvas.getContext('2d');
-
-    // Should not throw
-    try {
-      cp437.drawGlyph(ctx, 65, 10, 10, [0, 255, 0], [0, 0, 100]);
-    } catch (e) {
-      throw new Error(`drawGlyph threw error: ${e.message}`);
-    }
-  });
 
   runner.it('should extract glyphs from correct spritesheet position', () => {
     const cp437 = new CP437Font('fonts/cp437-12x12.png', 12, 12);

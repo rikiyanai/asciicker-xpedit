@@ -1030,6 +1030,77 @@ export class EditorApp {
     this.bundleMode = enabled;
     this.currentAction = enabled ? 'idle' : 'idle';
   }
+
+  /**
+   * Load an XP file into the editor
+   * Resizes canvas, creates LayerStack from file layers, and synchronizes canvas rendering
+   * @param {ArrayBuffer} arrayBuffer - The XP file data
+   * @throws {Error} If file is invalid or parsing fails
+   */
+  loadXPFile(arrayBuffer) {
+    try {
+      // Create and validate reader
+      const reader = new XPFileReader(arrayBuffer);
+
+      if (!reader.isValid()) {
+        throw new Error('Invalid XP file: header validation failed');
+      }
+
+      // Resize canvas to match file dimensions
+      this.canvas.width = reader.width;
+      this.canvas.height = reader.height;
+
+      // Update canvas element dimensions
+      const canvasElement = this.canvas.canvasElement;
+      if (canvasElement) {
+        canvasElement.width = reader.width * this.canvas.cellSizePixels;
+        canvasElement.height = reader.height * this.canvas.cellSizePixels;
+      }
+
+      // Get layers from file
+      const fileLayers = reader.getLayers();
+
+      // Create new LayerStack with file dimensions
+      this.layerStack = new LayerStack(reader.width, reader.height);
+
+      // Remove default layer and populate with file layers
+      if (this.layerStack.layers.length > 0) {
+        this.layerStack.layers.splice(0, 1); // Remove the default 'Layer 0'
+      }
+
+      // Copy each file layer into the LayerStack
+      for (let i = 0; i < fileLayers.length; i++) {
+        const fileLayer = fileLayers[i];
+        this.layerStack.addLayer(`Layer ${i}`);
+        const stackLayer = this.layerStack.layers[i];
+
+        // Copy all cells from file layer to stack layer
+        for (let y = 0; y < fileLayer.height; y++) {
+          for (let x = 0; x < fileLayer.width; x++) {
+            const cell = fileLayer.getCell(x, y);
+            if (cell) {
+              stackLayer.setCell(x, y, cell.glyph, cell.fg, cell.bg);
+            }
+          }
+        }
+      }
+
+      // Connect LayerStack to Canvas for composition rendering
+      this.canvas.setLayerStack(this.layerStack);
+
+      // Clear undo/redo history for clean slate after load
+      this.undoStack = new UndoStack(50);
+
+      // Trigger render
+      this.canvas.render();
+
+      // Update layer panel if available
+      this._renderLayerList();
+    } catch (error) {
+      console.error('Error loading XP file:', error);
+      throw error;
+    }
+  }
   dispose() {
     // Clean up paste mode
     this.cancelPaste();

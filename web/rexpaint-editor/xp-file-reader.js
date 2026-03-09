@@ -105,4 +105,122 @@ export class XPFileReader {
   isValid() {
     return this.width > 0 && this.height > 0 && this.layerCount > 0;
   }
+
+  /**
+   * Read and decompress all layers from the XP file
+   * @returns {Array} Array of layer objects, each with width, height, data (2D cell array), and getCell(x, y) method
+   * @throws {Error} If decompression or parsing fails
+   */
+  getLayers() {
+    if (this.cachedLayers) {
+      return this.cachedLayers;
+    }
+
+    const layers = [];
+
+    for (let i = 0; i < this.layerCount; i++) {
+      try {
+        // Read layer header
+        const layerWidth = this.view.getInt32(this.offset, true);
+        this.offset += 4;
+        const layerHeight = this.view.getInt32(this.offset, true);
+        this.offset += 4;
+
+        // Read compressed data size
+        const compressedSize = this.view.getInt32(this.offset, true);
+        this.offset += 4;
+
+        // Read compressed data
+        const compressedData = this.buffer.slice(this.offset, this.offset + compressedSize);
+        this.offset += compressedSize;
+
+        // Decompress gzip data
+        const decompressed = this._decompressGzip(compressedData);
+
+        // Parse cells (column-major format from disk, transpose to row-major)
+        const cells = this._parseCells(decompressed, layerWidth, layerHeight);
+
+        layers.push({
+          width: layerWidth,
+          height: layerHeight,
+          data: cells,
+          getCell: (x, y) => (cells[y] && cells[y][x]) ? cells[y][x] : null
+        });
+      } catch (error) {
+        throw new Error(`Failed to parse layer ${i}: ${error.message}`);
+      }
+    }
+
+    this.cachedLayers = layers;
+    return layers;
+  }
+
+  /**
+   * Decompress gzip-compressed cell data
+   * @param {ArrayBuffer} compressed - The gzip-compressed data
+   * @returns {Uint8Array} The decompressed data
+   * @throws {Error} If decompression fails
+   */
+  _decompressGzip(compressed) {
+    try {
+      const decompressed = zlib.gunzipSync(Buffer.from(compressed));
+      return new Uint8Array(decompressed);
+    } catch (error) {
+      throw new Error(`Gzip decompression failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Parse cell data from decompressed buffer
+   * XP files store cells in column-major order (x varies outer, y varies inner).
+   * This method transposes to row-major order for easier 2D array access.
+   *
+   * Cell format: 7 bytes per cell
+   * - glyph: 1 byte (CP437 code point)
+   * - fg_r, fg_g, fg_b: 3 bytes
+   * - bg_r, bg_g, bg_b: 3 bytes
+   *
+   * @param {Uint8Array} data - The decompressed cell data
+   * @param {number} width - Canvas width
+   * @param {number} height - Canvas height
+   * @returns {Array<Array>} 2D array of cells in row-major order: cells[y][x]
+   */
+  _parseCells(data, width, height) {
+    const BYTES_PER_CELL = 7;
+    const cells = [];
+
+    // Initialize row-major 2D array
+    for (let y = 0; y < height; y++) {
+      cells[y] = [];
+    }
+
+    // Parse column-major data and transpose to row-major
+    let offset = 0;
+    for (let x = 0; x < width; x++) {
+      for (let y = 0; y < height; y++) {
+        if (offset + BYTES_PER_CELL > data.length) {
+          throw new Error(
+            `Insufficient data for cell at (${x}, ${y}): expected ${BYTES_PER_CELL} bytes, only ${data.length - offset} remaining`
+          );
+        }
+
+        const glyph = data[offset];
+        const fgR = data[offset + 1];
+        const fgG = data[offset + 2];
+        const fgB = data[offset + 3];
+        const bgR = data[offset + 4];
+        const bgG = data[offset + 5];
+        const bgB = data[offset + 6];
+        offset += BYTES_PER_CELL;
+
+        cells[y][x] = {
+          glyph: glyph & 0xFF,
+          fg: [fgR, fgG, fgB],
+          bg: [bgR, bgG, bgB]
+        };
+      }
+    }
+
+    return cells;
+  }
 }

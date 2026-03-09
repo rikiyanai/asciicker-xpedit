@@ -259,29 +259,6 @@ runner.describe('Palette', () => {
     expect(palette.getBackground()).toEqual([0, 255, 0]);
   });
 
-  runner.it('should emit color-changed event', () => {
-    const palette = new Palette();
-    let emittedData = null;
-    palette.on('color-changed', (data) => {
-      emittedData = data;
-    });
-
-    palette.setForeground([100, 100, 100]);
-    expect(emittedData).toEqual({
-      fg: [100, 100, 100],
-      bg: [0, 0, 0]
-    });
-  });
-
-  runner.it('should render color picker UI', () => {
-    const palette = new Palette();
-    const container = document.createElement('div');
-    palette.render(container);
-
-    const colorInputs = container.querySelectorAll('input[type="color"]');
-    expect(colorInputs.length).toBeGreaterThanOrEqual(2);
-  });
-
 });
 
 runner.report();

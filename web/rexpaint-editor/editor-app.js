@@ -23,6 +23,7 @@ import { KeyboardHandler } from './keyboard-handler.js';
 import { UndoStack } from './undo-stack.js';
 import { LayerStack } from './layer-stack.js';
 import { XPFileReader } from './xp-file-reader.js';
+import { XPFileWriter } from './xp-file-writer.js';
 
 export class EditorApp {
   /**
@@ -1101,6 +1102,56 @@ export class EditorApp {
       throw error;
     }
   }
+
+  /**
+   * Save the current canvas and layers to an XP file buffer
+   * Exports LayerStack layers in the format expected by XPFileWriter
+   * @returns {ArrayBuffer} The XP file data ready to download or transmit
+   * @throws {Error} If LayerStack is not initialized or save fails
+   */
+  saveAsXP() {
+    try {
+      // Verify LayerStack is initialized
+      if (!this.layerStack || !this.layerStack.layers || this.layerStack.layers.length === 0) {
+        throw new Error('No layers available to save');
+      }
+
+      // Create XPFileWriter with canvas dimensions and layer count
+      const writer = new XPFileWriter(
+        this.canvas.width,
+        this.canvas.height,
+        this.layerStack.layers.length
+      );
+
+      // Export each layer from LayerStack to XPFileWriter format
+      for (const layer of this.layerStack.layers) {
+        // Build 2D cell array [y][x] for this layer
+        const cells = [];
+        for (let y = 0; y < layer.height; y++) {
+          cells[y] = [];
+          for (let x = 0; x < layer.width; x++) {
+            const cell = layer.getCell(x, y);
+            // Default to empty cell if not found
+            cells[y][x] = cell || {
+              glyph: 0,
+              fg: [255, 255, 255],
+              bg: [0, 0, 0],
+            };
+          }
+        }
+        // Add to writer
+        writer.addLayer(cells);
+      }
+
+      // Write and return the complete XP buffer
+      const buffer = writer.write();
+      return buffer;
+    } catch (error) {
+      console.error('Error saving XP file:', error);
+      throw error;
+    }
+  }
+
   dispose() {
     // Clean up paste mode
     this.cancelPaste();

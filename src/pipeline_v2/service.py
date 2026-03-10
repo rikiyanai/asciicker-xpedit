@@ -1988,6 +1988,73 @@ def workbench_export_xp(session_id: str, req_id: str) -> dict[str, Any]:
     }
 
 
+def workbench_upload_xp(xp_bytes: bytes, req_id: str) -> dict[str, Any]:
+    """Upload and parse an XP file into a new workbench session."""
+    if not isinstance(xp_bytes, bytes):
+        raise ApiError("xp_bytes must be bytes", "invalid_type", "workbench", req_id, 400)
+
+    # Parse XP file from bytes
+    try:
+        xp_data = read_xp(xp_bytes)
+    except Exception as e:
+        raise ApiError(f"Failed to parse XP file: {e}", "xp_parse_error", "workbench", req_id, 422)
+
+    cols = xp_data["width"]
+    rows = xp_data["height"]
+    layer_count = xp_data["layers"]
+
+    if cols <= 0 or rows <= 0:
+        raise ApiError("XP dimensions must be positive", "invalid_xp_dims", "workbench", req_id, 422)
+
+    if layer_count < 3:
+        raise ApiError(f"XP must have at least 3 layers, got {layer_count}", "insufficient_layers", "workbench", req_id, 422)
+
+    # Extract visual layer (layer 2, or layer 0 if file is simplified)
+    visual_layer_idx = 2 if layer_count >= 3 else 0
+    cells_raw = xp_data["cells"][visual_layer_idx]
+
+    # Convert cell data to standard format
+    cells = []
+    for i in range(cols * rows):
+        if cells_raw[i] is None:
+            cells.append({"glyph": 0, "fg": [255, 255, 255], "bg": [0, 0, 0]})
+        else:
+            glyph, fg, bg = cells_raw[i]
+            cells.append({
+                "glyph": int(glyph),
+                "fg": list(fg) if isinstance(fg, tuple) else fg,
+                "bg": list(bg) if isinstance(bg, tuple) else bg,
+            })
+
+    # Create workbench session
+    session_id = str(uuid.uuid4())
+    sess = WorkbenchSession(
+        session_id=session_id,
+        job_id="",  # No job_id for uploaded sessions
+        angles=1,
+        anims=[1],
+        projs=1,
+        cell_w=12,
+        cell_h=12,
+        grid_cols=cols,
+        grid_rows=rows,
+        cells=cells,
+        family="player",
+    )
+
+    # Save session
+    sess_path = _session_path(session_id)
+    save_json(sess_path, asdict(sess))
+
+    return {
+        "session_id": session_id,
+        "grid_cols": cols,
+        "grid_rows": rows,
+        "cell_count": len(cells),
+        "layer_count": layer_count,
+    }
+
+
 def workbench_xp_tool_command(xp_path: str, req_id: str) -> dict[str, Any]:
     xp = Path(xp_path).expanduser()
     if not xp.exists():

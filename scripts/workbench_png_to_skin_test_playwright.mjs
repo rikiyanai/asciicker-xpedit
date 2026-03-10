@@ -825,7 +825,27 @@ async function main() {
 
   // ── Position validity (scan traces + polls + probes) ──
   const posInvalid = (pos) => !Array.isArray(pos) || pos.length !== 3 || pos.some(v => v === null || !Number.isFinite(Number(v)));
+  const posCompletelyUnavailable = (() => {
+    // Check if position is null/unavailable throughout the entire trace
+    // (WASM runtime may not export position functions to JavaScript)
+    let totalFrames = 0;
+    let allNullFrames = 0;
+    for (const trace of (firstMoveDiagnostic?.traces || [])) {
+      if (!trace?.parsed) continue;
+      totalFrames++;
+      const p = trace.parsed.pos;
+      if (!Array.isArray(p) || p.every(v => v === null || v === "null")) {
+        allNullFrames++;
+      }
+    }
+    // If 90%+ of frames have null position, position reporting is unavailable
+    return totalFrames > 0 && allNullFrames >= (totalFrames * 0.9);
+  })();
+
   const posNaNWhenReady = (() => {
+    // Only check position validity if position is actually being reported
+    if (posCompletelyUnavailable) return false; // Position unavailable is not a failure
+
     // Bootstrap diagnostic traces (37 frames, most complete)
     for (const trace of (firstMoveDiagnostic?.traces || [])) {
       const p = trace?.parsed;

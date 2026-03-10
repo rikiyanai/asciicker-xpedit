@@ -940,9 +940,10 @@
 
   async function applyCurrentXpAsWebSkin(opts = {}) {
     await runWebbuildSkinAction("apply skin", async () => {
-      if (!(await ensureRuntimePreflight({ refresh: true }))) return;
       // Guard: need a session (classic) or a bundle with required enabled actions (bundle mode)
       if (isBundleMode()) {
+        // Bundle mode requires runtime preflight check
+        if (!(await ensureRuntimePreflight({ refresh: true }))) return;
         const ts = getActiveTemplateSet();
         if (ts) {
           for (const [key, spec] of Object.entries(getEnabledActions(ts))) {
@@ -1093,9 +1094,9 @@
   }
 
   async function testCurrentSkinInDock() {
-    if (!(await ensureRuntimePreflight({ refresh: true }))) return;
     if (isBundleMode()) {
-      // Bundle mode: need at least the required enabled actions converted
+      // Bundle mode: need runtime preflight and required enabled actions converted
+      if (!(await ensureRuntimePreflight({ refresh: true }))) return;
       const ts = getActiveTemplateSet();
       if (ts) {
         for (const [key, spec] of Object.entries(getEnabledActions(ts))) {
@@ -1122,7 +1123,6 @@
       status(`Skin dock busy: ${active} still running`, "warn");
       return;
     }
-    if (!(await ensureRuntimePreflight({ refresh: true }))) return;
     const input = $("webbuildUploadTestInput");
     if (!input) return;
     input.value = "";
@@ -1131,7 +1131,6 @@
 
   async function applyUploadedXpBytesToWebbuild(fileName, xpBytes) {
     await runWebbuildSkinAction("upload skin", async () => {
-      if (!(await ensureRuntimePreflight({ refresh: true }))) return;
       const override_names = WEBBUILD_DEFAULT_OVERRIDE_NAMES;
       let inject, prep = null;
       if (OVERRIDE_MODE === "preboot") {

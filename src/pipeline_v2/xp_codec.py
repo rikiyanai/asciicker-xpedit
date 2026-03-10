@@ -29,9 +29,12 @@ def write_xp(path: str | Path, width: int, height: int, layers: list[list[tuple[
                     f.write(bytes([fg[0], fg[1], fg[2], bg[0], bg[1], bg[2]]))
 
 
-def read_xp(path: str | Path) -> dict:
-    p = Path(path)
-    raw = p.read_bytes()
+def read_xp(path: str | Path | bytes) -> dict:
+    if isinstance(path, bytes):
+        raw = path
+    else:
+        p = Path(path)
+        raw = p.read_bytes()
     if raw.startswith(b"\x1f\x8b"):
         data = gzip.decompress(raw)
     else:

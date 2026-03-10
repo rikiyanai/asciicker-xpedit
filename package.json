@@ -1,0 +1,28 @@
+{
+  "name": "asciicker-pipeline-v2",
+  "version": "1.0.0",
+  "description": "Greenfield rebuild of the sprite-sheet pipeline. This repo is intentionally independent of the legacy `asciicker` codebase.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rikiyanai/asciicker-xpedit.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/rikiyanai/asciicker-xpedit/issues"
+  },
+  "homepage": "https://github.com/rikiyanai/asciicker-xpedit#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
+  }
+}

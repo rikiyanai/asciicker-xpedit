@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Asciicker TERM++ Skin Lab (Static)</title>
+  <style>
+    :root {
+      --bg: #07111f;
+      --panel: #0f1d33;
+      --panel2: #12243f;
+      --line: #223d66;
+      --text: #dce8ff;
+      --muted: #92a6c7;
+      --ok: #77d08f;
+      --warn: #e7cf72;
+      --err: #f18b8b;
+      --accent: #69b3ff;
+      --btn: #18345a;
+      --btn2: #21508e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      color: var(--text);
+      background: radial-gradient(1200px 700px at 20% -10%, #1a355f 0%, transparent 55%),
+                  radial-gradient(900px 600px at 100% 0%, #152445 0%, transparent 50%),
+                  var(--bg);
+    }
+    .wrap {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 18px;
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 14px;
+      min-height: 100vh;
+    }
+    .panel {
+      background: linear-gradient(180deg, var(--panel2), var(--panel));
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+    }
+    h1, h2, h3 { margin: 0 0 10px 0; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 15px; color: var(--text); }
+    .muted { color: var(--muted); }
+    .small { font-size: 12px; }
+    .small.ok { color: var(--ok); }
+    .small.warn { color: var(--warn); }
+    .small.err { color: var(--err); }
+    .controls { display: grid; gap: 10px; }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      align-items: center;
+    }
+    .row3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      align-items: center;
+    }
+    label {
+      font-size: 12px;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 4px;
+    }
+    input[type="text"], textarea, select {
+      width: 100%;
+      background: #0b1528;
+      border: 1px solid var(--line);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 8px;
+      font: inherit;
+    }
+    textarea { min-height: 90px; resize: vertical; }
+    button {
+      background: linear-gradient(180deg, var(--btn2), var(--btn));
+      border: 1px solid #3564a3;
+      color: #eef6ff;
+      border-radius: 7px;
+      padding: 8px 10px;
+      font: inherit;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-secondary {
+      background: #10213a;
+      border-color: #29486f;
+    }
+    .drop {
+      border: 2px dashed #3c5f8e;
+      border-radius: 8px;
+      padding: 14px;
+      text-align: center;
+      background: rgba(255,255,255,0.02);
+      transition: border-color 100ms ease, background 100ms ease;
+    }
+    .drop.dragover {
+      border-color: var(--accent);
+      background: rgba(105,179,255,0.08);
+    }
+    .viewer {
+      min-height: 75vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 10px;
+    }
+    .frameWrap {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #050a12;
+      overflow: hidden;
+      min-height: 620px;
+    }
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+      background: #000;
+    }
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 240px;
+      overflow: auto;
+      background: #081120;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 11px;
+    }
+    .pill {
+      display: inline-block;
+      border: 1px solid var(--line);
+      background: #0a1527;
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 11px;
+      margin-right: 6px;
+      margin-bottom: 6px;
+    }
+    .check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .check input { margin: 0; }
+    @media (max-width: 980px) {
+      .wrap {
+        grid-template-columns: 1fr;
+      }
+      .frameWrap {
+        min-height: 55vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="panel controls">
+      <div>
+        <h1>TERM++ Skin Lab (Static)</h1>
+        <div class="small muted">Browser-only skin preview. Upload an <code>.xp</code> file and inject it into the webbuild runtime. No backend required for preview.</div>
+      </div>
+
+      <div>
+        <h2>Webbuild</h2>
+        <div class="row">
+          <div>
+            <label for="webbuildPath">Webbuild Path</label>
+            <input id="webbuildPath" type="text" value="./termpp-web/index.html?solo=1&player=player">
+          </div>
+          <div>
+            <label for="playerName">Player Name</label>
+            <input id="playerName" type="text" value="player">
+          </div>
+        </div>
+        <div class="small muted" style="margin-top:6px;">
+          Flat arena variant example: <code>./termpp-web-flat/index.html?solo=1&player=player</code>
+        </div>
+        <div class="row3" style="margin-top:8px;">
+          <button id="openBtn">Open Webbuild</button>
+          <button id="reloadBtn" class="btn-secondary">Reload Webbuild</button>
+          <button id="startBtn" class="btn-secondary">Start Game</button>
+        </div>
+        <div id="webbuildState" class="small warn" style="margin-top:8px;">Webbuild not loaded</div>
+      </div>
+
+      <div>
+        <h2>Skin XP</h2>
+        <div id="dropZone" class="drop small">
+          Drag and drop a <code>.xp</code> file here<br>
+          or choose a file below
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <div>
+            <label for="xpFile">XP File</label>
+            <input id="xpFile" type="file" accept=".xp,application/octet-stream">
+          </div>
+          <div>
+            <label for="overrideMode">Override Set</label>
+            <select id="overrideMode">
+              <option value="player_common">Player Common (recommended)</option>
+              <option value="single_player_nude">Single file: player-nude.xp</option>
+              <option value="all_visible_test">All test aliases</option>
+            </select>
+          </div>
+        </div>
+        <div class="row3" style="margin-top:8px;">
+          <button id="applyBtn" disabled>Apply Uploaded XP</button>
+          <button id="reapplyBtn" class="btn-secondary" disabled>Reapply Last XP</button>
+          <button id="downloadInfoBtn" class="btn-secondary">Show Runtime Info</button>
+        </div>
+        <label class="check" style="margin-top:8px;">
+          <input id="autoStartChk" type="checkbox" checked>
+          Auto-start game after skin apply (avoids staying on login screen)
+        </label>
+        <div class="small muted" style="margin-top:8px;">
+          The current terrain/map is whatever the bundled webbuild ships in <code>index.data</code>. This page only swaps sprite XP files at runtime.
+        </div>
+      </div>
+
+      <div>
+        <h2>Override Targets</h2>
+        <div id="overrideNames" class="small"></div>
+      </div>
+
+      <div>
+        <h2>Status / Debug</h2>
+        <div id="statusLine" class="small warn">Ready</div>
+        <pre id="out"></pre>
+      </div>
+    </section>
+
+    <section class="panel viewer">
+      <div>
+        <h2>Embedded Webbuild Preview</h2>
+        <div class="small muted">This is the actual browser webbuild running in an iframe. Controls are the same as the normal web version.</div>
+      </div>
+      <div class="frameWrap">
+        <iframe id="gameFrame" title="Asciicker Webbuild" loading="eager"></iframe>
+      </div>
+    </section>
+  </div>
+
+  <script src="./termpp_skin_lab.js"></script>
+</body>
+</html>

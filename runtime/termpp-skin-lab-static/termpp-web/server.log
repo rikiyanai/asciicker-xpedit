@@ -1,0 +1,44 @@
+::1 - - [27/Dec/2025 06:22:18] "GET / HTTP/1.1" 200 -
+::1 - - [27/Dec/2025 06:22:18] "GET /index.js HTTP/1.1" 200 -
+::1 - - [27/Dec/2025 06:22:18] code 404, message File not found
+::1 - - [27/Dec/2025 06:22:18] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+::1 - - [27/Dec/2025 06:22:19] "GET /index.data HTTP/1.1" 200 -
+::1 - - [27/Dec/2025 06:22:19] "GET /index.wasm HTTP/1.1" 200 -
+::1 - - [27/Dec/2025 06:22:19] "GET /favicon.ico HTTP/1.1" 200 -
+::1 - - [27/Dec/2025 06:22:19] "GET /asciicker.json HTTP/1.1" 200 -
+::1 - - [27/Dec/2025 06:22:19] "GET /asciicker.png HTTP/1.1" 200 -
+::1 - - [27/Dec/2025 06:26:15] "GET / HTTP/1.1" 304 -
+::1 - - [27/Dec/2025 06:26:15] "GET /index.js HTTP/1.1" 304 -
+::1 - - [27/Dec/2025 06:26:15] "GET /index.data HTTP/1.1" 304 -
+::1 - - [27/Dec/2025 06:26:15] "GET /index.wasm HTTP/1.1" 304 -
+::1 - - [27/Dec/2025 06:26:15] "GET /asciicker.js HTTP/1.1" 200 -
+::1 - - [27/Dec/2025 06:26:15] "GET /asciicker.json HTTP/1.1" 304 -
+::1 - - [27/Dec/2025 06:26:15] "GET /index.html HTTP/1.1" 200 -
+::1 - - [27/Dec/2025 06:26:15] "GET /asciicker.png HTTP/1.1" 304 -
+::1 - - [27/Dec/2025 06:26:27] "GET /asciicker.js HTTP/1.1" 304 -
+::1 - - [27/Dec/2025 06:27:23] "GET /index.html HTTP/1.1" 200 -
+::1 - - [27/Dec/2025 06:27:23] "GET /fonts/cp437_40x40.png HTTP/1.1" 200 -
+::1 - - [27/Dec/2025 06:27:23] "GET /fonts/cp437_28x28.png HTTP/1.1" 304 -
+::1 - - [27/Dec/2025 06:27:23] "GET /fonts/cp437_24x24.png HTTP/1.1" 304 -
+::1 - - [27/Dec/2025 06:27:23] "GET /fonts/cp437_32x32.png HTTP/1.1" 304 -
+::1 - - [27/Dec/2025 06:27:23] "GET /fonts/cp437_36x36.png HTTP/1.1" 304 -
+::1 - - [27/Dec/2025 06:27:23] code 404, message File not found
+::1 - - [27/Dec/2025 06:27:23] "GET /audio.js HTTP/1.1" 404 -
+::1 - - [27/Dec/2025 06:27:24] "GET /asciicker.js HTTP/1.1" 200 -
+::1 - - [27/Dec/2025 06:27:30] "GET /favicon.ico HTTP/1.1" 304 -
+::1 - - [27/Dec/2025 06:27:31] "GET /asciicker.js HTTP/1.1" 304 -
+::1 - - [27/Dec/2025 06:27:36] "GET /asciicker.js HTTP/1.1" 304 -
+::1 - - [27/Dec/2025 06:27:41] code 404, message File not found
+::1 - - [27/Dec/2025 06:27:41] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+::1 - - [27/Dec/2025 06:27:59] "GET /asciicker.png HTTP/1.1" 304 -
+::1 - - [27/Dec/2025 06:28:06] "GET / HTTP/1.1" 304 -
+::1 - - [27/Dec/2025 06:28:06] "GET /index.js HTTP/1.1" 304 -
+::1 - - [27/Dec/2025 06:28:06] code 404, message File not found
+::1 - - [27/Dec/2025 06:28:06] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+::1 - - [27/Dec/2025 06:28:06] "GET /asciicker.json HTTP/1.1" 304 -
+::1 - - [27/Dec/2025 06:28:06] "GET /index.data HTTP/1.1" 304 -
+::1 - - [27/Dec/2025 06:28:06] "GET /index.wasm HTTP/1.1" 304 -
+::1 - - [27/Dec/2025 06:28:06] "GET /asciicker.js HTTP/1.1" 304 -
+::1 - - [27/Dec/2025 06:28:06] "GET /favicon.ico HTTP/1.1" 304 -
+::1 - - [27/Dec/2025 06:28:06] "GET /index.html HTTP/1.1" 304 -
+::1 - - [27/Dec/2025 06:28:38] "GET /asciicker.png HTTP/1.1" 304 -

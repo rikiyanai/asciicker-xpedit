@@ -2,15 +2,16 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SOURCE_WEB_DIR="${1:-}"
+SOURCE_WEB_DIR="${1:-$ROOT/output/termpp-skin-lab-static/termpp-web-flat}"
 OUT_DIR="${2:-$ROOT/runtime/termpp-skin-lab-static}"
 SOURCE_A3D_DIR="${SOURCE_A3D_DIR:-${3:-}}"
 ORIGINAL_MAP_PATH="${ORIGINAL_MAP_PATH:-${4:-}}"
 LOCAL_A3D_DIR="$ROOT/runtime/flatmap_sources"
 
-if [[ -z "$SOURCE_WEB_DIR" ]]; then
-  echo "error: source webbuild dir is required (no implicit sibling-repo fallback)." >&2
-  echo "usage: $(basename "$0") <source_web_dir> [out_dir] [source_a3d_dir] [original_map_path]" >&2
+if [[ ! -d "$SOURCE_WEB_DIR" ]]; then
+  echo "error: source webbuild dir not found: $SOURCE_WEB_DIR" >&2
+  echo "usage: $(basename "$0") [source_web_dir] [out_dir] [source_a3d_dir] [original_map_path]" >&2
+  echo "defaults to: $ROOT/output/termpp-skin-lab-static/termpp-web-flat" >&2
   exit 1
 fi
 
@@ -22,11 +23,6 @@ if [[ -z "$SOURCE_A3D_DIR" && -d "$(dirname "$SOURCE_WEB_DIR")/a3d" ]]; then
   SOURCE_A3D_DIR="$(dirname "$SOURCE_WEB_DIR")/a3d"
 fi
 
-if [[ ! -d "$SOURCE_WEB_DIR" ]]; then
-  echo "error: source webbuild dir not found: $SOURCE_WEB_DIR" >&2
-  echo "usage: $(basename "$0") <source_web_dir> [out_dir] [source_a3d_dir] [original_map_path]" >&2
-  exit 1
-fi
 
 for f in index.html index.js index.wasm index.data; do
   if [[ ! -f "$SOURCE_WEB_DIR/$f" ]]; then

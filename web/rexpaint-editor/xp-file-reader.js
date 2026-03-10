@@ -175,8 +175,8 @@ export class XPFileReader {
    * XP files store cells in column-major order (x varies outer, y varies inner).
    * This method transposes to row-major order for easier 2D array access.
    *
-   * Cell format: 7 bytes per cell
-   * - glyph: 1 byte (CP437 code point)
+   * Cell format: 10 bytes per cell (REXPaint standard)
+   * - glyph: 4 bytes (uint32 little-endian CP437 code point)
    * - fg_r, fg_g, fg_b: 3 bytes
    * - bg_r, bg_g, bg_b: 3 bytes
    *
@@ -186,7 +186,7 @@ export class XPFileReader {
    * @returns {Array<Array>} 2D array of cells in row-major order: cells[y][x]
    */
   _parseCells(data, width, height) {
-    const BYTES_PER_CELL = 7;
+    const BYTES_PER_CELL = 10;
     const cells = [];
 
     // Initialize row-major 2D array
@@ -204,17 +204,18 @@ export class XPFileReader {
           );
         }
 
-        const glyph = data[offset];
-        const fgR = data[offset + 1];
-        const fgG = data[offset + 2];
-        const fgB = data[offset + 3];
-        const bgR = data[offset + 4];
-        const bgG = data[offset + 5];
-        const bgB = data[offset + 6];
+        // Read glyph as 4-byte little-endian uint32
+        const glyph = data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16) | (data[offset + 3] << 24);
+        const fgR = data[offset + 4];
+        const fgG = data[offset + 5];
+        const fgB = data[offset + 6];
+        const bgR = data[offset + 7];
+        const bgG = data[offset + 8];
+        const bgB = data[offset + 9];
         offset += BYTES_PER_CELL;
 
         cells[y][x] = {
-          glyph: glyph & 0xFF,
+          glyph: glyph >>> 0,  // Ensure unsigned 32-bit
           fg: [fgR, fgG, fgB],
           bg: [bgR, bgG, bgB]
         };

@@ -12,8 +12,8 @@
  * - Bytes 16-19: Layer count (int32)
  * - Bytes 20+:   Layer data (each: layer_width(4) + layer_height(4) + compressed_size(4) + compressed_data)
  *
- * Cell format (7 bytes per cell, column-major order on disk):
- * - glyph: 1 byte (CP437 code point)
+ * Cell format (10 bytes per cell, column-major order on disk - REXPaint standard):
+ * - glyph: 4 bytes (uint32 little-endian CP437 code point)
  * - fg_r, fg_g, fg_b: 3 bytes
  * - bg_r, bg_g, bg_b: 3 bytes
  */
@@ -123,11 +123,18 @@ export class XPFileWriter {
       for (let y = 0; y < this.height; y++) {
         const cell = cells[y][x];
 
-        // Write 7 bytes per cell
-        cellBytes.push(cell.glyph & 0xFF);
+        // Write 10 bytes per cell (REXPaint format)
+        // Glyph: 4 bytes (uint32 little-endian)
+        const glyph = cell.glyph >>> 0;  // Ensure unsigned 32-bit
+        cellBytes.push(glyph & 0xFF);
+        cellBytes.push((glyph >> 8) & 0xFF);
+        cellBytes.push((glyph >> 16) & 0xFF);
+        cellBytes.push((glyph >> 24) & 0xFF);
+        // FG: 3 bytes
         cellBytes.push(cell.fg[0] & 0xFF);
         cellBytes.push(cell.fg[1] & 0xFF);
         cellBytes.push(cell.fg[2] & 0xFF);
+        // BG: 3 bytes
         cellBytes.push(cell.bg[0] & 0xFF);
         cellBytes.push(cell.bg[1] & 0xFF);
         cellBytes.push(cell.bg[2] & 0xFF);

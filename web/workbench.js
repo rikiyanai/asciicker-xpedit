@@ -939,180 +939,66 @@
   }
 
   async function applyCurrentXpAsWebSkin(opts = {}) {
-    await runWebbuildSkinAction("apply skin", async () => {
-      // Guard: need a session (classic) or a bundle with required enabled actions (bundle mode)
-      if (isBundleMode()) {
-        // Bundle mode requires runtime preflight check
-        if (!(await ensureRuntimePreflight({ refresh: true }))) return;
-        const ts = getActiveTemplateSet();
-        if (ts) {
-          for (const [key, spec] of Object.entries(getEnabledActions(ts))) {
-            if (spec.required && (!state.actionStates[key] || state.actionStates[key].status !== "converted")) {
-              status(`Required action "${key}" not converted yet`, "warn");
-              return;
-            }
-          }
-        }
-      } else if (!state.sessionId) {
-        status("Load a workbench session first", "warn");
-        return;
-      }
-      const t0 = Date.now();
-      const timings = {};
-      // ── Preboot vs mounted: prep diverges here ──
-      let prep = null;
-      if (OVERRIDE_MODE !== "preboot") {
-        // Mounted: load/reload iframe first, wait for WASM ready, then inject.
-        status("Preparing flat arena runtime for skin test...", "warn");
-        prep = await prepareWebbuildForSkinApply({
-          force_restart: !!opts.force_restart,
-          restart_if_overlay_hidden: opts.restart_if_overlay_hidden !== false,
-        });
-        timings.prepare_ms = Date.now() - t0;
-        if (!prep.ready) {
-          status("Webbuild not ready yet; wait for load to finish", "warn");
-          try {
-            $("webbuildOut").textContent = JSON.stringify({
-              stage: "prepare_webbuild_not_ready",
-              prep,
-              timings,
-              webbuild_state: String($("webbuildState")?.textContent || ""),
-            }, null, 2);
-          } catch (_e) {}
-          return;
-        }
-      }
-      try {
-        const tSave = Date.now();
-        status("Saving current session before skin test...", "warn");
-        const saveRes = await saveSessionState("pre-web-skin-apply", { wait_for_idle: true, timeout_ms: 15000 });
-        if (!saveRes || !saveRes.ok) {
-          // In bundle mode, save may fail if active tab has no session — that's OK
-          if (isBundleMode() && saveRes && saveRes.skipped === "no_session") {
-            timings.save_session_skipped = "bundle_no_active_session";
-          } else {
-            timings.save_session_failed = saveRes || { ok: false };
-            $("webbuildOut").textContent = JSON.stringify({
-              stage: "save_session_before_web_skin_apply_failed",
-              save: saveRes,
-              timings,
-            }, null, 2);
-            status("Skin test blocked: session save failed/timed out", "err");
-            return;
-          }
-        }
-        timings.save_session_ms = Date.now() - tSave;
-        status(prep && prep.restarted ? "Reloaded preview; exporting XP skin payload..." : "Exporting XP skin payload...", "warn");
-        const tPayload = Date.now();
-        const useBundlePayload = isBundleMode();
-        const payloadUrl = useBundlePayload
-          ? "/api/workbench/web-skin-bundle-payload"
-          : "/api/workbench/web-skin-payload";
-        const payloadBody = useBundlePayload
-          ? { bundle_id: state.bundleId }
-          : { session_id: state.sessionId };
-        const r = await fetch(payloadUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payloadBody),
-        });
-        timings.fetch_payload_ms = Date.now() - tPayload;
-        const j = await r.json();
-        if (!r.ok) {
-          $("webbuildOut").textContent = JSON.stringify(j, null, 2);
-          status("Web skin payload failed", "err");
-          return;
-        }
-        status("Injecting XP into flat arena runtime...", "warn");
-        const tInject = Date.now();
-        let inject;
-        if (useBundlePayload) {
-          // Bundle injection: per-action XP bytes
-          if (OVERRIDE_MODE === "preboot") {
-            if (!(await resetWebbuildForPreboot())) {
-              status("Webbuild not ready after preboot reload", "err");
-              return;
-            }
-          }
-          const win = webbuildFrameWindow();
-          inject = await injectBundleIntoWebbuild(win, j);
-          if (OVERRIDE_MODE === "preboot") inject.preboot = true;
-        } else {
-          // Classic single-XP injection
-          const xpBytes = b64ToUint8Array(j.xp_b64 || "");
-          if (OVERRIDE_MODE === "preboot") {
-            if (!(await resetWebbuildForPreboot())) {
-              status("Webbuild not ready after preboot reload", "err");
-              return;
-            }
-            const win = webbuildFrameWindow();
-            inject = await injectXpBytesIntoWebbuild(win, xpBytes, {
-              override_names: j.override_names,
-              reload_player_name: String(j.reload_player_name || "player"),
-            });
-            inject.preboot = true;
-          } else {
-            const win = webbuildFrameWindow();
-            inject = await injectXpBytesIntoWebbuild(win, xpBytes, {
-              override_names: j.override_names,
-              reload_player_name: String(j.reload_player_name || "player"),
-            });
-          }
-        }
-        timings.inject_ms = Date.now() - tInject;
-        timings.total_ms = Date.now() - t0;
-        const payloadSummary = useBundlePayload
-          ? { actions: Object.fromEntries(Object.entries(j.actions || {}).map(([k, v]) => [k, { files: (v.override_names || []).length, bytes: v.xp_size_bytes }])), unmapped: j.unmapped_families }
-          : { override_names: normalizeWebbuildOverrideNames(j.override_names), xp_b64: `(<${(j.xp_b64 || "").length} base64 chars>)` };
-        $("webbuildOut").textContent = JSON.stringify({
-          timings,
-          prep,
-          payload: payloadSummary,
-          inject,
-          bundle_mode: useBundlePayload,
-        }, null, 2);
-        state.webbuild.ready = true;
-        updateWebbuildUI();
-        const modeLabel = useBundlePayload ? "bundle skin" : "web skin";
-        status(`Applied ${modeLabel} (${Math.round(timings.total_ms || 0)}ms)`, "ok");
-        setWebbuildState(`Webbuild ready (${modeLabel} applied)`, "ok");
-      } catch (e) {
-        try {
-          timings.total_ms = Date.now() - t0;
-          $("webbuildOut").textContent = JSON.stringify({
-            stage: "apply_current_xp_as_web_skin_exception",
-            error: String(e),
-            timings,
-            webbuild_state: String($("webbuildState")?.textContent || ""),
-          }, null, 2);
-        } catch (_e2) {
-          $("webbuildOut").textContent = String(e);
-        }
-        status("Web skin apply failed", "err");
-      }
-    });
-  }
-
-  async function testCurrentSkinInDock() {
-    if (isBundleMode()) {
-      // Bundle mode: need runtime preflight and required enabled actions converted
-      if (!(await ensureRuntimePreflight({ refresh: true }))) return;
-      const ts = getActiveTemplateSet();
-      if (ts) {
-        for (const [key, spec] of Object.entries(getEnabledActions(ts))) {
-          if (spec.required && (!state.actionStates[key] || state.actionStates[key].status !== "converted")) {
-            status(`Required action "${key}" not converted yet`, "warn");
-            return;
-          }
-        }
-      }
-    } else if (!state.sessionId) {
+    if (!state.sessionId) {
       status("Load a workbench session first", "warn");
       return;
     }
-    status("Restarting flat test arena and testing current skin...", "warn");
+    const prep = await prepareWebbuildForSkinApply({
+      force_restart: !!opts.force_restart,
+      restart_if_overlay_hidden: opts.restart_if_overlay_hidden !== false,
+    });
+    if (!prep.ready) {
+      status("Webbuild not ready yet; wait for load to finish", "warn");
+      return;
+    }
+    try {
+      await saveSessionState("pre-web-skin-apply");
+      status(prep.restarted ? "Reloaded preview; exporting XP and applying web skin..." : "Exporting XP and applying web skin...", "warn");
+      const r = await fetch("/api/workbench/web-skin-payload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: state.sessionId }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        $("webbuildOut").textContent = JSON.stringify(j, null, 2);
+        status("Web skin payload failed", "err");
+        return;
+      }
+      const win = webbuildFrameWindow();
+      const inject = await injectXpBytesIntoWebbuild(win, b64ToUint8Array(j.xp_b64 || ""), {
+        override_names: j.override_names,
+        reload_player_name: String(j.reload_player_name || "player"),
+        require_start_game: prep.restarted || prep.overlay_visible,
+      });
+      $("webbuildOut").textContent = JSON.stringify({
+        prep,
+        payload: { ...j, override_names: normalizeWebbuildOverrideNames(j.override_names), xp_b64: `(<${(j.xp_b64 || "").length} base64 chars>)` },
+        inject,
+      }, null, 2);
+      state.webbuild.ready = true;
+      updateWebbuildUI();
+      status("Applied XP as web skin", "ok");
+      setWebbuildState("Webbuild ready (skin applied)", "ok");
+    } catch (e) {
+      $("webbuildOut").textContent = String(e);
+      status("Web skin apply failed", "err");
+    }
+  }
+
+  async function testCurrentSkinInDock() {
+    if (!state.sessionId) {
+      status("Load a workbench session first", "warn");
+      return;
+    }
+    const frame = $("webbuildFrame");
+    if (frame && frame.classList.contains("hidden")) {
+      status("Opening flat preview and testing current skin...", "warn");
+    } else {
+      status("Reloading flat preview and testing current skin...", "warn");
+    }
     await applyCurrentXpAsWebSkin({
-      force_restart: true,
+      force_restart: !!(frame && !frame.classList.contains("hidden")),
       restart_if_overlay_hidden: true,
     });
   }

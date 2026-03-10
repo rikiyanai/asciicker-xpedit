@@ -370,7 +370,11 @@
         clearInterval(diagnosticTraceTimer);
         diagnosticTraceTimer = 0;
         var result = "unknown";
-        if (worldReady && groundedOnce && posChanged && !waterDetected) {
+        // Primary classification: worldReady + grounded + (position moved OR rendering stage advanced)
+        // Handles cases where window.ak.getPos() is unavailable (WASM runtime without JS wrappers)
+        var stageAdvanced = isFinite(stage) && isFinite(initialStage) && stage > initialStage;
+        var hasMovementIndicator = posChanged || stageAdvanced;
+        if (worldReady && groundedOnce && hasMovementIndicator && !waterDetected) {
           result = "playable";
         } else if (isFinite(stage) && stage === initialStage && initialStage < 70) {
           result = "freeze_no_frames";

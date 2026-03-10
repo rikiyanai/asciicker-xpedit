@@ -2039,7 +2039,6 @@ def workbench_upload_xp(xp_bytes: bytes, req_id: str) -> dict[str, Any]:
         grid_cols=cols,
         grid_rows=rows,
         cells=cells,
-        family="player",
     )
 
     # Save session

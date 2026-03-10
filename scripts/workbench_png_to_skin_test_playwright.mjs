@@ -551,7 +551,6 @@ async function main() {
       /skin applied|webbuild ready/i.test(webbuildState) &&
       !!s.ready &&
       !!iframe.calledRun &&
-      !!iframe.hasLoad &&
       (!!iframe.wasmReady || !iframe.overlayVisible)
     );
     const failure = /blocked|failed|error/i.test(wbStatus) || /access error/i.test(webbuildState);

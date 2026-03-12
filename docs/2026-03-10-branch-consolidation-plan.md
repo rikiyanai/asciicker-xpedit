@@ -1,132 +1,155 @@
 # Branch Consolidation and Merge Plan
 
-## Current State (2026-03-10)
+## Status
 
-### Active Branches
-- **master** (359f217) - Base checkpoint after fix/solo-only-load-contract merge
-- **restore/bundle-override-filter-8279e11** (114f840) ← **CURRENT HEAD** - Adds XP upload API (2 new commits)
-- **feat/workbench-mcp-server** (2ebfe6a) - 80 commits ahead: Full web editor + XP I/O classes
-- **feat/sprite-extraction-dual-analysis** (52419fe) - Dual algorithm analysis + rexpaint-editor
-- **template-forcefit-next** (d65575c) - Bundle mode UI work
-- **checkpoint/pre-rexpaint-clone** (8279e11) - Earlier checkpoint
-- **phase2-death-template** (8279e11) - Points to same as checkpoint
-- **fix/solo-only-load-contract** (a74c72e) - 1 commit behind master (already merged)
-- **experiment/render-gate-ab-matrix** (2e5aa25) - Experimental, diverged
+This document was stale after the failed 2026-03-12 step-1/step-2 attempt. The old plan assumed plain `restore/bundle-override-filter-8279e11` was the known-good merge source. That is incomplete.
 
-## Problem Analysis
+The canonical bundle checkpoint is the current dirty main worktree on top of `restore/bundle-override-filter-8279e11@89b7d06`, verified by:
 
-### 1. Branch Divergence Issue
-Two major feature branches diverged from master:
-- **feat/workbench-mcp-server**: Has 80 commits of editor work but no rexpaint-editor/ files
-- **feat/sprite-extraction-dual-analysis**: Has the actual rexpaint-editor/ code but only 2 commits of new work
+- `/Users/r/Downloads/workbench-ui-recording-2026-03-11T13-27-24-653Z.json`
+- [result.json](/Users/r/Downloads/asciicker-pipeline-v2/output/playwright/workbench-headed-replay-2026-03-12T13-56-16-164Z/result.json)
 
-The Web REXPaint editor was split across branches:
-- UI wiring code on feat/workbench-mcp-server  
-- Editor module code on feat/sprite-extraction-dual-analysis
-- Never properly merged/unified
+Exact checkpoint sequence:
 
-### 2. Session 62-63 Attempted Integration
-- Added XP upload API endpoint to feat/workbench-mcp-server
-- But editor classes (XPFileReader/XPFileWriter) were only on feat/sprite-extraction-dual-analysis
-- Result: Half-baked integration that never worked
+1. `Attack`
+2. `Death`
+3. `Idle / Walk`
+4. `Test Bundle Skin`
 
-### 3. Current Worktree State
-- Main repo at restore/bundle-override-filter-8279e11 (has rexpaint-editor/ now)
-- Worktree at .worktrees/sprite-extraction-dual-analysis/ (old, can be deleted)
+Expected terminal state:
 
-## Merge Strategy (Non-Destructive)
+- `Bundle: 3/3 actions converted`
+- `Applied bundle skin`
 
-### Step 1: Verify Current State ✓
-- Current HEAD: restore/bundle-override-filter-8279e11
-- Contains: XP upload API + rexpaint-editor/ files (just copied from worktree)
-- Status: Ready to commit
+## Current Branch / Worktree Reality (2026-03-12)
 
-### Step 2: Consolidate onto feat/workbench-mcp-server
-**Goal**: Merge all working code into the editor feature branch
+- main worktree `/Users/r/Downloads/asciicker-pipeline-v2`
+  - branch: `restore/bundle-override-filter-8279e11`
+  - base commit: `89b7d0616853276043cccd6130b1463700742c7d`
+  - required dirty delta:
+    - `web/workbench.html`
+    - `web/workbench.js`
+    - `scripts/workbench_bundle_manual_watchdog.mjs`
+    - `docs/2026-03-11-CLAUDE-HANDOFF-CURRENT-STATE.md`
+    - `docs/AGENT_PROTOCOL.md`
+- clean worktree `/Users/r/Downloads/asciicker-pipeline-v2-clean-wt`
+  - branch: `phase2-death-template`
+  - commit: `8279e11ca712f1a19c68417e89727f4446efbcc5`
+- extra worktree `/Users/r/Downloads/asciicker-pipeline-v2/.worktrees/sprite-extraction-dual-analysis`
+  - branch: `feat/sprite-extraction-dual-analysis`
+  - commit: `52419fe5b563b25eb9be75c67492f60e0f8b0ef4`
+  - user decision: disposable, do not include in current consolidation
+- integration candidate base:
+  - `feat/workbench-mcp-server` @ `2ebfe6a0ff7076c7466e6d463e72f1f83648c1a3`
+  - divergence vs `restore`: `71 6`
 
-```bash
-# Switch to editor branch
-git checkout feat/workbench-mcp-server
+## Why The Old Step 1 / Step 2 Failed
 
-# Merge in the XP upload API work
-git merge restore/bundle-override-filter-8279e11
+1. Step 1 preserved the dirty checkpoint as a side commit, but did not make that exact checkpoint the merge source.
+2. Step 2 merged plain `restore/bundle-override-filter-8279e11`, which omitted the dirty bundle-baseline delta.
+3. That omitted at least two important things:
+   - the UI recorder/checkpoint hooks
+   - the empty-action-tab fix in `web/workbench.js` (`renderLegacyGrid()` / `renderFrameGrid()` instead of the dead `renderGrid()` path)
+4. Validation was then attempted with a stale idle-first watchdog script instead of the real recorded order.
 
-# Merge in sprite analysis features  
-git merge feat/sprite-extraction-dual-analysis
-```
+## Re-Audit Of Step 1
 
-### Step 3: Verify Result
-- feat/workbench-mcp-server should have:
-  - ✓ All 80 original editor commits
-  - ✓ XP upload API endpoint
-  - ✓ rexpaint-editor/ module with XPFileReader/XPFileWriter
-  - ✓ Dual algorithm sprite analysis
-  - ✓ All pipeline service updates
+Step 1 is still necessary, but it must preserve the exact dirty checkpoint and keep it runnable in place.
 
-### Step 4: Test Integration
-- Verify imports work
-- Run API test: upload XP → export XP
-- Run headed test: show roundtrip in browser
-- Check git status is clean
+Correct Step 1:
 
-### Step 5: Update master (if tests pass)
-```bash
-git checkout master
-git merge --ff-only feat/workbench-mcp-server
-```
+1. Do not move the main worktree off `restore`.
+2. Create a dedicated checkpoint branch from the current dirty state, for example `checkpoint/bundle-watchdog-baseline-20260312`.
+3. Commit the exact dirty delta to that branch:
+   - `web/workbench.html`
+   - `web/workbench.js`
+   - `scripts/workbench_bundle_manual_watchdog.mjs`
+   - the handoff/protocol doc updates
+4. Leave the main worktree parked on the same dirty checkpoint for manual comparison runs.
 
-## Branch Retention Decision
+Why:
 
-### Keep
-- **master** - Base checkpoint
-- **feat/workbench-mcp-server** - Main development branch (after merge)
-- **template-forcefit-next** - Bundle mode work (separate concern)
+- the known-good bundle checkpoint is not reproducible from plain `89b7d06` alone
+- step 2 needs a merge source that actually contains the verified bundle behavior
 
-### Delete (After Merge)
-- restore/bundle-override-filter-8279e11 (work merged into feat/workbench-mcp-server)
-- feat/sprite-extraction-dual-analysis (work merged into feat/workbench-mcp-server)
-- fix/solo-only-load-contract (already in master)
-- checkpoint/pre-rexpaint-clone (checkpoint, no longer needed)
-- phase2-death-template (redundant with other branches)
-- experiment/render-gate-ab-matrix (experimental, superseded)
+## Re-Audit Of Step 2
 
-## Commit Structure After Merge
+Step 2 should still use `feat/workbench-mcp-server` as the integration base, but it must merge the exact checkpoint branch from Step 1, not plain `restore`.
 
-feat/workbench-mcp-server will have:
-1. Original 35 editor tasks (Tasks 9-35)
-2. + Critical bug fixes (Tasks 9.5, 15.5, 19.5)
-3. + XP File I/O (W1.1-W1.5)
-4. + Sprite extraction algorithms (T1-T5)
-5. + XP upload API endpoint
-6. + Clean git history with semantic commits
+Correct Step 2:
 
-## Risk Assessment
+1. Create a fresh worktree from `feat/workbench-mcp-server`.
+2. Create a new integration branch there, for example `integrate/mcp-restore-baseline-20260312`.
+3. Merge `checkpoint/bundle-watchdog-baseline-20260312` into that branch.
+4. Resolve conflicts with this policy:
+   - `web/workbench.js`: prefer the checkpoint branch first
+   - `web/workbench.html`: prefer the checkpoint branch first
+   - `runtime/termpp-skin-lab-static/**`: prefer the checkpoint/restore side for bundle/runtime truth
+   - `src/pipeline_v2/app.py`, `src/pipeline_v2/service.py`, `src/pipeline_v2/xp_codec.py`: merge carefully, then rerun upload/export smoke
+   - `web/rexpaint-editor/*` and any modal wiring from `feat/workbench-mcp-server`: do not let that displace the working bundle shell during this step
+5. Run the canonical headed bundle checkpoint on the integration branch before any editor wiring.
 
-**Low Risk**: 
-- No force-pushing to master
-- All work already exists (just consolidating)
-- Can always revert to master if needed
+Why:
 
-**Merge Conflicts Expected**:
-- xp_codec.py (both branches modified)
-- app.py (both branches added endpoints)
-- service.py (both branches added functions)
-- Models might diverge
+- `feat/workbench-mcp-server` contains editor-side work, but its workbench shell diverges from the proven bundle shell
+- the biggest risk is `web/workbench.js` / `web/workbench.html`, not the small backend diff
 
-**Mitigation**:
-- Cherry-pick commits instead of full merges if conflicts are severe
-- Test each step before proceeding to next
+## Focused Conflict / Risk Inventory
 
-## What You'll Have After Consolidation
+High-risk files:
 
-**Single clean branch** (feat/workbench-mcp-server) with:
-- ✓ Working Web REXPaint editor (all 35 tasks)
-- ✓ XP file I/O roundtrip (upload → session → export)
-- ✓ Sprite extraction and analysis  
-- ✓ RESTful API for all operations
-- ✓ Proper test coverage
+- `web/workbench.js`
+  - `feat/workbench-mcp-server` has different web-skin apply/test flow and editor-related divergence
+  - the checkpoint branch contains the proven bundle path and empty-tab fix
+- `web/workbench.html`
+  - `feat/workbench-mcp-server` carries REXPaint modal markup and stylesheet hookup
+  - the checkpoint branch is the proven bundle UI shell
+- `runtime/termpp-skin-lab-static/termpp-web-flat/index.data`
+- `runtime/termpp-skin-lab-static/termpp-web-flat/index.wasm`
+  - binary conflicts expected; these must follow the checkpoint/restore runtime line
 
-**All temporary branches cleaned up**
-- Branches with no new work deleted
-- Experimental branches archived
-- Clean git history for future collaboration
+Medium-risk files:
+
+- `src/pipeline_v2/app.py`
+- `src/pipeline_v2/service.py`
+- `src/pipeline_v2/xp_codec.py`
+- `scripts/workbench_png_to_skin_test_playwright.mjs`
+- `web/termpp_flat_map_bootstrap.js`
+
+Known audit findings:
+
+- `git merge-tree` already warns about binary conflicts in the runtime bundle
+- the dirty baseline delta is only `web/workbench.html` and `web/workbench.js`, but that delta is behavior-critical
+- `feat/sprite-extraction-dual-analysis` is not needed for the current merge and should stay out
+
+## Verification Gate For The New Step 2
+
+The integration branch does not pass Step 2 unless all of these hold:
+
+1. API smoke:
+   - `POST /api/workbench/upload-xp` returns `201`
+   - `POST /api/workbench/export-xp` for that session returns `200`
+2. Bundle checkpoint, headed:
+   - `Attack`
+   - `Death`
+   - `Idle / Walk`
+   - `Test Bundle Skin`
+3. Final status matches:
+   - `Bundle: 3/3 actions converted`
+   - `Applied bundle skin`
+4. No new workbench regression is introduced when switching into an empty action tab
+
+## Handoff Snapshot
+
+- Branch: `restore/bundle-override-filter-8279e11`
+- HEAD: `89b7d0616853276043cccd6130b1463700742c7d`
+- Completed:
+  - Canonical bundle checkpoint identified from saved recording and fresh headed replay
+- Deferred:
+  - Step 1 exact checkpoint branch creation
+  - Step 2 integration re-run from that checkpoint branch
+- Open Risks:
+  - `web/workbench.js` / `web/workbench.html` divergence with `feat/workbench-mcp-server`
+  - binary runtime conflicts under `runtime/termpp-skin-lab-static`
+- Resume:
+  - create the exact dirty checkpoint branch first, then merge that branch into a fresh `feat/workbench-mcp-server` worktree

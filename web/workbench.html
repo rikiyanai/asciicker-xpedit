@@ -40,6 +40,18 @@
     <div id="wbStatus" class="small warn">No active session</div>
   </div>
 
+  <details class="panel">
+    <summary>Recorder</summary>
+    <div class="row" style="margin-top:8px;">
+      <button id="uiRecorderStartBtn">Start Recording</button>
+      <button id="uiRecorderStopBtn" disabled>Stop Recording</button>
+      <button id="uiRecorderClearBtn">Clear</button>
+      <button id="uiRecorderDownloadBtn">Download JSON</button>
+      <span id="uiRecorderStatus" class="small">Recorder idle</span>
+    </div>
+    <div id="uiRecorderSummary" class="small">0 events</div>
+  </details>
+
   <div class="panel">
     <h3>Upload + Convert (<span id="uploadPanelLabel">Workbench Direct</span>)</h3>
     <div class="row">

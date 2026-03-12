@@ -4,8 +4,10 @@ Canonical promoted baseline for the Workbench bundle/runtime path.
 
 ## Branch / Commit
 
-- branch: `integrate/mcp-restore-baseline-20260312`
-- commit: `4054dcf`
+- verified branch: `integrate/mcp-restore-baseline-20260312`
+- verified commit: `4054dcf`
+- promoted branch: `master`
+- promoted commit: `2f413ee`
 
 ## Included Evidence
 
@@ -15,6 +17,8 @@ Canonical promoted baseline for the Workbench bundle/runtime path.
   - headed watchdog result from `integrate/mcp-restore-baseline-20260312`
 - `integrate-watchdog-ui-recorder.json`
   - UI recorder capture from the integration watchdog run
+- `workbench-bundle-baseline.gif`
+  - screen recording rendered to GIF for the repo README
 
 ## Canonical Recorded Order
 

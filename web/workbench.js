@@ -60,6 +60,7 @@
     if (autoAttackParam) u.searchParams.set("autoattack", autoAttackParam);
     return `${u.pathname}${u.search}`;
   })();
+  const UI_RECORDER_AUTO_START = /^(1|true|yes|on)$/i.test(String(params.get("uirecord") || "").trim());
 
   const state = {
     jobId: params.get("job_id") || "",
@@ -174,12 +175,196 @@
     activeActionKey: "idle",
     actionStates: {},       // { idle: {sessionId, jobId, status}, attack: {...}, ... }
     templateRegistry: null, // cached from GET /api/workbench/templates
+    uiRecorder: {
+      active: false,
+      startedAt: 0,
+      stoppedAt: 0,
+      events: [],
+      seq: 0,
+      installed: false,
+      statusObserver: null,
+    },
   };
 
   function status(text, cls) {
     const el = $("wbStatus");
     el.className = "small " + (cls || "");
     el.textContent = text;
+  }
+
+  function uiRecorderNowMs() {
+    const start = Number(state.uiRecorder.startedAt || 0);
+    return start > 0 ? Date.now() - start : 0;
+  }
+
+  function uiRecorderSnapshot() {
+    return {
+      wbStatus: String($("wbStatus")?.textContent || ""),
+      webbuildState: String($("webbuildState")?.textContent || ""),
+      bundleStatus: String($("bundleStatus")?.textContent || ""),
+      templateStatus: String($("templateStatus")?.textContent || ""),
+      uploadPanelLabel: String($("uploadPanelLabel")?.textContent || ""),
+      templateSetKey: String(state.templateSetKey || ""),
+      activeActionKey: String(state.activeActionKey || ""),
+      bundleId: state.bundleId ? String(state.bundleId) : "",
+      sessionId: state.sessionId ? String(state.sessionId) : "",
+      jobId: state.jobId ? String(state.jobId) : "",
+    };
+  }
+
+  function uiRecorderEventTargetInfo(target) {
+    const el = target && target.nodeType === 1 ? target : null;
+    if (!el) return {};
+    const txt = String(el.textContent || "").replace(/\s+/g, " ").trim();
+    return {
+      tag: String(el.tagName || "").toLowerCase(),
+      id: String(el.id || ""),
+      name: String(el.getAttribute("name") || ""),
+      type: String(el.getAttribute("type") || ""),
+      text: txt ? txt.slice(0, 120) : "",
+      value: "value" in el ? String(el.value || "") : "",
+    };
+  }
+
+  function getUiRecorderData() {
+    return {
+      active: !!state.uiRecorder.active,
+      startedAt: Number(state.uiRecorder.startedAt || 0),
+      stoppedAt: Number(state.uiRecorder.stoppedAt || 0),
+      eventCount: state.uiRecorder.events.length,
+      events: state.uiRecorder.events.map((rec) => JSON.parse(JSON.stringify(rec))),
+    };
+  }
+
+  function refreshUiRecorderUi() {
+    const statusEl = $("uiRecorderStatus");
+    const summaryEl = $("uiRecorderSummary");
+    const startBtn = $("uiRecorderStartBtn");
+    const stopBtn = $("uiRecorderStopBtn");
+    const count = state.uiRecorder.events.length;
+    const duration = state.uiRecorder.active
+      ? uiRecorderNowMs()
+      : Math.max(0, Number(state.uiRecorder.stoppedAt || 0) - Number(state.uiRecorder.startedAt || 0));
+    if (statusEl) {
+      statusEl.textContent = state.uiRecorder.active
+        ? `Recording (${count} events, ${Math.round(duration / 1000)}s)`
+        : `Recorder idle (${count} events)`;
+    }
+    if (summaryEl) {
+      const last = count ? state.uiRecorder.events[count - 1] : null;
+      summaryEl.textContent = last
+        ? `Last: ${last.type} @ ${Math.round(last.t_ms)}ms`
+        : "0 events";
+    }
+    if (startBtn) startBtn.disabled = !!state.uiRecorder.active;
+    if (stopBtn) stopBtn.disabled = !state.uiRecorder.active;
+  }
+
+  function recordUiEvent(type, detail = {}) {
+    if (!state.uiRecorder.active) return null;
+    const rec = {
+      seq: ++state.uiRecorder.seq,
+      t_ms: uiRecorderNowMs(),
+      type: String(type || ""),
+      detail,
+      snapshot: uiRecorderSnapshot(),
+    };
+    state.uiRecorder.events.push(rec);
+    refreshUiRecorderUi();
+    return rec;
+  }
+
+  function installUiRecorderHooks() {
+    if (state.uiRecorder.installed) return;
+    state.uiRecorder.installed = true;
+    document.addEventListener("click", (ev) => {
+      const info = uiRecorderEventTargetInfo(ev.target);
+      if (info.id && /^uiRecorder/.test(info.id)) return;
+      recordUiEvent("click", info);
+    }, true);
+    document.addEventListener("change", (ev) => {
+      const info = uiRecorderEventTargetInfo(ev.target);
+      if (info.id && /^uiRecorder/.test(info.id)) return;
+      if (ev.target && ev.target.files && ev.target.files.length) {
+        info.files = Array.from(ev.target.files).map((f) => ({ name: String(f.name || ""), size: Number(f.size || 0) }));
+      }
+      recordUiEvent("change", info);
+    }, true);
+    document.addEventListener("keydown", (ev) => {
+      const key = String(ev.key || "");
+      if (!["Enter", "Escape", " ", "Spacebar", "Space", "w", "a", "s", "d", "W", "A", "S", "D"].includes(key)) return;
+      recordUiEvent("keydown", {
+        key,
+        code: String(ev.code || ""),
+        target: uiRecorderEventTargetInfo(ev.target),
+      });
+    }, true);
+    window.addEventListener("error", (ev) => {
+      recordUiEvent("error", {
+        message: String(ev.message || ""),
+        filename: String(ev.filename || ""),
+        lineno: Number(ev.lineno || 0),
+        colno: Number(ev.colno || 0),
+      });
+    });
+    window.addEventListener("unhandledrejection", (ev) => {
+      recordUiEvent("unhandledrejection", { reason: String(ev.reason || "") });
+    });
+    const observer = new MutationObserver(() => {
+      const snap = uiRecorderSnapshot();
+      const last = state.uiRecorder.events.length ? state.uiRecorder.events[state.uiRecorder.events.length - 1] : null;
+      const same = last && last.type === "status_change"
+        && JSON.stringify(last.detail || {}) === JSON.stringify(snap);
+      if (!same) recordUiEvent("status_change", snap);
+    });
+    for (const node of ["wbStatus", "webbuildState", "bundleStatus", "templateStatus", "uploadPanelLabel"].map((id) => $(id)).filter(Boolean)) {
+      observer.observe(node, { childList: true, subtree: true, characterData: true });
+    }
+    state.uiRecorder.statusObserver = observer;
+  }
+
+  function startUiRecorder() {
+    installUiRecorderHooks();
+    state.uiRecorder.active = true;
+    state.uiRecorder.startedAt = Date.now();
+    state.uiRecorder.stoppedAt = 0;
+    state.uiRecorder.events = [];
+    state.uiRecorder.seq = 0;
+    recordUiEvent("recording_started", { auto: UI_RECORDER_AUTO_START });
+    refreshUiRecorderUi();
+    return getUiRecorderData();
+  }
+
+  function stopUiRecorder() {
+    if (state.uiRecorder.active) recordUiEvent("recording_stopped", {});
+    state.uiRecorder.active = false;
+    state.uiRecorder.stoppedAt = Date.now();
+    refreshUiRecorderUi();
+    return getUiRecorderData();
+  }
+
+  function clearUiRecorder() {
+    state.uiRecorder.active = false;
+    state.uiRecorder.startedAt = 0;
+    state.uiRecorder.stoppedAt = 0;
+    state.uiRecorder.events = [];
+    state.uiRecorder.seq = 0;
+    refreshUiRecorderUi();
+    return getUiRecorderData();
+  }
+
+  function downloadUiRecorder() {
+    const data = getUiRecorderData();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = href;
+    a.download = `workbench-ui-recording-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(href), 1000);
+    return data;
   }
 
   function updateSessionDirtyBadge() {
@@ -5507,7 +5692,8 @@
       state.cells = [];
       state.gridCols = 0;
       state.gridRows = 0;
-      renderGrid();
+      renderLegacyGrid();
+      renderFrameGrid();
       status(`Action "${actionKey}" — upload a source image`, "warn");
     }
     renderBundleActionTabs();
@@ -5713,6 +5899,10 @@
         localStorage.setItem(VERIFY_CMD_TEMPLATE_STORAGE_KEY, $("verifyCommandTemplate").value || "");
       } catch (_e) {}
     });
+    $("uiRecorderStartBtn")?.addEventListener("click", startUiRecorder);
+    $("uiRecorderStopBtn")?.addEventListener("click", stopUiRecorder);
+    $("uiRecorderClearBtn")?.addEventListener("click", clearUiRecorder);
+    $("uiRecorderDownloadBtn")?.addEventListener("click", downloadUiRecorder);
     $("undoBtn").addEventListener("click", undo);
     $("redoBtn").addEventListener("click", redo);
 
@@ -6388,6 +6578,11 @@
       out.overrideMode = OVERRIDE_MODE;
       return out;
     },
+    startUiRecorder: () => startUiRecorder(),
+    stopUiRecorder: () => stopUiRecorder(),
+    clearUiRecorder: () => clearUiRecorder(),
+    getUiRecorder: () => getUiRecorderData(),
+    downloadUiRecorder: () => downloadUiRecorder(),
     openWebbuild: (forceFresh = true) => {
       openWebbuild({ force_fresh: forceFresh !== false });
       return true;
@@ -6659,6 +6854,9 @@
       return vals.join("|");
     },
   };
+  installUiRecorderHooks();
+  refreshUiRecorderUi();
+  if (UI_RECORDER_AUTO_START) startUiRecorder();
 
   bindUI();
   fetchRuntimePreflight().catch((_e) => {});

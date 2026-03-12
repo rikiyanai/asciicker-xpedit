@@ -60,6 +60,7 @@
     if (autoAttackParam) u.searchParams.set("autoattack", autoAttackParam);
     return `${u.pathname}${u.search}`;
   })();
+  const UI_RECORDER_AUTO_START = /^(1|true|yes|on)$/i.test(String(params.get("uirecord") || "").trim());
 
   const state = {
     jobId: params.get("job_id") || "",
@@ -174,12 +175,196 @@
     activeActionKey: "idle",
     actionStates: {},       // { idle: {sessionId, jobId, status}, attack: {...}, ... }
     templateRegistry: null, // cached from GET /api/workbench/templates
+    uiRecorder: {
+      active: false,
+      startedAt: 0,
+      stoppedAt: 0,
+      events: [],
+      seq: 0,
+      installed: false,
+      statusObserver: null,
+    },
   };
 
   function status(text, cls) {
     const el = $("wbStatus");
     el.className = "small " + (cls || "");
     el.textContent = text;
+  }
+
+  function uiRecorderNowMs() {
+    const start = Number(state.uiRecorder.startedAt || 0);
+    return start > 0 ? Date.now() - start : 0;
+  }
+
+  function uiRecorderSnapshot() {
+    return {
+      wbStatus: String($("wbStatus")?.textContent || ""),
+      webbuildState: String($("webbuildState")?.textContent || ""),
+      bundleStatus: String($("bundleStatus")?.textContent || ""),
+      templateStatus: String($("templateStatus")?.textContent || ""),
+      uploadPanelLabel: String($("uploadPanelLabel")?.textContent || ""),
+      templateSetKey: String(state.templateSetKey || ""),
+      activeActionKey: String(state.activeActionKey || ""),
+      bundleId: state.bundleId ? String(state.bundleId) : "",
+      sessionId: state.sessionId ? String(state.sessionId) : "",
+      jobId: state.jobId ? String(state.jobId) : "",
+    };
+  }
+
+  function uiRecorderEventTargetInfo(target) {
+    const el = target && target.nodeType === 1 ? target : null;
+    if (!el) return {};
+    const txt = String(el.textContent || "").replace(/\s+/g, " ").trim();
+    return {
+      tag: String(el.tagName || "").toLowerCase(),
+      id: String(el.id || ""),
+      name: String(el.getAttribute("name") || ""),
+      type: String(el.getAttribute("type") || ""),
+      text: txt ? txt.slice(0, 120) : "",
+      value: "value" in el ? String(el.value || "") : "",
+    };
+  }
+
+  function getUiRecorderData() {
+    return {
+      active: !!state.uiRecorder.active,
+      startedAt: Number(state.uiRecorder.startedAt || 0),
+      stoppedAt: Number(state.uiRecorder.stoppedAt || 0),
+      eventCount: state.uiRecorder.events.length,
+      events: state.uiRecorder.events.map((rec) => JSON.parse(JSON.stringify(rec))),
+    };
+  }
+
+  function refreshUiRecorderUi() {
+    const statusEl = $("uiRecorderStatus");
+    const summaryEl = $("uiRecorderSummary");
+    const startBtn = $("uiRecorderStartBtn");
+    const stopBtn = $("uiRecorderStopBtn");
+    const count = state.uiRecorder.events.length;
+    const duration = state.uiRecorder.active
+      ? uiRecorderNowMs()
+      : Math.max(0, Number(state.uiRecorder.stoppedAt || 0) - Number(state.uiRecorder.startedAt || 0));
+    if (statusEl) {
+      statusEl.textContent = state.uiRecorder.active
+        ? `Recording (${count} events, ${Math.round(duration / 1000)}s)`
+        : `Recorder idle (${count} events)`;
+    }
+    if (summaryEl) {
+      const last = count ? state.uiRecorder.events[count - 1] : null;
+      summaryEl.textContent = last
+        ? `Last: ${last.type} @ ${Math.round(last.t_ms)}ms`
+        : "0 events";
+    }
+    if (startBtn) startBtn.disabled = !!state.uiRecorder.active;
+    if (stopBtn) stopBtn.disabled = !state.uiRecorder.active;
+  }
+
+  function recordUiEvent(type, detail = {}) {
+    if (!state.uiRecorder.active) return null;
+    const rec = {
+      seq: ++state.uiRecorder.seq,
+      t_ms: uiRecorderNowMs(),
+      type: String(type || ""),
+      detail,
+      snapshot: uiRecorderSnapshot(),
+    };
+    state.uiRecorder.events.push(rec);
+    refreshUiRecorderUi();
+    return rec;
+  }
+
+  function installUiRecorderHooks() {
+    if (state.uiRecorder.installed) return;
+    state.uiRecorder.installed = true;
+    document.addEventListener("click", (ev) => {
+      const info = uiRecorderEventTargetInfo(ev.target);
+      if (info.id && /^uiRecorder/.test(info.id)) return;
+      recordUiEvent("click", info);
+    }, true);
+    document.addEventListener("change", (ev) => {
+      const info = uiRecorderEventTargetInfo(ev.target);
+      if (info.id && /^uiRecorder/.test(info.id)) return;
+      if (ev.target && ev.target.files && ev.target.files.length) {
+        info.files = Array.from(ev.target.files).map((f) => ({ name: String(f.name || ""), size: Number(f.size || 0) }));
+      }
+      recordUiEvent("change", info);
+    }, true);
+    document.addEventListener("keydown", (ev) => {
+      const key = String(ev.key || "");
+      if (!["Enter", "Escape", " ", "Spacebar", "Space", "w", "a", "s", "d", "W", "A", "S", "D"].includes(key)) return;
+      recordUiEvent("keydown", {
+        key,
+        code: String(ev.code || ""),
+        target: uiRecorderEventTargetInfo(ev.target),
+      });
+    }, true);
+    window.addEventListener("error", (ev) => {
+      recordUiEvent("error", {
+        message: String(ev.message || ""),
+        filename: String(ev.filename || ""),
+        lineno: Number(ev.lineno || 0),
+        colno: Number(ev.colno || 0),
+      });
+    });
+    window.addEventListener("unhandledrejection", (ev) => {
+      recordUiEvent("unhandledrejection", { reason: String(ev.reason || "") });
+    });
+    const observer = new MutationObserver(() => {
+      const snap = uiRecorderSnapshot();
+      const last = state.uiRecorder.events.length ? state.uiRecorder.events[state.uiRecorder.events.length - 1] : null;
+      const same = last && last.type === "status_change"
+        && JSON.stringify(last.detail || {}) === JSON.stringify(snap);
+      if (!same) recordUiEvent("status_change", snap);
+    });
+    for (const node of ["wbStatus", "webbuildState", "bundleStatus", "templateStatus", "uploadPanelLabel"].map((id) => $(id)).filter(Boolean)) {
+      observer.observe(node, { childList: true, subtree: true, characterData: true });
+    }
+    state.uiRecorder.statusObserver = observer;
+  }
+
+  function startUiRecorder() {
+    installUiRecorderHooks();
+    state.uiRecorder.active = true;
+    state.uiRecorder.startedAt = Date.now();
+    state.uiRecorder.stoppedAt = 0;
+    state.uiRecorder.events = [];
+    state.uiRecorder.seq = 0;
+    recordUiEvent("recording_started", { auto: UI_RECORDER_AUTO_START });
+    refreshUiRecorderUi();
+    return getUiRecorderData();
+  }
+
+  function stopUiRecorder() {
+    if (state.uiRecorder.active) recordUiEvent("recording_stopped", {});
+    state.uiRecorder.active = false;
+    state.uiRecorder.stoppedAt = Date.now();
+    refreshUiRecorderUi();
+    return getUiRecorderData();
+  }
+
+  function clearUiRecorder() {
+    state.uiRecorder.active = false;
+    state.uiRecorder.startedAt = 0;
+    state.uiRecorder.stoppedAt = 0;
+    state.uiRecorder.events = [];
+    state.uiRecorder.seq = 0;
+    refreshUiRecorderUi();
+    return getUiRecorderData();
+  }
+
+  function downloadUiRecorder() {
+    const data = getUiRecorderData();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = href;
+    a.download = `workbench-ui-recording-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(href), 1000);
+    return data;
   }
 
   function updateSessionDirtyBadge() {
@@ -939,66 +1124,179 @@
   }
 
   async function applyCurrentXpAsWebSkin(opts = {}) {
-    if (!state.sessionId) {
-      status("Load a workbench session first", "warn");
-      return;
-    }
-    const prep = await prepareWebbuildForSkinApply({
-      force_restart: !!opts.force_restart,
-      restart_if_overlay_hidden: opts.restart_if_overlay_hidden !== false,
-    });
-    if (!prep.ready) {
-      status("Webbuild not ready yet; wait for load to finish", "warn");
-      return;
-    }
-    try {
-      await saveSessionState("pre-web-skin-apply");
-      status(prep.restarted ? "Reloaded preview; exporting XP and applying web skin..." : "Exporting XP and applying web skin...", "warn");
-      const r = await fetch("/api/workbench/web-skin-payload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: state.sessionId }),
-      });
-      const j = await r.json();
-      if (!r.ok) {
-        $("webbuildOut").textContent = JSON.stringify(j, null, 2);
-        status("Web skin payload failed", "err");
+    await runWebbuildSkinAction("apply skin", async () => {
+      if (!(await ensureRuntimePreflight({ refresh: true }))) return;
+      // Guard: need a session (classic) or a bundle with required enabled actions (bundle mode)
+      if (isBundleMode()) {
+        const ts = getActiveTemplateSet();
+        if (ts) {
+          for (const [key, spec] of Object.entries(getEnabledActions(ts))) {
+            if (spec.required && (!state.actionStates[key] || state.actionStates[key].status !== "converted")) {
+              status(`Required action "${key}" not converted yet`, "warn");
+              return;
+            }
+          }
+        }
+      } else if (!state.sessionId) {
+        status("Load a workbench session first", "warn");
         return;
       }
-      const win = webbuildFrameWindow();
-      const inject = await injectXpBytesIntoWebbuild(win, b64ToUint8Array(j.xp_b64 || ""), {
-        override_names: j.override_names,
-        reload_player_name: String(j.reload_player_name || "player"),
-        require_start_game: prep.restarted || prep.overlay_visible,
-      });
-      $("webbuildOut").textContent = JSON.stringify({
-        prep,
-        payload: { ...j, override_names: normalizeWebbuildOverrideNames(j.override_names), xp_b64: `(<${(j.xp_b64 || "").length} base64 chars>)` },
-        inject,
-      }, null, 2);
-      state.webbuild.ready = true;
-      updateWebbuildUI();
-      status("Applied XP as web skin", "ok");
-      setWebbuildState("Webbuild ready (skin applied)", "ok");
-    } catch (e) {
-      $("webbuildOut").textContent = String(e);
-      status("Web skin apply failed", "err");
-    }
+      const t0 = Date.now();
+      const timings = {};
+      // ── Preboot vs mounted: prep diverges here ──
+      let prep = null;
+      if (OVERRIDE_MODE !== "preboot") {
+        // Mounted: load/reload iframe first, wait for WASM ready, then inject.
+        status("Preparing flat arena runtime for skin test...", "warn");
+        prep = await prepareWebbuildForSkinApply({
+          force_restart: !!opts.force_restart,
+          restart_if_overlay_hidden: opts.restart_if_overlay_hidden !== false,
+        });
+        timings.prepare_ms = Date.now() - t0;
+        if (!prep.ready) {
+          status("Webbuild not ready yet; wait for load to finish", "warn");
+          try {
+            $("webbuildOut").textContent = JSON.stringify({
+              stage: "prepare_webbuild_not_ready",
+              prep,
+              timings,
+              webbuild_state: String($("webbuildState")?.textContent || ""),
+            }, null, 2);
+          } catch (_e) {}
+          return;
+        }
+      }
+      try {
+        const tSave = Date.now();
+        status("Saving current session before skin test...", "warn");
+        const saveRes = await saveSessionState("pre-web-skin-apply", { wait_for_idle: true, timeout_ms: 15000 });
+        if (!saveRes || !saveRes.ok) {
+          // In bundle mode, save may fail if active tab has no session — that's OK
+          if (isBundleMode() && saveRes && saveRes.skipped === "no_session") {
+            timings.save_session_skipped = "bundle_no_active_session";
+          } else {
+            timings.save_session_failed = saveRes || { ok: false };
+            $("webbuildOut").textContent = JSON.stringify({
+              stage: "save_session_before_web_skin_apply_failed",
+              save: saveRes,
+              timings,
+            }, null, 2);
+            status("Skin test blocked: session save failed/timed out", "err");
+            return;
+          }
+        }
+        timings.save_session_ms = Date.now() - tSave;
+        status(prep && prep.restarted ? "Reloaded preview; exporting XP skin payload..." : "Exporting XP skin payload...", "warn");
+        const tPayload = Date.now();
+        const useBundlePayload = isBundleMode();
+        const payloadUrl = useBundlePayload
+          ? "/api/workbench/web-skin-bundle-payload"
+          : "/api/workbench/web-skin-payload";
+        const payloadBody = useBundlePayload
+          ? { bundle_id: state.bundleId }
+          : { session_id: state.sessionId };
+        const r = await fetch(payloadUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payloadBody),
+        });
+        timings.fetch_payload_ms = Date.now() - tPayload;
+        const j = await r.json();
+        if (!r.ok) {
+          $("webbuildOut").textContent = JSON.stringify(j, null, 2);
+          status("Web skin payload failed", "err");
+          return;
+        }
+        status("Injecting XP into flat arena runtime...", "warn");
+        const tInject = Date.now();
+        let inject;
+        if (useBundlePayload) {
+          // Bundle injection: per-action XP bytes
+          if (OVERRIDE_MODE === "preboot") {
+            if (!(await resetWebbuildForPreboot())) {
+              status("Webbuild not ready after preboot reload", "err");
+              return;
+            }
+          }
+          const win = webbuildFrameWindow();
+          inject = await injectBundleIntoWebbuild(win, j);
+          if (OVERRIDE_MODE === "preboot") inject.preboot = true;
+        } else {
+          // Classic single-XP injection
+          const xpBytes = b64ToUint8Array(j.xp_b64 || "");
+          if (OVERRIDE_MODE === "preboot") {
+            if (!(await resetWebbuildForPreboot())) {
+              status("Webbuild not ready after preboot reload", "err");
+              return;
+            }
+            const win = webbuildFrameWindow();
+            inject = await injectXpBytesIntoWebbuild(win, xpBytes, {
+              override_names: j.override_names,
+              reload_player_name: String(j.reload_player_name || "player"),
+            });
+            inject.preboot = true;
+          } else {
+            const win = webbuildFrameWindow();
+            inject = await injectXpBytesIntoWebbuild(win, xpBytes, {
+              override_names: j.override_names,
+              reload_player_name: String(j.reload_player_name || "player"),
+            });
+          }
+        }
+        timings.inject_ms = Date.now() - tInject;
+        timings.total_ms = Date.now() - t0;
+        const payloadSummary = useBundlePayload
+          ? { actions: Object.fromEntries(Object.entries(j.actions || {}).map(([k, v]) => [k, { files: (v.override_names || []).length, bytes: v.xp_size_bytes }])), unmapped: j.unmapped_families }
+          : { override_names: normalizeWebbuildOverrideNames(j.override_names), xp_b64: `(<${(j.xp_b64 || "").length} base64 chars>)` };
+        $("webbuildOut").textContent = JSON.stringify({
+          timings,
+          prep,
+          payload: payloadSummary,
+          inject,
+          bundle_mode: useBundlePayload,
+        }, null, 2);
+        state.webbuild.ready = true;
+        updateWebbuildUI();
+        const modeLabel = useBundlePayload ? "bundle skin" : "web skin";
+        status(`Applied ${modeLabel} (${Math.round(timings.total_ms || 0)}ms)`, "ok");
+        setWebbuildState(`Webbuild ready (${modeLabel} applied)`, "ok");
+      } catch (e) {
+        try {
+          timings.total_ms = Date.now() - t0;
+          $("webbuildOut").textContent = JSON.stringify({
+            stage: "apply_current_xp_as_web_skin_exception",
+            error: String(e),
+            timings,
+            webbuild_state: String($("webbuildState")?.textContent || ""),
+          }, null, 2);
+        } catch (_e2) {
+          $("webbuildOut").textContent = String(e);
+        }
+        status("Web skin apply failed", "err");
+      }
+    });
   }
 
   async function testCurrentSkinInDock() {
-    if (!state.sessionId) {
+    if (!(await ensureRuntimePreflight({ refresh: true }))) return;
+    if (isBundleMode()) {
+      // Bundle mode: need at least the required enabled actions converted
+      const ts = getActiveTemplateSet();
+      if (ts) {
+        for (const [key, spec] of Object.entries(getEnabledActions(ts))) {
+          if (spec.required && (!state.actionStates[key] || state.actionStates[key].status !== "converted")) {
+            status(`Required action "${key}" not converted yet`, "warn");
+            return;
+          }
+        }
+      }
+    } else if (!state.sessionId) {
       status("Load a workbench session first", "warn");
       return;
     }
-    const frame = $("webbuildFrame");
-    if (frame && frame.classList.contains("hidden")) {
-      status("Opening flat preview and testing current skin...", "warn");
-    } else {
-      status("Reloading flat preview and testing current skin...", "warn");
-    }
+    status("Restarting flat test arena and testing current skin...", "warn");
     await applyCurrentXpAsWebSkin({
-      force_restart: !!(frame && !frame.classList.contains("hidden")),
+      force_restart: true,
       restart_if_overlay_hidden: true,
     });
   }
@@ -1009,6 +1307,7 @@
       status(`Skin dock busy: ${active} still running`, "warn");
       return;
     }
+    if (!(await ensureRuntimePreflight({ refresh: true }))) return;
     const input = $("webbuildUploadTestInput");
     if (!input) return;
     input.value = "";
@@ -1017,6 +1316,7 @@
 
   async function applyUploadedXpBytesToWebbuild(fileName, xpBytes) {
     await runWebbuildSkinAction("upload skin", async () => {
+      if (!(await ensureRuntimePreflight({ refresh: true }))) return;
       const override_names = WEBBUILD_DEFAULT_OVERRIDE_NAMES;
       let inject, prep = null;
       if (OVERRIDE_MODE === "preboot") {
@@ -5392,7 +5692,8 @@
       state.cells = [];
       state.gridCols = 0;
       state.gridRows = 0;
-      renderGrid();
+      renderLegacyGrid();
+      renderFrameGrid();
       status(`Action "${actionKey}" — upload a source image`, "warn");
     }
     renderBundleActionTabs();
@@ -5598,6 +5899,10 @@
         localStorage.setItem(VERIFY_CMD_TEMPLATE_STORAGE_KEY, $("verifyCommandTemplate").value || "");
       } catch (_e) {}
     });
+    $("uiRecorderStartBtn")?.addEventListener("click", startUiRecorder);
+    $("uiRecorderStopBtn")?.addEventListener("click", stopUiRecorder);
+    $("uiRecorderClearBtn")?.addEventListener("click", clearUiRecorder);
+    $("uiRecorderDownloadBtn")?.addEventListener("click", downloadUiRecorder);
     $("undoBtn").addEventListener("click", undo);
     $("redoBtn").addEventListener("click", redo);
 
@@ -6273,6 +6578,11 @@
       out.overrideMode = OVERRIDE_MODE;
       return out;
     },
+    startUiRecorder: () => startUiRecorder(),
+    stopUiRecorder: () => stopUiRecorder(),
+    clearUiRecorder: () => clearUiRecorder(),
+    getUiRecorder: () => getUiRecorderData(),
+    downloadUiRecorder: () => downloadUiRecorder(),
     openWebbuild: (forceFresh = true) => {
       openWebbuild({ force_fresh: forceFresh !== false });
       return true;
@@ -6544,6 +6854,9 @@
       return vals.join("|");
     },
   };
+  installUiRecorderHooks();
+  refreshUiRecorderUi();
+  if (UI_RECORDER_AUTO_START) startUiRecorder();
 
   bindUI();
   fetchRuntimePreflight().catch((_e) => {});

@@ -1,4 +1,4 @@
-var CACHE_NAME = 'asciicker-v9';
+var CACHE_NAME = 'asciicker-v7';
 var urlsToCache = [
   'fonts/cp437_6x6.png',
   'fonts/cp437_8x8.png',
@@ -26,19 +26,6 @@ self.addEventListener('install', function (event) {
       	return cache.addAll(urlsToCache);
       })
   );
-  self.skipWaiting();
-});
-
-self.addEventListener('activate', function (event) {
-  event.waitUntil(
-    caches.keys().then(function (names) {
-      return Promise.all(
-        names.filter(function (name) { return name !== CACHE_NAME; })
-             .map(function (name) { return caches.delete(name); })
-      );
-    })
-  );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', function (event) {

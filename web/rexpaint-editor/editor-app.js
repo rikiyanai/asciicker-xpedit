@@ -22,8 +22,14 @@ import { SelectTool } from './tools/select-tool.js';
 import { KeyboardHandler } from './keyboard-handler.js';
 import { UndoStack } from './undo-stack.js';
 import { LayerStack } from './layer-stack.js';
-import { XPFileReader } from './xp-file-reader.js';
-import { XPFileWriter } from './xp-file-writer.js';
+
+let XPFileReader = null;
+let XPFileWriter = null;
+
+if (typeof window === 'undefined') {
+  ({ XPFileReader } = await import('./xp-file-reader.js'));
+  ({ XPFileWriter } = await import('./xp-file-writer.js'));
+}
 
 export class EditorApp {
   /**
@@ -1040,6 +1046,9 @@ export class EditorApp {
    */
   loadXPFile(arrayBuffer) {
     try {
+      if (!XPFileReader) {
+        throw new Error('XP file loading is unavailable in the browser-mounted editor runtime');
+      }
       // Create and validate reader
       const reader = new XPFileReader(arrayBuffer);
 
@@ -1111,6 +1120,9 @@ export class EditorApp {
    */
   saveAsXP() {
     try {
+      if (!XPFileWriter) {
+        throw new Error('XP file export is unavailable in the browser-mounted editor runtime');
+      }
       // Verify LayerStack is initialized
       if (!this.layerStack || !this.layerStack.layers || this.layerStack.layers.length === 0) {
         throw new Error('No layers available to save');

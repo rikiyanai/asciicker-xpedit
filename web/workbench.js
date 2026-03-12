@@ -22,6 +22,8 @@
     [128, 0, 255],
     [128, 64, 0],
   ];
+  let rexpaintWorkbenchModal = null;
+  let rexpaintWorkbenchModulePromise = null;
   const OVERRIDE_MODE = String(params.get("overridemode") || "mounted").trim().toLowerCase();
   const WEBBUILD_DEFAULT_OVERRIDE_NAMES = (() => {
     if (OVERRIDE_MODE === "full_parity") {
@@ -3168,26 +3170,58 @@
   }
 
   function openInspector(row, col) {
-    state.inspectorOpen = true;
+    state.inspectorOpen = false;
     state.inspectorRow = Math.max(0, row);
     state.inspectorCol = Math.max(0, col);
     state.inspectorHover = null;
     state.inspectorLastHoverAnchor = null;
     const panel = $("cellInspectorPanel");
-    if (panel) panel.classList.remove("hidden");
-    renderInspector();
-    status(`Opened XP Editor for row=${state.inspectorRow} col=${state.inspectorCol}`, "ok");
-    try {
-      requestAnimationFrame(() => {
-        try { panel?.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (_e) {}
-        if (document.activeElement !== $("webbuildFrame")) {
-          try { $("cellInspectorCanvas")?.focus?.(); } catch (_e) {}
-        }
+    if (panel) panel.classList.add("hidden");
+    if (rexpaintWorkbenchModal?.close) {
+      try { rexpaintWorkbenchModal.close({ replaced: true }); } catch (_e) {}
+      rexpaintWorkbenchModal = null;
+    }
+    const targetRow = state.inspectorRow;
+    const targetCol = state.inspectorCol;
+    const info = frameColInfo(targetCol);
+    const subtitle = `row ${targetRow} | col ${targetCol} | proj ${info.proj + 1}/${Math.max(1, state.projs)} | frame ${info.frame + 1}/${info.semanticFrames}`;
+    status(`Opening XP Editor for row=${targetRow} col=${targetCol}`, "warn");
+    if (!rexpaintWorkbenchModulePromise) {
+      rexpaintWorkbenchModulePromise = import("/rexpaint-editor/workbench-editor-modal.js");
+    }
+    rexpaintWorkbenchModulePromise
+      .then(({ openWorkbenchEditorModal }) => openWorkbenchEditorModal({
+        title: "XP Editor",
+        subtitle,
+        frameWidth: state.frameWChars,
+        frameHeight: state.frameHChars,
+        matrix: inspectorFrameCellMatrix(targetRow, targetCol),
+        onSave: async (nextMatrix) => {
+          pushHistory();
+          writeFrameCellMatrix(targetRow, targetCol, nextMatrix);
+          renderAll();
+          await saveSessionState("rexpaint-editor-save");
+          status(`Applied XP Editor changes for row=${targetRow} col=${targetCol}`, "ok");
+        },
+        onClose: () => {
+          if (rexpaintWorkbenchModal) rexpaintWorkbenchModal = null;
+        },
+      }))
+      .then((handle) => {
+        rexpaintWorkbenchModal = handle;
+        status(`Opened XP Editor for row=${targetRow} col=${targetCol}`, "ok");
+      })
+      .catch((err) => {
+        console.error("Failed to open XP editor modal:", err);
+        status(`XP Editor failed to open: ${err}`, "err");
       });
-    } catch (_e) {}
   }
 
   function closeInspector() {
+    if (rexpaintWorkbenchModal?.close) {
+      try { rexpaintWorkbenchModal.close({ cancelled: true }); } catch (_e) {}
+      rexpaintWorkbenchModal = null;
+    }
     commitInspectorStrokeIfNeeded();
     state.inspectorOpen = false;
     state.inspectorSelecting = false;

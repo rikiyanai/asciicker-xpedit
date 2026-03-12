@@ -183,10 +183,13 @@ async function main() {
     };
     const locator = page.locator("#bundleActionTabs button").filter({ hasText: labelMap[actionKey] });
     await locator.first().click();
-    await page.waitForFunction((key) => {
-      return !!(window.__wb_debug && typeof window.__wb_debug.getState === "function"
-        && window.__wb_debug.getState().activeActionKey === key);
-    }, actionKey, { timeout: 15000 });
+    await page.waitForFunction(({ key, pattern }) => {
+      const uploadLabel = String(document.getElementById("uploadPanelLabel")?.textContent || "");
+      const btns = Array.from(document.querySelectorAll("#bundleActionTabs button"));
+      const active = btns.find((btn) => btn.classList.contains("primary"));
+      const activeText = String(active?.textContent || "");
+      return uploadLabel.trim() === `Upload for ${key}` || new RegExp(pattern, "i").test(activeText);
+    }, { key: actionKey, pattern: labelMap[actionKey].source }, { timeout: 15000 });
     logEvent("bundle_tab:select", { actionKey });
   }
 

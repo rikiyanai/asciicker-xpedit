@@ -216,10 +216,11 @@ export class EditorApp {
       return;
     }
 
-    if (this.activeTool && this.activeTool.name) {
+    const toolName = this.activeTool?.name || this.activeTool?.constructor?.name || '';
+    if (toolName) {
       // Remove 'Tool' suffix if present (e.g., 'CellTool' -> 'Cell')
-      const toolName = this.activeTool.name.replace(/Tool$/, '');
-      this.statusBar.toolDisplay.textContent = `Tool: ${toolName}`;
+      const displayName = toolName.replace(/Tool$/, '');
+      this.statusBar.toolDisplay.textContent = `Tool: ${displayName}`;
     } else {
       this.statusBar.toolDisplay.textContent = 'Tool: Cell';
     }
@@ -569,8 +570,12 @@ export class EditorApp {
     this._updateToolDisplay();
 
     // Tell canvas about the active tool
-    if (this.canvas && typeof this.canvas.setActiveTool === 'function') {
-      this.canvas.setActiveTool(tool);
+    if (this.canvas) {
+      if (typeof this.canvas.setActiveTool === 'function') {
+        this.canvas.setActiveTool(tool);
+      } else if (typeof this.canvas.toolActivated === 'function') {
+        this.canvas.toolActivated(tool);
+      }
     }
 
     // After tool activation, if it's SelectTool, register it with canvas for visualization

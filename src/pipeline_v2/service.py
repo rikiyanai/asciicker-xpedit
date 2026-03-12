@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import logging
 import math
 import os
 import shlex
@@ -12,6 +13,7 @@ import threading
 import time
 import uuid
 from dataclasses import asdict
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -935,8 +937,7 @@ def load_template_registry() -> dict[str, Any]:
     if not reg_path.exists():
         _template_registry = {"template_sets": {}}
         return _template_registry
-    import json
-    _template_registry = json.loads(reg_path.read_text(encoding="utf-8"))
+    _template_registry = load_json(reg_path)
     # Validate L0 reference checksums at load time
     for ts_key, ts in _template_registry.get("template_sets", {}).items():
         for act_key, act in ts.get("actions", {}).items():
@@ -972,7 +973,6 @@ def _load_reference_l0(family: str) -> list[Cell] | None:
         return None
     actual_sha = _sha256(full_path)
     if l0_ref_sha256 and actual_sha != l0_ref_sha256:
-        import logging
         logging.warning(
             "L0 reference checksum mismatch for family '%s': expected %s, got %s",
             family, l0_ref_sha256, actual_sha,
@@ -1022,7 +1022,6 @@ def create_bundle(template_set_key: str, req_id: str) -> dict[str, Any]:
             f"unknown template_set_key: {template_set_key}",
             "invalid_template_set", "workbench", req_id, 422,
         )
-    from datetime import UTC, datetime
     bundle_id = f"b-{uuid.uuid4()}"
     now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     actions: dict[str, BundleActionState] = {}
@@ -1047,7 +1046,6 @@ def load_bundle(bundle_id: str, req_id: str) -> BundleSession:
 
 
 def save_bundle(bundle: BundleSession) -> None:
-    from datetime import UTC, datetime
     bundle.updated_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     save_json(_bundle_path(bundle.bundle_id), bundle.to_dict())
 

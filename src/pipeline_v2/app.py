@@ -28,6 +28,7 @@ from .service import (
     workbench_load_from_job,
     workbench_save_session,
     workbench_export_xp,
+    workbench_upload_xp,
     workbench_xp_tool_command,
     workbench_open_in_xp_tool,
     workbench_run_verification,
@@ -351,6 +352,24 @@ def create_app() -> Flask:
             if not session_id:
                 raise ApiError("session_id is required", "missing_session_id", "workbench", req_id, 400)
             return jsonify(workbench_export_xp(session_id, req_id)), 200
+        except ApiError as e:
+            return _err(e)
+
+    @app.post("/api/workbench/upload-xp")
+    def api_wb_upload_xp():
+        req_id = str(uuid.uuid4())
+        try:
+            if "file" not in request.files:
+                raise ApiError("file field is required", "missing_file", "workbench", req_id, 400)
+            file = request.files["file"]
+            if not file or not file.filename:
+                raise ApiError("no file selected", "no_file", "workbench", req_id, 400)
+            if not file.filename.lower().endswith(".xp"):
+                raise ApiError("file must have .xp extension", "invalid_extension", "workbench", req_id, 400)
+            xp_bytes = file.read()
+            if not xp_bytes:
+                raise ApiError("file is empty", "empty_file", "workbench", req_id, 400)
+            return jsonify(workbench_upload_xp(xp_bytes, req_id)), 201
         except ApiError as e:
             return _err(e)
 

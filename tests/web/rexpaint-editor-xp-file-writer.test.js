@@ -8,7 +8,7 @@
  * - Dimensions are validated before writing
  * - Layer encoding works in column-major format
  * - Gzip compression is applied correctly
- * - Cell data is properly formatted (7 bytes per cell)
+ * - Cell data is properly formatted (10 bytes per cell since a26be4a — fixtures below still use legacy 7-byte layout)
  */
 
 import { XPFileWriter } from '../../web/rexpaint-editor/xp-file-writer.js';
@@ -344,7 +344,7 @@ runner.describe('Compression', () => {
     const buffer = writer.write();
 
     // Total size should be reasonable for compressed data
-    // 80x25 = 2000 cells * 7 bytes = 14000 bytes uncompressed
+    // 80x25 = 2000 cells — STALE: uses 7-byte cells, production now uses 10 bytes (a26be4a)
     // Should be much smaller compressed
     runner.assertGreaterThan(buffer.byteLength, 32, 'Should have content');
   });

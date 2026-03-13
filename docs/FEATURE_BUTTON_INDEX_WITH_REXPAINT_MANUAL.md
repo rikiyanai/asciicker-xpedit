@@ -1,7 +1,9 @@
 # Feature Button Index & REXPaint Reference Manual
 
+> Audit status (2026-03-13): references to `EditorApp.loadXPFile` / `saveAsXP` below describe the standalone module in `web/rexpaint-editor/*` or the planned flow, not proof of live workbench integration on `master`. The live workbench still uses the legacy inspector in `web/workbench.js`. Test watchdog status is not current — tests are not runnable under the repo's CommonJS package config (ESM import mismatch).
+
 **Generated:** 2026-03-09
-**Status:** Week 1 Testing - Watchdog All Green ✅
+**Status:** Week 1 Testing - Watchdog All Green ✅ (see audit note above)
 
 ---
 

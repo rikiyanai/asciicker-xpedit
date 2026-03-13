@@ -1,5 +1,7 @@
 # Deliverable Audit Report — Critical Issues Found
 
+> Audit status (2026-03-13): Issue 1 (7-byte vs 10-byte XP cell format) was fixed in commit `a26be4a`. The JS reader/writer now uses 10-byte REXPaint cells. Test fixtures in `tests/web/` still construct 7-byte binary blobs — that is a deferred code issue, not a doc issue. Issue 2 (magic number) was a doc-only error, already noted below.
+
 **Date:** 2026-03-10
 **Auditor:** Claude Code
 **Status:** ⚠️ **CRITICAL ISSUES IDENTIFIED**
@@ -17,7 +19,7 @@
 
 ## Critical Issues Found
 
-### ISSUE 1: XP Cell Format Mismatch (CRITICAL)
+### ISSUE 1: XP Cell Format Mismatch (CRITICAL) — SUPERSEDED by a26be4a
 
 **Severity:** 🔴 CRITICAL — Binary format incompatibility
 
@@ -75,6 +77,8 @@ If JavaScript tries to load this file with 7-byte assumption, it will read past 
 - Update JavaScript reader to use `BYTES_PER_CELL = 10`
 - Update JavaScript writer to write glyph as 4-byte uint32 (little-endian)
 - Update documentation to reflect the correct 10-byte format
+
+> **2026-03-13 update:** Fixed in commit `a26be4a`. JS reader/writer now uses 10-byte cells (glyph as uint32). Test fixtures in `tests/web/` still construct 7-byte blobs — this is a deferred code issue tracked in the handoff.
 
 ---
 

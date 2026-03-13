@@ -476,8 +476,8 @@ function createValidXPBufferWithLayerData() {
 
   // Build uncompressed cell data: 10x5 canvas = 50 cells
   // Column-major order: x=0 (y=0..4), x=1 (y=0..4), etc.
-  // Each cell: 7 bytes (glyph + fg_rgb + bg_rgb)
-  const layerDataSize = 10 * 5 * 7; // 350 bytes
+  // STALE: was 7 bytes, now 10 bytes per cell (glyph_u32 + fg_rgb + bg_rgb) since a26be4a
+  const layerDataSize = 10 * 5 * 7; // 350 bytes — STALE: fixture still uses 7-byte layout
   const cellData = new Uint8Array(layerDataSize);
   let offset = 0;
   for (let x = 0; x < 10; x++) {

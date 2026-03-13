@@ -1,7 +1,9 @@
 # Revised Design Brief: Embedded XP Editor (Workbench-Only)
 
+> Audit status (2026-03-13): this file is still a design brief, not a description of shipped `master` behavior. On `master` at `5caeb07`, workbench editing still runs through the legacy inspector in `web/workbench.js`; `EditorApp` is not wired into the live workbench flow.
+
 **Date:** 2026-03-04
-**Constraint Change:** No standalone mode. The editor replaces `#cellInspectorPanel` inside `workbench.html`. All existing workbench panels (grid, source, bundle/template, skin test dock) are preserved.
+**Constraint Change:** No standalone mode. Target state: the editor would replace `#cellInspectorPanel` inside `workbench.html`. All existing workbench panels (grid, source, bundle/template, skin test dock) are preserved.
 
 ---
 
@@ -20,7 +22,7 @@
 - Canvas resize dialog (dimensions locked by family contract in embedded mode)
 - `mode: 'standalone'` constructor option and dual-mode API
 
-### ADDED (workbench integration features)
+### ADDED (planned workbench integration features)
 - Grid panel <-> editor frame sync (grid click loads frame, editor edits write back)
 - Frame navigation from within editor (prev/next angle/frame buttons, matching grid selection)
 - Session save integration (edits trigger `saveSessionState()` through existing debounce path)
@@ -208,10 +210,10 @@ These are the critical sync points where the grid panel and editor must coordina
 - **pako.js**: Gzip library for client-side XP codec (~45KB minified). Or native CompressionStream for modern browsers.
 
 ### No New Server Endpoints
-All existing endpoints are sufficient. The editor operates on client-side cell data and saves via existing `POST /api/workbench/save-session`.
+Planned assumption: existing endpoints may be sufficient because the editor can operate on client-side cell data and save via existing `POST /api/workbench/save-session`. As of the 2026-03-13 audit, this has not been proven by a live `EditorApp` integration on `master`.
 
 ### No New MCP Tools
-The existing 12 xp-tool + 17 workbench-api MCP tools are sufficient. The browser editor handles interactive editing; Claude handles batch operations and validation via MCP.
+Planned assumption: the existing 12 xp-tool + 17 workbench-api MCP tools may be sufficient. As of the 2026-03-13 audit, the live browser automation surface is still `window.__wb_debug` for the legacy inspector rather than a first-class `EditorApp` API.
 
 ---
 

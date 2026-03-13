@@ -1,5 +1,7 @@
 # Grid Panel + REXPaint Editor Integration Analysis
 
+> Audit status (2026-03-13): this file accurately describes the legacy XP inspector path living inside `web/workbench.js`, but it should not be read as evidence that `EditorApp` is already embedded in the live workbench on `master`.
+
 ## 1. Current Architecture Summary
 
 ### Data Model: Flat Cell Array with Virtual Frame Grid
@@ -71,7 +73,7 @@ The workbench has a layer stack (`state.layers[]`):
 
 ---
 
-## 3. Cell Inspector (XP Editor) Implementation
+## 3. Legacy Cell Inspector (Current Shipped XP Editing Path)
 
 ### Opening the Inspector
 - **openInspector(row, col)** (line 2985): Sets `inspectorOpen=true`, stores `inspectorRow/Col`, unhides `#cellInspectorPanel`, calls `renderInspector()`.
@@ -232,7 +234,7 @@ Rationale:
 
 **Recommendation: Keep the current layer compositing model (`cellForRender` composites visible layers) but show layer toggle controls within the editor panel.**
 
-The current implementation already does this — `renderInspector()` calls `cellForRender()` which respects `state.visibleLayers`. The editor shows composited output but only edits layer 2. This matches REXPaint's layer model well.
+The current legacy inspector already does this — `renderInspector()` calls `cellForRender()` which respects `state.visibleLayers`. On `master` as of the 2026-03-13 audit, this statement does not apply to `EditorApp` integration because `EditorApp` is still a separate codepath.
 
 ---
 

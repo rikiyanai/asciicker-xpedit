@@ -1,5 +1,7 @@
 # Claude Handoff - Current State (2026-03-11)
 
+> Historical note (2026-03-13): this remains the canonical branch/bundle history handoff for restore-line debugging, but it is not the default source for current editor implementation status on audited `master`. Start with `docs/INDEX.md` and the 2026-03-13 editor/doc handoff for that workflow.
+
 ## 2026-03-12 Addendum - Canonical Bundle Checkpoint
 
 This document remains useful for branch-history context, but the canonical bundle checkpoint is now narrower and more specific than this handoff originally stated.

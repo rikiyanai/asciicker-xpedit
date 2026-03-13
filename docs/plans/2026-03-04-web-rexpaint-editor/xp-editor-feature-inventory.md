@@ -1,7 +1,9 @@
 # Web REXPaint XP Editor — Complete Feature Inventory
 
-**Status:** Ground truth for Phase 1-8 implementation
-**Last Updated:** 2026-03-08
+> Audit status (2026-03-13): this file is useful as a feature inventory, but the implementation tracker below had drifted. On `master` at `5caeb07`, `EditorApp` is still not embedded into live workbench, `EditorApp.undo()` / `redo()` are TODO stubs, and the test files are not runnable as documented under the current CommonJS package configuration.
+
+**Status:** Historical feature inventory with audit corrections
+**Last Updated:** 2026-03-13
 **Total Features:** 40 (16 Tier 1 + 16 Tier 2 + 8 Tier 3)
 **Target Implementation:** Phases 1-8 (Tier 1 by Phase 2, Tier 2 by Phase 6, Tier 3 by Phase 8)
 
@@ -240,13 +242,13 @@ When deployed as full-page XP editor within workbench:
 
 ---
 
-## IMPLEMENTATION STATUS TRACKER (Updated 2026-03-10)
+## IMPLEMENTATION STATUS TRACKER (Audit-corrected 2026-03-13)
 
 ### Summary
-- **Tier 1 (16 features):** 14/16 COMPLETE (87.5%) ✅
-- **Tier 2 (16 features):** 4/16 COMPLETE (25%) ⚠️
-- **Tier 3 (8 features):** 2/8 COMPLETE (25%) ⚠️
-- **Overall:** 20/40 COMPLETE (50%) 🔄
+- The standalone `web/rexpaint-editor/*` module has substantial implementation, but the live workbench on `master` still uses the legacy inspector path.
+- Undo/redo should not be counted complete for `EditorApp`; the methods are still TODO stubs in `web/rexpaint-editor/editor-app.js`.
+- Test counts below should not be treated as current verification evidence until the CommonJS/ESM runner mismatch and stale 7-byte XP fixtures are corrected.
+- Treat the tables below as a planning inventory, not as a release-ready completion report.
 
 ### Tier 1 Status: MVP Features
 
@@ -258,8 +260,8 @@ When deployed as full-page XP editor within workbench:
 | 4 | BG Color Selection | ✅ DONE | `palette.js` | ✅ 2 | RMB palette click, swatch update |
 | 5 | Color Picker (HSV/RGB) | ⚠️ PARTIAL | `palette.js` | ⚠️ 1 | Native HTML picker works, custom HSV UI pending |
 | 6 | Apply Mode Toggles | ✅ DONE | `editor-app.js` | ✅ 2 | G/F/B buttons, independent channels |
-| 7 | Undo | ✅ DONE | `undo-stack.js` | ✅ 2 | Ctrl+Z/Ctrl+Y, max 50 history |
-| 8 | Redo | ✅ DONE | `undo-stack.js` | ✅ 1 | Works with undo, clears on new edit |
+| 7 | Undo | ❌ NOT IMPLEMENTED IN `EditorApp` | `editor-app.js` | ⚠️ stale | `EditorApp.undo()` is still a TODO stub; `undo-stack.js` exists but is not wired as a completed user-facing feature in the audited path |
+| 8 | Redo | ❌ NOT IMPLEMENTED IN `EditorApp` | `editor-app.js` | ⚠️ stale | `EditorApp.redo()` is still a TODO stub |
 | 9 | Layer Visibility Toggle | ✅ DONE | `layer-stack.js` | ✅ 2 | Eye icon, 1-9 keys |
 | 10 | Layer Selection | ✅ DONE | `editor-app.js` | ✅ 2 | Activate layer for editing |
 | 11 | Line Draw | ✅ DONE | `line-tool.js` | ✅ 3 | Bresenham, preview, L shortcut |
@@ -269,7 +271,7 @@ When deployed as full-page XP editor within workbench:
 | 15 | Grid Toggle | ✅ DONE | `canvas.js` | ✅ 1 | Ctrl+G overlay, 0.5px lines |
 | 16 | Canvas Pan | ✅ DONE | `canvas.js` | ✅ 2 | Spacebar+drag, offset clamping |
 
-**Tier 1 Gap:** Feature #5 (HSV/RGB picker) — native HTML color input works, but custom RGB/HSV numeric input UI not yet built.
+**Tier 1 Gaps:** Feature #5 (custom HSV/RGB picker) remains partial, and features #7-8 (undo/redo) should not be treated as complete in `EditorApp`.
 
 ### Tier 2 Status: High-Priority Features
 

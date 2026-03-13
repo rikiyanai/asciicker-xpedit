@@ -30,10 +30,12 @@ If the branch role is unknown, the agent must stop making fix claims and audit b
 Use sources in this order:
 
 1. `AGENTS.md`
-2. this file
-3. current live branch/worktree state
-4. [2026-03-11-CLAUDE-HANDOFF-CURRENT-STATE.md](/Users/r/Downloads/asciicker-pipeline-v2/docs/2026-03-11-CLAUDE-HANDOFF-CURRENT-STATE.md)
-5. focused bug handoff docs such as:
+2. [docs/INDEX.md](/Users/r/Downloads/asciicker-pipeline-v2/docs/INDEX.md)
+3. this file
+4. `CLAUDE.md`
+5. current live branch/worktree state
+6. latest task-relevant handoff
+7. focused bug handoff docs such as:
    - `docs/WORKBENCH_IFRAME_KEYBOARD_STUCK_HANDOFF.md`
    - `docs/CLAUDE_RESEARCH_DUMP_WORKBENCH_MOVE_FREEZE_2026-02-27.md`
    - relevant docs under `docs/plans/`
@@ -212,11 +214,20 @@ If no handoff was updated, the session is incomplete.
 
 ## 11. First Read For Current Repo State
 
-For the current known branch confusion, agents should read this file first:
+Start with the canonical hub and then pick the task-specific handoff:
+
+- [docs/INDEX.md](/Users/r/Downloads/asciicker-pipeline-v2/docs/INDEX.md)
+
+For editor/doc status work on audited `master`, read:
+
+- [2026-03-13-CLAUDE-HANDOFF-EDITOR-DOC-ALIGNMENT.md](/Users/r/Downloads/asciicker-pipeline-v2/docs/2026-03-13-CLAUDE-HANDOFF-EDITOR-DOC-ALIGNMENT.md)
+- [2026-03-13 claim verification](/Users/r/Downloads/asciicker-pipeline-v2/docs/research/ascii/2026-03-13-claim-verification.md)
+
+For the branch confusion and restore/bundle history, read:
 
 - [2026-03-11-CLAUDE-HANDOFF-CURRENT-STATE.md](/Users/r/Downloads/asciicker-pipeline-v2/docs/2026-03-11-CLAUDE-HANDOFF-CURRENT-STATE.md#L1)
 
-That document explains:
+That older handoff explains:
 
 - why `feat/workbench-mcp-server` is not the full restore line
 - why `restore/bundle-override-filter-8279e11` matters

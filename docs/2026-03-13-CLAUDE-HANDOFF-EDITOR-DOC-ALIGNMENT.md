@@ -52,6 +52,7 @@ For editor/doc truth on audited `master`:
 
 - live workbench editing still uses the legacy inspector in `web/workbench.js`
 - `EditorApp` exists in `web/rexpaint-editor/*` but is not embedded into shipped workbench on audited `master`
+- the editor modal UI is still not REXPaint-parity UI; the finding that the modal/editor UX needs to match REXPaint more closely remains valid
 - JS XP codec code now uses 10-byte REXPaint cells
 - `window.__wb_debug` is the live browser automation surface for the legacy inspector path
 
@@ -79,6 +80,7 @@ For editor/doc truth on audited `master`:
 
 - `docs/research/ascii/2026-03-13-claim-verification.md`
   - records the main contradictions between recent Claude/editor docs and current code
+  - does not invalidate the broader product finding that the shipped editor modal/UI is still wrong for REXPaint-parity goals
 
 ### Doc corrections applied (follow-up pass)
 
@@ -126,6 +128,11 @@ For editor/doc truth on audited `master`:
 
 - No runtime/browser validation of the workbench UI in this doc-alignment pass.
 - No editor test suite pass. Direct `node tests/...` execution is still broken under the current CommonJS package configuration while those test files use ESM `import`.
+- No end-to-end XP fidelity validation exists for the core editor workflow:
+  - read an original XP
+  - attempt recreation or editing using only editor buttons / exposed browser API
+  - export or read back the resulting XP
+  - compare the resulting XP against the original XP for fidelity
 
 ---
 
@@ -133,7 +140,9 @@ For editor/doc truth on audited `master`:
 
 - `master` should still be treated as `stale/unknown` for bundle-restore truth unless the task explicitly re-audits branch/runtime state.
 - `EditorApp` and the live workbench inspector remain separate implementations.
+- The editor modal UI remains materially different from REXPaint and should not be treated as UX-complete even where underlying modules exist.
 - The new canonical stack exists, but more old docs may still need historical labeling as future cleanup.
+- Actual XP-file gameplay/editor fidelity is still unproven. There is no authoritative end-to-end test that imports an XP, recreates/edits it only through editor controls or browser API, and compares the result back to the source XP.
 
 ### Deferred code issues (7-byte XP test fixtures)
 

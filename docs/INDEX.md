@@ -113,3 +113,5 @@ No distinct palette asset files (`.pal`, `palette.json`, etc.) exist in the repo
 - Some tests and docs still contain obsolete 7-byte XP assumptions even though current JS XP codec code uses 10-byte REXPaint cells. Three test files (`tests/web/rexpaint-editor-xp-file-{reader,writer,integration}.test.js`) construct actual 7-byte binary XP blobs in their fixtures — this is a deferred code issue.
 - All editor test files use ESM `import` statements but the repo's `package.json` declares `"type": "commonjs"`, so direct `node tests/...` execution fails with `SyntaxError`.
 - `EditorApp` exists in `web/rexpaint-editor/*`, but the live workbench on audited `master` still edits through the legacy inspector in `web/workbench.js`.
+- The finding that the editor modal/UI is still wrong for REXPaint-parity goals remains valid; existence of `EditorApp` modules does not mean the shipped UI matches REXPaint.
+- XP-file fidelity is still not proven end-to-end. No canonical test currently exists for `read XP -> recreate/edit using only editor controls or browser API -> compare output XP to source XP`.

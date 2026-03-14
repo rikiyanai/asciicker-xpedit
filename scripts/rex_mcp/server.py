@@ -19,11 +19,11 @@ mcp = FastMCP("rex_manager")
 
 REXPAINT_WINE_PATH = os.environ.get(
     "WINE_PATH",
-    "/Applications/Wine Crossover.app/Contents/Resources/wine/bin/wine"
+    ""
 )
 REXPAINT_EXE_PATH = os.environ.get(
     "REXPAINT_EXE_PATH",
-    "/Users/r/Desktop/wine-11.0/REXPaint-v1.70/REXPaint.exe"
+    ""
 )
 REXPAINT_EXE_DIR = os.path.dirname(REXPAINT_EXE_PATH)
 WINE_PROCESS_NAME = os.environ.get("WINE_PROCESS_NAME", "wine-preloader")
@@ -49,8 +49,12 @@ def launch_rexpaint() -> str:
     if is_rexpaint_running():
         return "REXPaint is already running."
 
+    if not REXPAINT_WINE_PATH:
+        return "Error: WINE_PATH is not set."
     if not os.path.exists(REXPAINT_WINE_PATH):
         return f"Error: Wine not found at {REXPAINT_WINE_PATH}"
+    if not REXPAINT_EXE_PATH:
+        return "Error: REXPAINT_EXE_PATH is not set."
     if not os.path.exists(REXPAINT_EXE_PATH):
         return f"Error: REXPaint.exe not found at {REXPAINT_EXE_PATH}"
 

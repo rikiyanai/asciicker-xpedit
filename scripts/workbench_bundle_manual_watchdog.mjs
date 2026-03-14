@@ -8,9 +8,9 @@ import { pathToFileURL } from "node:url";
 function parseArgs(argv) {
   const out = {
     url: "http://127.0.0.1:5071/workbench",
-    idlePng: "/Users/r/Desktop/SMALLTESTPNGs/midi-bn.png",
-    attackPng: "/Users/r/Desktop/SMALLTESTPNGs/werewolf-NESW.png",
-    deathPng: "/Users/r/Desktop/SMALLTESTPNGs/Screenshot 2026-02-22 at 00.46.13.png",
+    idlePng: "",
+    attackPng: "",
+    deathPng: "",
     headed: false,
     timeoutSec: 300,
     moveSec: 10,
@@ -41,6 +41,9 @@ async function loadPlaywright() {
 }
 
 async function ensureFile(p, label) {
+  if (!p) {
+    throw new Error(`${label} missing: pass --${label.toLowerCase().replace(/\s+/g, "-")} /absolute/path/to/file.png`);
+  }
   try {
     const st = await fs.stat(p);
     if (!st.isFile()) throw new Error("not a file");
@@ -73,9 +76,9 @@ function parseFlatMapTraceLine(text) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const idlePng = path.resolve(args.idlePng);
-  const attackPng = path.resolve(args.attackPng);
-  const deathPng = path.resolve(args.deathPng);
+  const idlePng = args.idlePng ? path.resolve(args.idlePng) : "";
+  const attackPng = args.attackPng ? path.resolve(args.attackPng) : "";
+  const deathPng = args.deathPng ? path.resolve(args.deathPng) : "";
   const actionSequence = [
     { actionKey: "attack", pngPath: attackPng, doneCount: 1 },
     { actionKey: "death", pngPath: deathPng, doneCount: 2 },

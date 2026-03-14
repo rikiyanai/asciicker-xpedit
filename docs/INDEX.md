@@ -2,6 +2,12 @@
 
 Canonical doc hub for agents working in `/Users/r/Downloads/asciicker-pipeline-v2`.
 
+## Non-Negotiable Constraints
+
+- **Self-containment**: This repo must be 100% self-contained. No runtime, test, or build-time dependency on external folders (e.g. `/Users/r/Downloads/asciicker-Y9-2`, `/Users/r/Downloads/n`).
+- All sprites, runtime assets, `.web` files, `.a3d` maps, fonts — everything the workbench needs must live inside this repo.
+- Symlinks pointing outside the repo are violations.
+
 ## Current Branch Truth
 
 - Audit date: 2026-03-13
@@ -9,6 +15,7 @@ Canonical doc hub for agents working in `/Users/r/Downloads/asciicker-pipeline-v
 - Audited branch: `master`
 - Audited HEAD before doc-alignment commits: `5caeb07`
 - Branch role on this worktree: `stale/unknown` for bundle-restore truth until a task-specific audit proves otherwise
+- **Self-containment**: This repo must be 100% self-contained. No runtime, test, or build-time dependency on external folders (e.g. `/Users/r/Downloads/asciicker-Y9-2`, `/Users/r/Downloads/n`). Run `python3 scripts/self_containment_audit.py` at startup.
 
 Do not assume `master` is the canonical restore/bundle line. For bundle/runtime issues, read the branch-history handoff below before making fix claims.
 
@@ -31,11 +38,18 @@ If a lower-priority doc conflicts with a higher-priority source or with current 
 - `AGENTS.md`
 - `docs/AGENT_PROTOCOL.md`
 - `CLAUDE.md`
+- `python3 scripts/conductor_tools.py status --auto-setup`
+- `python3 scripts/self_containment_audit.py`
 
 ### Editor/doc status or plan audits
 
 - `docs/research/ascii/2026-03-13-claim-verification.md`
 - `docs/2026-03-13-CLAUDE-HANDOFF-EDITOR-DOC-ALIGNMENT.md`
+
+### XP fidelity harness planning
+
+- `docs/2026-03-14-CLAUDE-HANDOFF-XP-FIDELITY-PLAN.md`
+- `docs/plans/2026-03-13-xp-fidelity-test.md`
 
 ### Bundle/runtime/restore regressions
 
@@ -44,6 +58,8 @@ If a lower-priority doc conflicts with a higher-priority source or with current 
 
 ## Active High-Signal Docs
 
+- `docs/2026-03-14-CLAUDE-HANDOFF-XP-FIDELITY-PLAN.md`
+  - current resume point for XP fidelity harness planning; records the correct worktree and current branch state
 - `docs/2026-03-13-CLAUDE-HANDOFF-EDITOR-DOC-ALIGNMENT.md`
   - current Claude resume point for doc alignment and editor-status truth
 - `docs/research/ascii/2026-03-13-claim-verification.md`
@@ -68,6 +84,8 @@ If a lower-priority doc conflicts with a higher-priority source or with current 
 
 ## Editor Planning & Research
 
+- `docs/plans/2026-03-13-xp-fidelity-test.md`
+  - current XP fidelity harness plan; direction is `upload-xp` single-frame only on `master`, while `feat/xp-fidelity-harness` already carries the `upload-xp -> job_id` prerequisite
 - `docs/plans/2026-03-04-web-rexpaint-editor/claude-workbench-ui-inventory.md`
   - exhaustive workbench.html/js UI element inventory (189 elements, handler-level detail)
 - `docs/plans/2026-03-04-web-rexpaint-editor/claude-cp437-font-research.md`
@@ -115,3 +133,4 @@ No distinct palette asset files (`.pal`, `palette.json`, etc.) exist in the repo
 - `EditorApp` exists in `web/rexpaint-editor/*`, but the live workbench on audited `master` still edits through the legacy inspector in `web/workbench.js`.
 - The finding that the editor modal/UI is still wrong for REXPaint-parity goals remains valid; existence of `EditorApp` modules does not mean the shipped UI matches REXPaint.
 - XP-file fidelity is still not proven end-to-end. No canonical test currently exists for `read XP -> recreate/edit using only editor controls or browser API -> compare output XP to source XP`.
+- Self-containment is now machine-enforced via `scripts/self_containment_audit.py` and installable git hooks in `.githooks/`. Blocking findings are external symlinks and live/build/runtime/test references to absolute paths outside this repo.

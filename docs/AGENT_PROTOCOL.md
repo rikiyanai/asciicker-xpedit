@@ -23,6 +23,13 @@ Before doing any debugging, testing, restore work, or merge planning, the agent 
 
 If the branch role is unknown, the agent must stop making fix claims and audit branch reality first.
 
+Mandatory startup commands:
+
+1. `python3 scripts/conductor_tools.py status --auto-setup`
+2. `python3 scripts/self_containment_audit.py`
+
+If the self-containment audit fails, the agent must treat that as a blocking repo-state defect for any task that would rely on runtime, build, test, or asset paths.
+
 ---
 
 ## 2. Canonical Sources
@@ -46,18 +53,33 @@ Old summary docs are supporting evidence, not branch truth.
 
 ## 3. Cross-Repo Isolation
 
+**This repo must be self-contained.** Never reference, symlink, or depend on external folders at runtime or build time. If you need assets from the game source, copy them into the repo and commit them.
+
 Agents must not:
 
 - import code or tools from a different repo path unless the user explicitly asked for that
 - run Playwright from another checkout
 - read fixtures from another repo to "make the current repo work"
 - treat another repo's `node_modules`, scripts, or runtime assets as canonical for this repo
+- reference, symlink, or hardcode paths to external folders (e.g. `/Users/r/Downloads/asciicker-Y9-2`, `/Users/r/Downloads/n`)
+- use build scripts that pull assets from outside this repo
 
 Concrete example of forbidden behavior:
 
 - writing `/tmp/headed-test.mjs` that imports Playwright from `/Users/r/Downloads/asciicker-Y9-2/node_modules/playwright/index.js`
+- a build script that reads `.web` files or sprites from `/Users/r/Downloads/asciicker-Y9-2/`
+- symlinks under `runtime/` or `sprites/` that point outside this repo
 
-If a required dependency is missing in this repo, the agent must say so explicitly.
+If a required dependency or asset is missing in this repo, the agent must say so explicitly — not silently reach outside the repo to find it.
+
+Enforcement:
+
+- install hooks with `bash scripts/install_self_containment_hooks.sh`
+- hooks run `python3 scripts/self_containment_audit.py` on `pre-commit` and `pre-push`
+- blocking findings:
+  - symlinks that resolve outside the repo
+  - live/build/runtime/test files that reference absolute paths outside the repo
+- historical doc references are warnings by default and can be made blocking with `python3 scripts/self_containment_audit.py --strict-docs`
 
 ---
 
@@ -222,6 +244,10 @@ For editor/doc status work on audited `master`, read:
 
 - [2026-03-13-CLAUDE-HANDOFF-EDITOR-DOC-ALIGNMENT.md](/Users/r/Downloads/asciicker-pipeline-v2/docs/2026-03-13-CLAUDE-HANDOFF-EDITOR-DOC-ALIGNMENT.md)
 - [2026-03-13 claim verification](/Users/r/Downloads/asciicker-pipeline-v2/docs/research/ascii/2026-03-13-claim-verification.md)
+
+For XP fidelity harness planning, read:
+
+- [2026-03-14-CLAUDE-HANDOFF-XP-FIDELITY-PLAN.md](/Users/r/Downloads/asciicker-pipeline-v2/docs/2026-03-14-CLAUDE-HANDOFF-XP-FIDELITY-PLAN.md)
 
 For the branch confusion and restore/bundle history, read:
 

@@ -4,8 +4,8 @@
     "command": "python3",
     "args": ["scripts/rex_mcp/server.py"],
     "env": {
-      "WINE_PATH": "/Users/r/Desktop/wine-11.0/wine",
-      "REXPAINT_EXE_PATH": "/Users/r/Downloads/REXPaint/REXPaint.exe"
+      "WINE_PATH": "/path/to/wine",
+      "REXPAINT_EXE_PATH": "/path/to/REXPaint.exe"
     }
   },
   "xp-tool": {

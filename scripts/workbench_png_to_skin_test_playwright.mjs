@@ -50,8 +50,6 @@ async function loadPlaywright() {
 function findDaimonPngCandidates() {
   const roots = [
     "/Users/r/Downloads/asciicker-pipeline-v2",
-    "/Users/r/Downloads",
-    "/Users/r/Projects",
   ].filter((p) => fssync.existsSync(p));
   if (!roots.length) return [];
   const cmd = ["find", ...roots, "-type", "f", "(", "-iname", "*daimon*.png", "-o", "-iname", "*demon*.png", ")", "-print"];

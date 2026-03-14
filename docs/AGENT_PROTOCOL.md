@@ -8,6 +8,20 @@ This protocol defines the minimum required startup, debugging, and handoff behav
 
 ---
 
+## 0. Milestone Framing
+
+Agents must keep the current XP-editor milestone framed correctly:
+
+- The current milestone is **functional XP-file editor parity first**.
+- The proof mechanism is the oracle -> recipe -> execute-via-UI -> export -> compare harness.
+- A passing blank-flow `1,1,1` recreation run is evidence for the milestone, but it is **not** the whole milestone.
+- Agents must not collapse the goal down to "single-frame blank-session fidelity" when writing plans, handoffs, or status updates.
+- UX/UI work to make the editor feel like REXPaint belongs **after** capability parity is demonstrated and verified.
+
+If an agent is only working on a narrow harness slice, it must say so explicitly and tie that slice back to the larger parity milestone.
+
+---
+
 ## 1. Mandatory Startup
 
 Before doing any debugging, testing, restore work, or merge planning, the agent must report:

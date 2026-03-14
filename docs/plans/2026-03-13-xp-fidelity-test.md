@@ -2,11 +2,16 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Determine whether the current workbench UI can reconstruct XP cell data through real user-reachable actions only once an editable session exists. This is currently an edit/reconstruction roundtrip, not true blank-document authoring, because the harness bootstraps from `upload-xp` and there is no first-class "new XP file" flow under test yet. On unmodified master, the harness aborts in setup because `upload-xp` does not return `job_id` (see Backend Prerequisite). After applying the prerequisite patch, the expected result is a structured FAIL documenting which UI capabilities are missing or broken. That failure is useful evidence, not a bug in the test.
+**Goal:** Prove the current milestone of XP-editor functional parity first: the shipped workbench must be able to recreate XP files through real user-reachable editing actions to the level of the targeted REXPaint capability surface, and that claim must be backed by an oracle -> recipe -> execute-via-UI -> export -> compare loop. The current harness is only one slice of that milestone. It proves or disproves the present workbench path; it does not by itself prove the whole editor roadmap or the later UX/UI parity phase.
 
-**Architecture:** Three-layer stack: (1) oracle reads source XP via Python's authoritative codec into a truth table; (2) executor tries to recreate the target editable layer using only visible DOM controls, clicks, and typing after bootstrapping a real session from the source XP; (3) verifier exports the result via the real Export XP button and compares cell-by-cell against the oracle.
+**Architecture:** Three-layer stack: (1) oracle reads source XP via Python's authoritative codec into a truth table; (2) executor tries to recreate the target editable layer using only visible DOM controls, clicks, and typing in the shipped workbench path under test; (3) verifier exports the result via the real Export XP button and compares cell-by-cell against the oracle.
 
 **Tech Stack:** Python 3 (xp_core.py), Node.js + Playwright (.mjs), Flask on :5071.
+
+> Historical note: later March 14 work moved the live harness from the older
+> `upload-xp` bootstrap toward the blank-flow `New XP` path. Read this plan for
+> milestone framing and contract intent, but treat March 14 handoffs as the
+> current source for live harness behavior.
 
 ---
 
@@ -58,6 +63,14 @@ This boundary exists so the harness cannot drift back into verifier shortcuts. I
 **Current unmodified master:** Setup abort. The executor calls `upload-xp`, checks for `job_id` in the response, finds none (`service.py:2033` sets `job_id=""`), and exits with `"Cannot proceed without a job_id — is the backend prerequisite applied?"`. No UI interaction is attempted. No failure report is generated.
 
 **Master after backend prerequisite patch:** Structured FAIL. Setup completes (upload → navigate → `loadFromJob()` boot). The executor reaches Phases 2-4, which exercise the real UI. The failure report documents exactly which capabilities are missing or broken (failure classes: `ui_missing`, `ui_blocked`, `ui_behavior_mismatch`, `xp_mismatch`). When the UI improves, the same harness starts passing — no philosophical shift, no different test.
+
+### Milestone framing
+
+This plan is about **functional parity proof**, not UX polish:
+
+- passing this harness is evidence toward the first milestone
+- a narrow harness pass is not enough to claim full XP-editor parity
+- UX/UI redesign to make the editor feel like REXPaint should happen only after capability parity is actually demonstrated and verified
 
 ---
 

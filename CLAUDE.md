@@ -8,10 +8,18 @@ Use this file as short-lived repo memory, not as proof over code.
 - Then run `python3 scripts/self_containment_audit.py`.
 - Then read `docs/INDEX.md` and `docs/AGENT_PROTOCOL.md`.
 
+## Current Milestone
+
+- The current milestone is **functional XP-editor parity first**, not UX polish.
+- "Done" for this milestone means the shipped workbench can recreate XP files through real user-reachable editing actions to the level of REXPaint capability being targeted, and that this is proved by the oracle -> recipe -> execute-via-UI -> export -> compare harness.
+- The current blank-flow `1,1,1` harness is only a **slice** of that milestone. Do not collapse the overall goal down to "single-frame blank-session fidelity."
+- UX/UI redesign to make the editor feel like REXPaint comes **after** capability parity is demonstrated and verified. Do not treat current inspector success as UX-complete.
+
 ## Current High-Signal Truths
 
 - As of the 2026-03-13 audit, the shared worktree at `/Users/r/Downloads/asciicker-pipeline-v2` was on `master` at `5caeb07` and should be treated as `stale/unknown` for bundle-restore truth until re-audited.
 - Live workbench XP editing still runs through the legacy inspector in `web/workbench.js`; `EditorApp` is not embedded into shipped workbench on audited `master`.
+- The XP fidelity harness is the proof mechanism for the current parity milestone, but the currently-audited path is still narrower than full REXPaint-capable proof.
 - `EditorApp.undo()` / `redo()` are still TODO stubs in the audited codepath.
 - Current JS XP codec code uses 10-byte REXPaint cells; older docs/tests may still mention 7-byte cells.
 - `window.__wb_debug` is the live browser automation surface for the workbench inspector path.
@@ -26,6 +34,11 @@ Use this file as short-lived repo memory, not as proof over code.
 
 ## First Reads By Topic
 
+- XP visible mismatch blocker: `docs/2026-03-14-CLAUDE-HANDOFF-XP-VISIBLE-MISMATCH.md`
+- XP fidelity zero-context amended plan: `docs/2026-03-14-CLAUDE-HANDOFF-XP-ZERO-CONTEXT-AMENDED-PLAN.md`
+- XP fidelity runtime loop: `docs/2026-03-14-CLAUDE-HANDOFF-XP-RUNTIME-LOOP.md`
+- Phase 2 audit for blank-flow harness: `docs/2026-03-14-CLAUDE-HANDOFF-PHASE2-AUDIT-BLANK-FLOW.md`
+- Phase 1 audit for New XP flow: `docs/2026-03-14-CLAUDE-HANDOFF-PHASE1-AUDIT-NEW-XP.md`
 - XP fidelity requirement pivot / blank `New XP` flow: `docs/2026-03-14-CLAUDE-HANDOFF-XP-NEW-XP-FLOW.md`
 - XP fidelity Task 6 runtime execution: `docs/2026-03-14-CLAUDE-HANDOFF-XP-FIDELITY-TASK6-PLAYWRIGHT.md`
 - XP fidelity harness planning: `docs/2026-03-14-CLAUDE-HANDOFF-XP-FIDELITY-PLAN.md`

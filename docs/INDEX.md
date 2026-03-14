@@ -31,6 +31,14 @@ Do not assume `master` is the canonical restore/bundle line. For bundle/runtime 
 
 If a lower-priority doc conflicts with a higher-priority source or with current code, treat the lower-priority doc as historical until corrected.
 
+## Current Milestone
+
+- The current product milestone is **functional XP-file editor parity first**.
+- The target is: the shipped workbench can perform the XP editing behaviors needed to match the relevant REXPaint capability surface, and that claim is backed by the oracle -> recipe -> execute-via-UI -> export -> compare harness.
+- The current blank-flow `New XP` / `1,1,1` path is a **verification slice**, not the whole milestone.
+- Do not reduce the milestone to "single-frame recreation works." That is evidence toward parity, not parity itself.
+- Do not start REXPaint UX/UI redesign as if parity is already proven. UX/UI work is the next phase **after** capability parity is verified.
+
 ## First Reads By Task
 
 ### Any agent startup
@@ -48,6 +56,11 @@ If a lower-priority doc conflicts with a higher-priority source or with current 
 
 ### XP fidelity harness planning
 
+- `docs/2026-03-14-CLAUDE-HANDOFF-XP-VISIBLE-MISMATCH.md`
+- `docs/2026-03-14-CLAUDE-HANDOFF-XP-ZERO-CONTEXT-AMENDED-PLAN.md`
+- `docs/2026-03-14-CLAUDE-HANDOFF-XP-RUNTIME-LOOP.md`
+- `docs/2026-03-14-CLAUDE-HANDOFF-PHASE2-AUDIT-BLANK-FLOW.md`
+- `docs/2026-03-14-CLAUDE-HANDOFF-PHASE1-AUDIT-NEW-XP.md`
 - `docs/2026-03-14-CLAUDE-HANDOFF-XP-NEW-XP-FLOW.md`
 - `docs/2026-03-14-CLAUDE-HANDOFF-XP-FIDELITY-TASK6-PLAYWRIGHT.md`
 - `docs/2026-03-14-CLAUDE-HANDOFF-XP-FIDELITY-PLAN.md`
@@ -60,6 +73,17 @@ If a lower-priority doc conflicts with a higher-priority source or with current 
 
 ## Active High-Signal Docs
 
+- XP fidelity docs describe the current harness slice. Read them with the milestone framing above: they prove or disprove pieces of XP-editor parity, not the entire editor roadmap.
+- `docs/2026-03-14-CLAUDE-HANDOFF-XP-VISIBLE-MISMATCH.md`
+  - current blocker handoff; the active issue is visible paint mismatch / canvas lifecycle mismatch, not just generic crash analysis
+- `docs/2026-03-14-CLAUDE-HANDOFF-XP-ZERO-CONTEXT-AMENDED-PLAN.md`
+  - zero-context startup handoff for the current XP fidelity state; includes the amended plan and exact run -> log -> fix -> rerun loop
+- `docs/2026-03-14-CLAUDE-HANDOFF-XP-RUNTIME-LOOP.md`
+  - current fresh-session resume point for XP fidelity; explains the run -> log -> fix -> rerun loop and the conformance-vs-diagnostic boundary
+- `docs/2026-03-14-CLAUDE-HANDOFF-PHASE2-AUDIT-BLANK-FLOW.md`
+  - current highest-signal XP fidelity handoff; verifies the blank-flow harness rewrite, selector contract, and next runtime validation order
+- `docs/2026-03-14-CLAUDE-HANDOFF-PHASE1-AUDIT-NEW-XP.md`
+  - audit of the dirty Phase 1 New XP implementation; use this before trusting “Phase 1 complete / no blockers” claims
 - `docs/2026-03-14-CLAUDE-HANDOFF-XP-NEW-XP-FLOW.md`
   - fresh-session resume point after requirement pivot; blank-document `New XP` authoring is now the main acceptance path, uploaded-source reconstruction is secondary
 - `docs/2026-03-14-CLAUDE-HANDOFF-XP-FIDELITY-TASK6-PLAYWRIGHT.md`
@@ -91,7 +115,7 @@ If a lower-priority doc conflicts with a higher-priority source or with current 
 ## Editor Planning & Research
 
 - `docs/plans/2026-03-13-xp-fidelity-test.md`
-  - current XP fidelity harness plan; direction is `upload-xp` single-frame only on `master`, while `feat/xp-fidelity-harness` already carries the `upload-xp -> job_id` prerequisite
+  - XP fidelity harness plan; read with the March 14 handoffs because parts of this document still reflect the earlier `upload-xp` framing rather than the current blank-flow path
 - `docs/plans/2026-03-04-web-rexpaint-editor/claude-workbench-ui-inventory.md`
   - exhaustive workbench.html/js UI element inventory (189 elements, handler-level detail)
 - `docs/plans/2026-03-04-web-rexpaint-editor/claude-cp437-font-research.md`
@@ -139,4 +163,5 @@ No distinct palette asset files (`.pal`, `palette.json`, etc.) exist in the repo
 - `EditorApp` exists in `web/rexpaint-editor/*`, but the live workbench on audited `master` still edits through the legacy inspector in `web/workbench.js`.
 - The finding that the editor modal/UI is still wrong for REXPaint-parity goals remains valid; existence of `EditorApp` modules does not mean the shipped UI matches REXPaint.
 - XP-file fidelity is still not proven end-to-end. No canonical test currently exists for `read XP -> recreate/edit using only editor controls or browser API -> compare output XP to source XP`.
+- Current blank-flow harness docs may sound narrower than the real milestone. The bigger-picture goal remains full XP-editor capability parity first, with UX/UI parity work after that proof.
 - Self-containment is now machine-enforced via `scripts/self_containment_audit.py` and installable git hooks in `.githooks/`. Blocking findings are external symlinks and live/build/runtime/test references to absolute paths outside this repo.

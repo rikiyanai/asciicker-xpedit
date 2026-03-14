@@ -1,8 +1,19 @@
 # XP Fidelity Test — User-Action Conformance
 
-Red/green gate for workbench XP editing. Tests whether the UI can reconstruct
-XP cell data through real user-reachable actions only once an editable
-session exists.
+Red/green gate for XP-editor functional parity work. The long-term milestone is
+that the shipped workbench can recreate XP files through real user-reachable
+editing actions to the level of the targeted REXPaint capability surface.
+
+This harness is the proof mechanism for that milestone:
+
+- oracle XP -> truth table
+- recipe derived from the oracle
+- execute the recipe only through reachable UI
+- export
+- compare against the oracle
+
+The current harness does **not** prove the whole milestone by itself. It proves
+one current slice of it.
 
 ## Contract
 
@@ -30,19 +41,23 @@ session exists.
 
 ## Scope
 
-**Single-frame only.** This harness uses the `upload-xp` API which creates
-sessions with geometry `1,1,1` (entire grid = 1 frame). Multi-frame sessions
-are out of scope. See the plan doc for details.
+**Current harness slice:** blank-flow single-frame only. The current runner
+creates a blank XP via `New XP`, and the audited recipe/executor assume
+geometry `1,1,1`. Multi-frame and metadata-driven load geometry are still out
+of scope for this harness version.
 
-**Bootstrap, not blank creation.** The current harness uploads an XP to get a
-real editable session, then tests whether the UI can reconstruct the target
-editable layer through user actions. It does **not** prove that the product can
-start a brand-new XP from chosen dimensions, because there is no first-class
-`New XP` flow under test yet.
+**Not the full milestone.** A pass here shows that one narrow workbench path
+can reconstruct and export an XP through user-reachable actions. It does **not**
+by itself prove:
 
-**Upload-session defaults.** The upload path sets fixed metadata defaults
-(`cell_w_chars=12`, `cell_h_chars=12`, `family="uploaded"`) — these are not
-derived from the uploaded XP file. See `service.py:workbench_upload_xp()`.
+- full REXPaint-capable editor parity
+- metadata-driven multi-frame/multi-angle geometry correctness
+- the broader editor feature surface
+- the later UX/UI parity phase
+
+**Milestone ordering matters.** Functional parity comes before UX/UI redesign.
+The editor should not be treated as UX-complete just because this harness
+passes.
 
 ## Architecture
 

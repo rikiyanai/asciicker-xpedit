@@ -63,14 +63,17 @@ def generate_recipe(truth_table):
     skipped = [l['index'] for l in truth_table['layers'] if l['index'] != 2]
 
     # Group non-transparent cells by (glyph, fg, bg) for minimal brush changes.
-    # After clear_frame, all cells are already transparent { glyph: 0, fg: [0,0,0],
-    # bg: MAGENTA } (workbench.js:5013). Painting transparent cells is redundant
-    # and bloats the action count on large sprites.
-    MAGENTA_BG = [255, 0, 255]
+    # After clear_frame, all cells are reset to the exact post-clear state:
+    #   { glyph: 0, fg: [0,0,0], bg: [255,0,255] }  (workbench.js:5013)
+    # Only skip cells that match this full tuple. Cells with glyph 0 and magenta bg
+    # but nonzero fg must still be painted — otherwise the export will mismatch.
+    POST_CLEAR_CELL = (0, [0, 0, 0], [255, 0, 255])
     brush_groups = defaultdict(list)
     skipped_transparent = 0
     for cell in layer2['cells']:
-        if cell['glyph'] == 0 and cell['bg'] == MAGENTA_BG:
+        if (cell['glyph'] == POST_CLEAR_CELL[0]
+                and cell['fg'] == POST_CLEAR_CELL[1]
+                and cell['bg'] == POST_CLEAR_CELL[2]):
             skipped_transparent += 1
             continue
         key = (cell['glyph'],

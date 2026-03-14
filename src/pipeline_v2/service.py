@@ -2035,6 +2035,15 @@ def workbench_upload_xp(xp_bytes: bytes, req_id: str) -> dict[str, Any]:
     # It reads: job["xp_path"], job["metadata"]["angles"], job["metadata"]["anims"],
     # job["metadata"]["projs"], job["metadata"].get("cell_w_chars", ...),
     # job["metadata"].get("family", "player").
+    #
+    # UPLOAD-SESSION DEFAULTS: These metadata values are not derived from the
+    # uploaded XP file — they are fixed defaults for the upload path:
+    #   - angles=1, anims=[1], projs=1: single-frame session (entire grid = 1 frame)
+    #   - cell_w_chars=12, cell_h_chars=12: editor tile size (not from file)
+    #   - render_resolution=12: matches cell char dims for consistency
+    #   - family="uploaded": distinguishes from pipeline-generated jobs
+    # If this upload path is reused outside the fidelity harness, these defaults
+    # should be reviewed — they are not file-derived geometry.
     record = JobRecord(
         job_id=job_id,
         state="SUCCEEDED",

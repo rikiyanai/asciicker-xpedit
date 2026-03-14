@@ -62,9 +62,17 @@ def generate_recipe(truth_table):
 
     skipped = [l['index'] for l in truth_table['layers'] if l['index'] != 2]
 
-    # Group cells by (glyph, fg, bg) for minimal brush changes
+    # Group non-transparent cells by (glyph, fg, bg) for minimal brush changes.
+    # After clear_frame, all cells are already transparent { glyph: 0, fg: [0,0,0],
+    # bg: MAGENTA } (workbench.js:5013). Painting transparent cells is redundant
+    # and bloats the action count on large sprites.
+    MAGENTA_BG = [255, 0, 255]
     brush_groups = defaultdict(list)
+    skipped_transparent = 0
     for cell in layer2['cells']:
+        if cell['glyph'] == 0 and cell['bg'] == MAGENTA_BG:
+            skipped_transparent += 1
+            continue
         key = (cell['glyph'],
                cell['fg'][0], cell['fg'][1], cell['fg'][2],
                cell['bg'][0], cell['bg'][1], cell['bg'][2])
@@ -162,12 +170,12 @@ def generate_recipe(truth_table):
         "target_layer": 2,
         "canvas": {"width": layer2['width'], "height": layer2['height']},
         "geometry": {"angles": 1, "anims": [1], "projs": 1},
-        "expected_result": "structured_fail_on_current_master",
         "required_selectors": REQUIRED_SELECTORS,
         "actions": actions,
         "skipped_layers": skipped,
         "stats": {
             "total_cells": total_cells,
+            "skipped_transparent": skipped_transparent,
             "brush_groups": len(sorted_groups),
             "total_actions": len(actions),
         }
@@ -205,13 +213,13 @@ def main():
             json.dump(recipe, f, indent=2)
 
     s = recipe['stats']
-    print(f"Recipe: {s['total_cells']} cells, "
+    print(f"Recipe: {s['total_cells']} cells to paint, "
+          f"{s['skipped_transparent']} transparent skipped, "
           f"{s['brush_groups']} brush groups, "
           f"{s['total_actions']} actions total",
           file=sys.stderr)
     print(f"Geometry: 1,1,1 (single-frame upload-xp session)", file=sys.stderr)
     print(f"Required selectors: {len(REQUIRED_SELECTORS)}", file=sys.stderr)
-    print(f"Expected result: {recipe['expected_result']}", file=sys.stderr)
 
 
 if __name__ == '__main__':

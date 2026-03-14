@@ -50,11 +50,11 @@ truth_table.py → recipe_generator.py → run_fidelity_test.mjs
 # Start server
 PYTHONPATH=src python3 -m pipeline_v2.app &
 
+# Run with native game sprite (recommended first test)
+scripts/xp_fidelity_test/run.sh sprites/player-0000.xp --headed
+
 # Run with fixture (15 cells, fast)
 scripts/xp_fidelity_test/run.sh sprites/fidelity-test-5x3.xp --headed
-
-# Run with real sprite (10080 cells, slow)
-scripts/xp_fidelity_test/run.sh sprites/player-0100.xp --headed
 ```
 
 ## Output

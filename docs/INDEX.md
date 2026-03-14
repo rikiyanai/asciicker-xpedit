@@ -48,6 +48,8 @@ If a lower-priority doc conflicts with a higher-priority source or with current 
 
 ### XP fidelity harness planning
 
+- `docs/2026-03-14-CLAUDE-HANDOFF-XP-NEW-XP-FLOW.md`
+- `docs/2026-03-14-CLAUDE-HANDOFF-XP-FIDELITY-TASK6-PLAYWRIGHT.md`
 - `docs/2026-03-14-CLAUDE-HANDOFF-XP-FIDELITY-PLAN.md`
 - `docs/plans/2026-03-13-xp-fidelity-test.md`
 
@@ -58,8 +60,12 @@ If a lower-priority doc conflicts with a higher-priority source or with current 
 
 ## Active High-Signal Docs
 
+- `docs/2026-03-14-CLAUDE-HANDOFF-XP-NEW-XP-FLOW.md`
+  - fresh-session resume point after requirement pivot; blank-document `New XP` authoring is now the main acceptance path, uploaded-source reconstruction is secondary
+- `docs/2026-03-14-CLAUDE-HANDOFF-XP-FIDELITY-TASK6-PLAYWRIGHT.md`
+  - current resume point for XP fidelity Task 6 runtime execution; includes exact worktree, branch, fixture paths, and next commands
 - `docs/2026-03-14-CLAUDE-HANDOFF-XP-FIDELITY-PLAN.md`
-  - current resume point for XP fidelity harness planning; records the correct worktree and current branch state
+  - planning/background handoff for the XP fidelity harness; use the Task 6 handoff first for live execution work
 - `docs/2026-03-13-CLAUDE-HANDOFF-EDITOR-DOC-ALIGNMENT.md`
   - current Claude resume point for doc alignment and editor-status truth
 - `docs/research/ascii/2026-03-13-claim-verification.md`

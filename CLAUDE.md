@@ -26,6 +26,8 @@ Use this file as short-lived repo memory, not as proof over code.
 
 ## First Reads By Topic
 
+- XP fidelity requirement pivot / blank `New XP` flow: `docs/2026-03-14-CLAUDE-HANDOFF-XP-NEW-XP-FLOW.md`
+- XP fidelity Task 6 runtime execution: `docs/2026-03-14-CLAUDE-HANDOFF-XP-FIDELITY-TASK6-PLAYWRIGHT.md`
 - XP fidelity harness planning: `docs/2026-03-14-CLAUDE-HANDOFF-XP-FIDELITY-PLAN.md`
 - Editor/doc alignment: `docs/2026-03-13-CLAUDE-HANDOFF-EDITOR-DOC-ALIGNMENT.md`
 - Claim verification: `docs/research/ascii/2026-03-13-claim-verification.md`

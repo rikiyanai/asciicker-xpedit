@@ -2,9 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Determine whether the current workbench UI can recreate XP cell data through real user-reachable actions only. On unmodified master, the harness aborts in setup because `upload-xp` does not return `job_id` (see Backend Prerequisite). After applying the prerequisite patch, the expected result is a structured FAIL documenting which UI capabilities are missing or broken. That failure is useful evidence, not a bug in the test.
+**Goal:** Determine whether the current workbench UI can reconstruct XP cell data through real user-reachable actions only once an editable session exists. This is currently an edit/reconstruction roundtrip, not true blank-document authoring, because the harness bootstraps from `upload-xp` and there is no first-class "new XP file" flow under test yet. On unmodified master, the harness aborts in setup because `upload-xp` does not return `job_id` (see Backend Prerequisite). After applying the prerequisite patch, the expected result is a structured FAIL documenting which UI capabilities are missing or broken. That failure is useful evidence, not a bug in the test.
 
-**Architecture:** Three-layer stack: (1) oracle reads source XP via Python's authoritative codec into a truth table; (2) executor tries to reproduce all layer-2 cells using only visible DOM controls, clicks, and typing; (3) verifier exports the result via the real Export XP button and compares cell-by-cell against the oracle.
+**Architecture:** Three-layer stack: (1) oracle reads source XP via Python's authoritative codec into a truth table; (2) executor tries to recreate the target editable layer using only visible DOM controls, clicks, and typing after bootstrapping a real session from the source XP; (3) verifier exports the result via the real Export XP button and compares cell-by-cell against the oracle.
 
 **Tech Stack:** Python 3 (xp_core.py), Node.js + Playwright (.mjs), Flask on :5071.
 
@@ -104,6 +104,8 @@ By inference (not manual-verified fact), REXPaint opens the entire sheet as a si
 
 **This harness is scoped to sessions created via the `upload-xp` API path.** That path hardcodes `angles=1, anims=[1], projs=1` (`service.py:2034-2036`), which makes `frameWChars = gridCols` and `frameHChars = gridRows` — the entire grid is one frame. The recipe generator assumes this geometry — global coordinates equal frame-local coordinates.
 
+**This is not a true "create new XP from blank" harness.** The current test bootstraps by uploading a source XP so the workbench has a real editable session/job context. The harness then clears and repaints the editable layer through UI-reachable actions. If the product requirement becomes "author a new XP file from chosen starting dimensions with no uploaded source," that requires a separate first-class `New XP` flow and the recipe/bootstrap contract must change accordingly.
+
 **Multi-frame is out of scope for this harness version.** Extending to multi-frame would require:
 1. A setup path that creates a session with matching geometry (the `upload-xp` API does not accept geometry overrides)
 2. Handling `recomputeFrameGeometry()`'s non-exact-division fallback to `cellWChars`/`cellHChars` (`workbench.js:1839-1840`) — plain `floor(gridCols / frameCols)` is only correct when the division is exact
@@ -113,7 +115,7 @@ This means:
 - Opening the inspector IS part of the tested UI path, not scaffolding. The recipe's `open_inspector` action uses the real dblclick flow on `.frame-cell[data-row][data-col]` elements (`workbench.js:5467-5472`).
 - For this version, there is exactly 1 frame. The recipe opens it once and paints all cells with global coordinates (which equal frame-local coordinates when geometry is `1,1,1`).
 - The per-frame model is itself a known gap vs REXPaint's inferred whole-sheet editing. When the same test runs against a future whole-sheet editor, the `open_inspector` action becomes unnecessary — the recipe would paint all cells on a single canvas directly.
-- Session bootstrap (uploading the XP via API, navigating to `/workbench?job_id=<id>`) is the ONLY scaffolding. Everything after that — opening the editor, selecting tools, painting, exporting — is under test.
+- Session bootstrap (uploading the XP via API, navigating to `/workbench?job_id=<id>`) is the ONLY scaffolding. Everything after that — opening the editor, clearing/repainting the editable layer, selecting tools, painting, exporting — is under test.
 
 ### Event Propagation
 

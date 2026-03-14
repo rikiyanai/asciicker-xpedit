@@ -204,3 +204,76 @@ npx playwright test tests/playwright/full-workflow-with-game.spec.js --headed
 **CRITICAL BLOCKER:** Missing runtime files prevent "Test This Skin" button from being enabled.
 
 **ACTION REQUIRED:** Build and deploy runtime files using `scripts/build_termpp_skin_lab_static.sh`
+
+---
+
+# Playwright / XP Fidelity Failure Log Addendum
+
+**Date:** 2026-03-14
+**Status:** FAILED - XP fidelity harness reached export/compare but primary requirement changed
+
+## What Ran
+
+Fixture run:
+
+```bash
+scripts/xp_fidelity_test/run.sh sprites/fidelity-test-5x3.xp --headed
+```
+
+Latest artifact:
+
+- `output/xp-fidelity-test/fidelity-2026-03-14T09-46-11-645Z/result.json`
+
+## Observed Failure
+
+- verdict: `FAIL`
+- failure class: `xp_mismatch`
+- mismatch summary: `15/15 cells differ between oracle and export`
+
+## Earlier Harness Failure
+
+Before the current dirty executor patch, the harness had a false preflight failure:
+
+- inspector child controls were checked for visibility before the hidden inspector panel was opened
+- this produced a catch-22 and an invalid `ui_blocked` failure
+
+Current dirty `scripts/xp_fidelity_test/run_fidelity_test.mjs` contains an in-progress fix for that ordering problem.
+
+## Important Contradiction Caught By User
+
+One diagnosis claimed the export was effectively returning the original uploaded XP.
+
+That explanation is not sufficient, because:
+
+- the oracle came from the same source XP
+- if export were simply returning the untouched original, the fixture should not show `0/15` matching cells on the editable layer
+
+So the correct current state is:
+
+- export/compare is being reached
+- the actual layer/edit/export wiring is still unresolved
+- nobody should claim "it exported the original" without code-backed proof of:
+  - which layer the UI mutates
+  - which layer export serializes
+  - which layer the verifier compares
+
+## Requirement Pivot
+
+The more important issue is product scope:
+
+- the current harness is an uploaded-source reconstruction test
+- the user clarified that the real acceptance criterion is **blank-document authoring**
+
+Required new direction:
+
+1. add a first-class `New XP` button/entry point with starting dimensions
+2. make blank XP session creation/export work in the product first
+3. then change the harness bootstrap, recipe generator, and verifier to start from blank through the visible UI
+4. keep uploaded-XP reconstruction only as a secondary regression/control test
+5. after blank-flow fidelity works, run the real sprite case and then runtime-load-test the produced skin
+
+## Next Action
+
+Resume from:
+
+- `docs/2026-03-14-CLAUDE-HANDOFF-XP-NEW-XP-FLOW.md`

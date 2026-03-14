@@ -2026,11 +2026,42 @@ def workbench_upload_xp(xp_bytes: bytes, req_id: str) -> dict[str, Any]:
                 "bg": list(bg) if isinstance(bg, tuple) else bg,
             })
 
+    # Save uploaded XP to disk so workbench_load_from_job can read it
+    job_id = str(uuid.uuid4())
+    xp_disk_path = EXPORT_DIR / f"{job_id}.xp"
+    xp_disk_path.write_bytes(xp_bytes)
+
+    # Create minimal job record consumable by workbench_load_from_job().
+    # It reads: job["xp_path"], job["metadata"]["angles"], job["metadata"]["anims"],
+    # job["metadata"]["projs"], job["metadata"].get("cell_w_chars", ...),
+    # job["metadata"].get("family", "player").
+    record = JobRecord(
+        job_id=job_id,
+        state="SUCCEEDED",
+        stage="upload",
+        source_path="",
+        xp_path=str(xp_disk_path.resolve()),
+        preview_paths=[],
+        metadata={
+            "angles": 1,
+            "anims": [1],
+            "source_projs": 1,
+            "projs": 1,
+            "render_resolution": 12,
+            "cell_w_chars": 12,
+            "cell_h_chars": 12,
+            "family": "uploaded",
+        },
+        gate_report_path=None,
+        trace_path=None,
+    )
+    save_json(_job_path(job_id), record.to_dict())
+
     # Create workbench session
     session_id = str(uuid.uuid4())
     sess = WorkbenchSession(
         session_id=session_id,
-        job_id="",  # No job_id for uploaded sessions
+        job_id=job_id,
         angles=1,
         anims=[1],
         projs=1,
@@ -2047,6 +2078,7 @@ def workbench_upload_xp(xp_bytes: bytes, req_id: str) -> dict[str, Any]:
 
     return {
         "session_id": session_id,
+        "job_id": job_id,
         "grid_cols": cols,
         "grid_rows": rows,
         "cell_count": len(cells),

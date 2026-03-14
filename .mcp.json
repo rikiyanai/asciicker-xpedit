@@ -11,9 +11,9 @@
       "command": "python3",
       "args": ["scripts/rex_mcp/server.py"],
       "env": {
-        "WINE_PATH": "/Applications/Wine Crossover.app/Contents/Resources/wine/bin/wine",
-        "REXPAINT_EXE_PATH": "/Users/r/Desktop/wine-11.0/REXPaint-v1.70/REXPaint.exe",
-        "WINE_PROCESS_NAME": "wine-preloader"
+        "WINE_PATH": "",
+        "REXPAINT_EXE_PATH": "",
+        "WINE_PROCESS_NAME": ""
       }
     },
     "xp-tool": {

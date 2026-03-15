@@ -173,13 +173,53 @@ Exit gate:
 
 - verifier is honest, narrow when narrow, and full only when full
 
+## Audit-Grounded Blocker Order (2026-03-15)
+
+Four audits completed. See `docs/research/ascii/2026-03-15-four-audits-xp-editor.md`.
+
+**Result at audit time: 10 FAIL, 1 PARTIAL, 0 PASS.** The backend was the first wall.
+
+Update after B1 patch:
+
+- `workbench_upload_xp()` now derives `angles/anims/projs` from L0 row 0 instead of hardcoding `1,1,1`
+- the next priority is no longer "make the frame inspector path pass"
+- the next frontend/editor priority is the whole-sheet REXPaint-style editor pivot
+
+### Tier 1: Backend Structure (fix first, in this order)
+
+1. ~~**B1: Upload geometry hardcoding**~~ FIXED — `workbench_upload_xp()` now derives geometry from L0 row 0 metadata instead of hardcoding `1,1,1`.
+2. **B2: Upload layer discarding** — `service.py:2012-2014` extracts only L2. Must extract and store all layers.
+3. **B3: Session model is single-layer** — `WorkbenchSession.cells` is one flat list. Must support multi-layer.
+4. **B4: Export fabricates L0/L1/L3** — `service.py:1193-1231` replaces real layers with templates. Must export from stored layers.
+
+### Tier 2: Format and Protocol
+
+5. **B5: XP codec incompatibility** — Python and JS codecs use structurally incompatible container formats (whole-file gzip + no magic vs per-layer gzip + REXP magic + 20-byte header). Neither can read the other's output. Must unify on REXPaint standard format or delete JS codec if EditorApp will proxy through backend.
+6. **B6: Whole-sheet editor path not integrated** — the shipped workbench still centers editing on the legacy frame inspector instead of a whole-sheet REXPaint-style editor surface.
+
+### Tier 3: UI and Integration
+
+7. **B7: EditorApp / whole-sheet editor salvage audit** — salvageable pieces likely exist in `feat/workbench-xp-editor-wireup` and `web/rexpaint-editor/*`, but they must be audited before implementation.
+8. **B8: No new-XP authoring** — Deleted in 034004e. Rebuild with real geometry.
+9. **B9: No multi-layer editing UI** — inspector edits L2 only. Need real layer stack behavior on the whole-sheet editor path.
+10. ~~**B10: AGENT_PROTOCOL.md contradiction**~~ FIXED — Updated to reference acceptance contract gates instead of deleted harness.
+
+### Tier 4: Runtime Validation (blocked by Tier 1)
+
+11. **B11: Runtime with real geometry** — Validate after B1-B4 are fixed.
+
 ## Immediate Next Actions
 
-1. Complete the four audits.
-2. Write the canonical XP data contract grounded in current code.
-3. Identify whether backend geometry/layer preservation or frontend structure realization is the first hard blocker.
-4. Fix that blocker only.
-5. Rerun and repeat.
+1. ~~Complete the four audits.~~ DONE — see audit document.
+2. ~~Write canonical XP data contract.~~ DONE — see `docs/research/ascii/2026-03-15-xp-data-contract.md`. Phase 1 exit gate met.
+3. ~~Fix B10: AGENT_PROTOCOL.md doc drift.~~ DONE.
+4. ~~Fix B1: make `workbench_upload_xp()` derive geometry from XP file using L0 metadata parser.~~ DONE.
+5. Audit the whole-sheet REXPaint pivot before more frontend code:
+   - `docs/2026-03-15-CLAUDE-HANDOFF-WHOLE-SHEET-REXPAINT-PIVOT.md`
+6. Fix B2: extract all layers on upload.
+7. Fix B3: extend session model to multi-layer.
+8. Fix B4: export from stored layers.
+9. After Tier 1 backend preservation is fixed, implement the whole-sheet editor path instead of improving the legacy frame inspector path.
 
 ## Non-Goals
 

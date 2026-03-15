@@ -65,6 +65,10 @@ If a lower-priority doc conflicts with a higher-priority source or with current 
   - canonical acceptance contract; this is the source of truth for what counts as XP-editor parity and what shortcuts are forbidden
 - `docs/2026-03-15-CLAUDE-HANDOFF-FOUR-AUDITS-XP-EDITOR.md`
   - restart handoff requiring four full audits across local code, local history, remote refs, and contract cross-checking
+- `docs/2026-03-15-CLAUDE-HANDOFF-WHOLE-SHEET-REXPAINT-PIVOT.md`
+  - current next-step handoff: keep backend geometry fixes, stop optimizing the legacy frame inspector as the parity path, and pivot to auditing the whole-sheet REXPaint editor integration
+- `docs/research/ascii/2026-03-15-xp-data-contract.md`
+  - canonical code-backed XP data contract: binary format, layer roles, frame layout, geometry derivation, confirmed contradictions, and unknowns
 - `docs/plans/2026-03-15-xp-editor-hard-fail-plan.md`
   - active hard-fail plan replacing the deleted single-frame harness plan
 - `docs/2026-03-13-CLAUDE-HANDOFF-EDITOR-DOC-ALIGNMENT.md`

@@ -253,15 +253,20 @@ If no handoff was updated, the session is incomplete.
 Start with the canonical hub and then pick the task-specific handoff:
 
 - [docs/INDEX.md](/Users/r/Downloads/asciicker-pipeline-v2/docs/INDEX.md)
+- [XP Editor Acceptance Contract](/Users/r/Downloads/asciicker-pipeline-v2/docs/XP_EDITOR_ACCEPTANCE_CONTRACT.md)
 
 For editor/doc status work on audited `master`, read:
 
 - [2026-03-13-CLAUDE-HANDOFF-EDITOR-DOC-ALIGNMENT.md](/Users/r/Downloads/asciicker-pipeline-v2/docs/2026-03-13-CLAUDE-HANDOFF-EDITOR-DOC-ALIGNMENT.md)
 - [2026-03-13 claim verification](/Users/r/Downloads/asciicker-pipeline-v2/docs/research/ascii/2026-03-13-claim-verification.md)
 
-For XP fidelity harness planning, read:
+Do not use any deleted or historical "XP fidelity harness" plan as current truth. If XP-editor
+verification work resumes, it must load real XP through the product path and hard-fail on
+metadata, layer, visual, export, and Skin Dock/runtime mismatches.
 
-- [2026-03-14-CLAUDE-HANDOFF-XP-FIDELITY-PLAN.md](/Users/r/Downloads/asciicker-pipeline-v2/docs/2026-03-14-CLAUDE-HANDOFF-XP-FIDELITY-PLAN.md)
+Current restart handoff:
+
+- [2026-03-15-CLAUDE-HANDOFF-FOUR-AUDITS-XP-EDITOR.md](/Users/r/Downloads/asciicker-pipeline-v2/docs/2026-03-15-CLAUDE-HANDOFF-FOUR-AUDITS-XP-EDITOR.md)
 
 For the branch confusion and restore/bundle history, read:
 

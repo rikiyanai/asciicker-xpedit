@@ -7,22 +7,23 @@ Use this file as short-lived repo memory, not as proof over code.
 - Run `python3 scripts/conductor_tools.py status --auto-setup` first.
 - Then run `python3 scripts/self_containment_audit.py`.
 - Then read `docs/INDEX.md` and `docs/AGENT_PROTOCOL.md`.
+- Then read `docs/XP_EDITOR_ACCEPTANCE_CONTRACT.md`.
 
 ## Current Milestone
 
 - The current milestone is **functional XP-editor parity first**, not UX polish.
-- "Done" for this milestone means the shipped workbench can recreate XP files through real user-reachable editing actions to the level of REXPaint capability being targeted, and that this is proved by the oracle -> recipe -> execute-via-UI -> export -> compare harness.
-- The current blank-flow `1,1,1` harness is only a **slice** of that milestone. Do not collapse the overall goal down to "single-frame blank-session fidelity."
-- UX/UI redesign to make the editor feel like REXPaint comes **after** capability parity is demonstrated and verified. Do not treat current inspector success as UX-complete.
+- "Done" for this milestone means the shipped workbench can load, edit, and export real multi-frame XP files with correct geometry, and that exported XP loads in the Skin Dock runtime.
+- No XP fidelity harness exists yet. The previous blank-flow single-frame harness was deleted on 2026-03-15 because it flattened geometry, skipped layers, and misrepresented coverage. See `PLAYWRIGHT_FAILURE_LOG.md` for the full deletion record.
+- UX/UI redesign to make the editor feel like REXPaint comes **after** capability parity is demonstrated and verified.
 
 ## Current High-Signal Truths
 
 - As of the 2026-03-13 audit, the shared worktree at `/Users/r/Downloads/asciicker-pipeline-v2` was on `master` at `5caeb07` and should be treated as `stale/unknown` for bundle-restore truth until re-audited.
 - Live workbench XP editing still runs through the legacy inspector in `web/workbench.js`; `EditorApp` is not embedded into shipped workbench on audited `master`.
-- The XP fidelity harness is the proof mechanism for the current parity milestone, but the currently-audited path is still narrower than full REXPaint-capable proof.
 - `EditorApp.undo()` / `redo()` are still TODO stubs in the audited codepath.
 - Current JS XP codec code uses 10-byte REXPaint cells; older docs/tests may still mention 7-byte cells.
 - `window.__wb_debug` is the live browser automation surface for the workbench inspector path.
+- `workbench_upload_xp()` in `service.py` hardcodes `angles=1, anims=[1], projs=1` — it does not read geometry from the uploaded XP file. This is a blocking backend gap for any multi-frame XP load test.
 
 ## Do Not Assume
 
@@ -31,17 +32,13 @@ Use this file as short-lived repo memory, not as proof over code.
 - Do not use editor test counts as verification evidence until the CommonJS/ESM runner mismatch is fixed.
 - Do not reference sibling repos or external absolute paths for runtime/build/test fixes; self-containment is enforced by `scripts/self_containment_audit.py`.
 - Do not assume external folders like `asciicker-Y9-2` are available. All assets must be committed to this repo.
+- Do not call any test "XP fidelity" unless it loads real XP through the product path, validates all layers and metadata, and verifies Skin Dock runtime load.
 
 ## First Reads By Topic
 
-- XP visible mismatch blocker: `docs/2026-03-14-CLAUDE-HANDOFF-XP-VISIBLE-MISMATCH.md`
-- XP fidelity zero-context amended plan: `docs/2026-03-14-CLAUDE-HANDOFF-XP-ZERO-CONTEXT-AMENDED-PLAN.md`
-- XP fidelity runtime loop: `docs/2026-03-14-CLAUDE-HANDOFF-XP-RUNTIME-LOOP.md`
-- Phase 2 audit for blank-flow harness: `docs/2026-03-14-CLAUDE-HANDOFF-PHASE2-AUDIT-BLANK-FLOW.md`
-- Phase 1 audit for New XP flow: `docs/2026-03-14-CLAUDE-HANDOFF-PHASE1-AUDIT-NEW-XP.md`
-- XP fidelity requirement pivot / blank `New XP` flow: `docs/2026-03-14-CLAUDE-HANDOFF-XP-NEW-XP-FLOW.md`
-- XP fidelity Task 6 runtime execution: `docs/2026-03-14-CLAUDE-HANDOFF-XP-FIDELITY-TASK6-PLAYWRIGHT.md`
-- XP fidelity harness planning: `docs/2026-03-14-CLAUDE-HANDOFF-XP-FIDELITY-PLAN.md`
+- XP editor acceptance contract: `docs/XP_EDITOR_ACCEPTANCE_CONTRACT.md`
+- Four-audit restart handoff: `docs/2026-03-15-CLAUDE-HANDOFF-FOUR-AUDITS-XP-EDITOR.md`
+- Hard-fail implementation plan: `docs/plans/2026-03-15-xp-editor-hard-fail-plan.md`
 - Editor/doc alignment: `docs/2026-03-13-CLAUDE-HANDOFF-EDITOR-DOC-ALIGNMENT.md`
 - Claim verification: `docs/research/ascii/2026-03-13-claim-verification.md`
 - Bundle/runtime restore history: `docs/2026-03-11-CLAUDE-HANDOFF-CURRENT-STATE.md`

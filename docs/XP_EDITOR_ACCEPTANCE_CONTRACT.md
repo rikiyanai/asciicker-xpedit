@@ -19,6 +19,7 @@ The goal is full XP-editor parity for the shipped workbench.
 - the primary editor surface is a whole-sheet XP editor aligned with the REXPaint interaction model, not a legacy frame-by-frame inspector used as a substitute for that model
 - the workbench can export XP without structural corruption
 - the exported XP works in the Skin Dock/runtime
+- the end-to-end result passes through full UI-driven product workflows, not only artifact comparison
 
 This is not a speed goal. This is not a partial-proof goal. This is a hard-fail fidelity goal.
 
@@ -38,6 +39,16 @@ The product must support creating a new XP from scratch with the intended:
 
 The resulting session must reflect that intended structure in the live workbench UI and in export.
 
+Required acceptance scenario:
+
+- from a new file, recreate the required three sprite animations for the bundle:
+  - idle
+  - attack
+  - death
+- do so through user-reachable UI controls
+- export correctly
+- pass Test Skin Dock/runtime
+
 ### 2. Existing XP Load/Edit/Export
 
 The product must support loading an existing XP through the real product path, preserving:
@@ -50,6 +61,15 @@ The product must support loading an existing XP through the real product path, p
 - cell contents
 
 Editing and export must not corrupt that structure.
+
+Required acceptance scenario:
+
+- import an existing blank single-layer XP file with a deliberately simple/wrong starting structure
+- through user-reachable UI actions, change dimensions to the correct structure
+- add the correct layers
+- recreate each layer correctly
+- produce the correct bundle XP result
+- pass Test Skin Dock/runtime
 
 ## Non-Negotiable Hard-Fail Gates
 
@@ -108,6 +128,9 @@ Hard fail if exported XP differs from the intended/new/oracle XP in metadata, la
 ### Gate F. Runtime Load
 
 Hard fail if the exported XP or current edited session cannot load and behave in Skin Dock/runtime.
+
+Artifact identity alone is not sufficient for acceptance. A workflow does not pass until
+Skin Dock/runtime also passes.
 
 ### Gate G. Truthfulness of Reporting
 
@@ -169,6 +192,13 @@ Any future verifier must report at least:
 - `export_pass`
 - `skin_dock_pass`
 - `overall_pass`
+
+If the workflow under test is a bundle workflow, reporting must also distinguish bundle
+coverage for:
+
+- `idle_pass`
+- `attack_pass`
+- `death_pass`
 
 `overall_pass` may be `true` only if every required gate for the workflow under test passes.
 

@@ -188,14 +188,14 @@ Update after B1 patch:
 ### Tier 1: Backend Structure (fix first, in this order)
 
 1. ~~**B1: Upload geometry hardcoding**~~ FIXED — `workbench_upload_xp()` now derives geometry from L0 row 0 metadata instead of hardcoding `1,1,1`.
-2. **B2: Upload layer discarding** — `service.py:2012-2014` extracts only L2. Must extract and store all layers.
-3. **B3: Session model is single-layer** — `WorkbenchSession.cells` is one flat list. Must support multi-layer.
-4. **B4: Export fabricates L0/L1/L3** — `service.py:1193-1231` replaces real layers with templates. Must export from stored layers.
+2. ~~**B2: Upload layer discarding**~~ FIXED — uploaded XP sessions now preserve all layers instead of extracting only L2.
+3. ~~**B3: Session model is single-layer**~~ FIXED — `WorkbenchSession` and workbench load/save now preserve full session layers for uploaded XP sessions.
+4. ~~**B4: Export fabricates L0/L1/L3**~~ FIXED for uploaded XP sessions — export now preserves persisted real layers instead of fabricating template layers. Legacy/template sessions still use template export.
 
 ### Tier 2: Format and Protocol
 
-5. **B5: XP codec incompatibility** — Python and JS codecs use structurally incompatible container formats (whole-file gzip + no magic vs per-layer gzip + REXP magic + 20-byte header). Neither can read the other's output. Must unify on REXPaint standard format or delete JS codec if EditorApp will proxy through backend.
-6. **B6: Whole-sheet editor path not integrated** — the shipped workbench still centers editing on the legacy frame inspector instead of a whole-sheet REXPaint-style editor surface.
+5. **B5: XP codec incompatibility** — Python and JS codecs use structurally incompatible container formats (whole-file gzip + no magic vs per-layer gzip + REXP magic + 20-byte header). Neither can read the other's output. This matters once the whole-sheet editor path touches JS-side file I/O.
+6. **B6: Whole-sheet editor path not integrated** — the shipped workbench still centers editing on the legacy frame inspector instead of a whole-sheet REXPaint-style editor surface. This is now the primary product blocker.
 
 ### Tier 3: UI and Integration
 
@@ -214,12 +214,12 @@ Update after B1 patch:
 2. ~~Write canonical XP data contract.~~ DONE — see `docs/research/ascii/2026-03-15-xp-data-contract.md`. Phase 1 exit gate met.
 3. ~~Fix B10: AGENT_PROTOCOL.md doc drift.~~ DONE.
 4. ~~Fix B1: make `workbench_upload_xp()` derive geometry from XP file using L0 metadata parser.~~ DONE.
-5. Audit the whole-sheet REXPaint pivot before more frontend code:
-   - `docs/2026-03-15-CLAUDE-HANDOFF-WHOLE-SHEET-REXPAINT-PIVOT.md`
-6. Fix B2: extract all layers on upload.
-7. Fix B3: extend session model to multi-layer.
-8. Fix B4: export from stored layers.
-9. After Tier 1 backend preservation is fixed, implement the whole-sheet editor path instead of improving the legacy frame inspector path.
+5. ~~Audit the whole-sheet REXPaint pivot before more frontend code.~~ DONE.
+6. ~~Fix B2: extract all layers on upload.~~ DONE.
+7. ~~Fix B3: extend session model to multi-layer.~~ DONE.
+8. ~~Fix B4: export from stored layers.~~ DONE for uploaded XP sessions.
+9. Implement the first whole-sheet editor integration slice in the shipped workbench instead of improving the legacy frame inspector path:
+   - `docs/2026-03-15-CLAUDE-HANDOFF-B6-WHOLE-SHEET-INTEGRATION.md`
 
 ## Non-Goals
 

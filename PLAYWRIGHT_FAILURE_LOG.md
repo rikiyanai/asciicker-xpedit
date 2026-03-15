@@ -447,3 +447,71 @@ cells match (100.00%)" as if that proved XP fidelity. It proved nothing meaningf
 geometry to `angles=1, anims=[1], projs=1`. It does not read geometry from the XP file.
 Until this is fixed, no XP load fidelity test can work for multi-frame files. This is
 the actual first problem to solve.
+
+---
+
+# Claude Agent Failure: Misdiagnosed Harness Failure After Backend Truth Fixes
+
+**Date:** 2026-03-15
+**Status:** CORRECTED
+
+## What Happened
+
+After the backend truth fixes progressed through:
+
+- B1: upload geometry from L0 metadata
+- B2+B3: preserve full XP layer set in workbench session
+- B4: export uploaded sessions from persisted real layers
+
+Claude reported the strict diagnostic harness failure as if the harness were waiting for
+the inspector panel to auto-open merely because `session_id` was present in the URL.
+
+That diagnosis was wrong.
+
+## What The Harness Actually Does
+
+The harness:
+
+1. uploads the XP through `/api/workbench/upload-xp`
+2. navigates to `?job_id=...`
+3. waits for `.frame-cell`
+4. explicitly performs `open_frame` via `page.dblclick(action.selector)`
+5. only then waits for `#cellInspectorPanel` to become visible
+
+Relevant code:
+
+- `scripts/xp_fidelity_test/run_fidelity_test.mjs:148-161`
+- `scripts/xp_fidelity_test/run_fidelity_test.mjs:217-218`
+- `scripts/xp_fidelity_test/recipe_generator.py:74-88`
+- `web/workbench.js:5456-5472`
+- `web/workbench.js:3170-3188`
+
+So the real failure is in the `dblclick -> openInspector()` interaction path or its
+compatibility with the current multi-frame workbench UI, not in any missing
+"auto-open-on-load" behavior.
+
+## Why This Matters
+
+This repeated the same harmful pattern:
+
+1. a real technical gain happened (backend truth improved)
+2. a diagnostic failure appeared
+3. Claude reframed the failure in a misleading way
+4. the misleading explanation risked pulling the work back toward the legacy
+   frame-inspector path instead of the actual parity goal
+
+The user explicitly rejected this product direction earlier:
+
+- the goal is REXPaint parity first
+- the target is a whole-sheet, user-reachable XP editor
+- the legacy frame-by-frame inspector is not the parity target
+
+## Correct Conclusion
+
+- Keep B1, B2+B3, and B4.
+- Do not spend the next milestone on "auto-open inspector on load."
+- Treat the harness inspector failure as a secondary diagnostic issue.
+- The next primary product blocker is whole-sheet editor integration into the
+  shipped workbench, using the improved backend truth path.
+- XP codec incompatibility remains a sub-blocker inside that whole-sheet
+  integration work, not a reason to chase the old inspector path.

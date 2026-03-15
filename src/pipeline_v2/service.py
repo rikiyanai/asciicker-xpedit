@@ -1151,6 +1151,98 @@ def _digit_to_glyph(v: int) -> int:
     return 0
 
 
+def _glyph_to_digit(glyph: int) -> int:
+    """Inverse of _digit_to_glyph: CP437 glyph → integer value, or -1."""
+    if 48 <= glyph <= 57:
+        return glyph - 48
+    if 65 <= glyph <= 90:
+        return glyph + 10 - 65
+    if 97 <= glyph <= 122:
+        return glyph + 10 - 97
+    return -1
+
+
+def _derive_geometry_from_l0(
+    xp_data: dict, cols: int, rows: int, req_id: str
+) -> dict:
+    """Parse geometry from L0 row 0 metadata cells.
+
+    Matches the proven parser at scripts/rex_mcp/xp_core.py:242-292.
+    Returns dict with angles, anims, projs, cell_w, cell_h.
+    Hard-fails with ApiError if geometry is invalid or inconsistent.
+    """
+    l0_cells = xp_data["cells"][0]
+
+    # Cell (col=0, row=0) → angles
+    glyph_0, _, _ = l0_cells[0]  # row-major: cells[y*w+x] → cells[0*w+0]
+    raw_angles = _glyph_to_digit(glyph_0)
+
+    if raw_angles > 0:
+        angles = raw_angles
+        projs = 2
+    else:
+        angles = 1
+        projs = 1
+
+    # Cells (col=1..N, row=0) → anims list, scan until non-digit or zero
+    anims: list[int] = []
+    for c in range(1, cols):
+        cell = l0_cells[c]  # row-major: cells[0*w + c]
+        g, _, _ = cell
+        val = _glyph_to_digit(g)
+        if val > 0:
+            anims.append(val)
+        else:
+            break
+
+    if not anims:
+        raise ApiError(
+            "L0 row 0 contains no valid anim counts (cells [1..N] at row 0 are all non-digit or zero)",
+            "invalid_l0_metadata", "workbench", req_id, 422,
+        )
+
+    # Validate: all anims must be positive (guaranteed by loop, but be explicit)
+    if any(a <= 0 for a in anims):
+        raise ApiError(
+            f"L0 row 0 anim counts must all be positive, got {anims}",
+            "invalid_l0_metadata", "workbench", req_id, 422,
+        )
+
+    # Derive frame grid
+    frame_cols = sum(anims) * projs
+    frame_rows = angles
+
+    if frame_cols <= 0 or frame_rows <= 0:
+        raise ApiError(
+            f"Derived frame grid is invalid: frame_cols={frame_cols}, frame_rows={frame_rows}",
+            "invalid_geometry", "workbench", req_id, 422,
+        )
+
+    if cols % frame_cols != 0:
+        raise ApiError(
+            f"Grid width {cols} not divisible by frame_cols {frame_cols} "
+            f"(sum(anims)={sum(anims)} * projs={projs})",
+            "geometry_dimension_mismatch", "workbench", req_id, 422,
+        )
+
+    if rows % frame_rows != 0:
+        raise ApiError(
+            f"Grid height {rows} not divisible by frame_rows {frame_rows} (angles={angles})",
+            "geometry_dimension_mismatch", "workbench", req_id, 422,
+        )
+
+    cell_w = cols // frame_cols
+    cell_h = rows // frame_rows
+
+    return {
+        "angles": angles,
+        "anims": anims,
+        "projs": projs,
+        "cell_w": cell_w,
+        "cell_h": cell_h,
+    }
+
+
 Cell = tuple[int, tuple[int, int, int], tuple[int, int, int]]
 
 
@@ -2026,24 +2118,16 @@ def workbench_upload_xp(xp_bytes: bytes, req_id: str) -> dict[str, Any]:
                 "bg": list(bg) if isinstance(bg, tuple) else bg,
             })
 
+    # Derive geometry from L0 row 0 metadata (matches xp_core.py:242-292).
+    # Hard-fails if metadata is absent, malformed, or inconsistent with grid dims.
+    geo = _derive_geometry_from_l0(xp_data, cols, rows, req_id)
+
     # Save uploaded XP to disk so workbench_load_from_job can read it
     job_id = str(uuid.uuid4())
     xp_disk_path = EXPORT_DIR / f"{job_id}.xp"
     xp_disk_path.write_bytes(xp_bytes)
 
-    # Create minimal job record consumable by workbench_load_from_job().
-    # It reads: job["xp_path"], job["metadata"]["angles"], job["metadata"]["anims"],
-    # job["metadata"]["projs"], job["metadata"].get("cell_w_chars", ...),
-    # job["metadata"].get("family", "player").
-    #
-    # UPLOAD-SESSION DEFAULTS: These metadata values are not derived from the
-    # uploaded XP file — they are fixed defaults for the upload path:
-    #   - angles=1, anims=[1], projs=1: single-frame session (entire grid = 1 frame)
-    #   - cell_w_chars=12, cell_h_chars=12: editor tile size (not from file)
-    #   - render_resolution=12: matches cell char dims for consistency
-    #   - family="uploaded": distinguishes from pipeline-generated jobs
-    # If this upload path is reused outside the fidelity harness, these defaults
-    # should be reviewed — they are not file-derived geometry.
+    # Create minimal job record with L0-derived geometry.
     record = JobRecord(
         job_id=job_id,
         state="SUCCEEDED",
@@ -2052,13 +2136,13 @@ def workbench_upload_xp(xp_bytes: bytes, req_id: str) -> dict[str, Any]:
         xp_path=str(xp_disk_path.resolve()),
         preview_paths=[],
         metadata={
-            "angles": 1,
-            "anims": [1],
-            "source_projs": 1,
-            "projs": 1,
-            "render_resolution": 12,
-            "cell_w_chars": 12,
-            "cell_h_chars": 12,
+            "angles": geo["angles"],
+            "anims": geo["anims"],
+            "source_projs": geo["projs"],
+            "projs": geo["projs"],
+            "render_resolution": geo["cell_w"],
+            "cell_w_chars": geo["cell_w"],
+            "cell_h_chars": geo["cell_h"],
             "family": "uploaded",
         },
         gate_report_path=None,
@@ -2071,11 +2155,11 @@ def workbench_upload_xp(xp_bytes: bytes, req_id: str) -> dict[str, Any]:
     sess = WorkbenchSession(
         session_id=session_id,
         job_id=job_id,
-        angles=1,
-        anims=[1],
-        projs=1,
-        cell_w=12,
-        cell_h=12,
+        angles=geo["angles"],
+        anims=geo["anims"],
+        projs=geo["projs"],
+        cell_w=geo["cell_w"],
+        cell_h=geo["cell_h"],
         grid_cols=cols,
         grid_rows=rows,
         cells=cells,
@@ -2092,6 +2176,11 @@ def workbench_upload_xp(xp_bytes: bytes, req_id: str) -> dict[str, Any]:
         "grid_rows": rows,
         "cell_count": len(cells),
         "layer_count": layer_count,
+        "angles": geo["angles"],
+        "anims": geo["anims"],
+        "projs": geo["projs"],
+        "cell_w": geo["cell_w"],
+        "cell_h": geo["cell_h"],
     }
 
 

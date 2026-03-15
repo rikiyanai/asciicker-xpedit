@@ -11,19 +11,22 @@ Use this file as short-lived repo memory, not as proof over code.
 
 ## Current Milestone
 
-- The current milestone is **functional XP-editor parity first**, not UX polish.
-- "Done" for this milestone means the shipped workbench can load, edit, and export real multi-frame XP files with correct geometry, and that exported XP loads in the Skin Dock runtime.
-- No XP fidelity harness exists yet. The previous blank-flow single-frame harness was deleted on 2026-03-15 because it flattened geometry, skipped layers, and misrepresented coverage. See `PLAYWRIGHT_FAILURE_LOG.md` for the full deletion record.
-- UX/UI redesign to make the editor feel like REXPaint comes **after** capability parity is demonstrated and verified.
+- The current milestone is **REXPaint parity first**, not "functioning somehow first" and not UX polish after a narrowed substitute.
+- "Done" for this milestone means the shipped workbench can load, edit, and export real multi-frame XP files with correct geometry through a **whole-sheet, user-reachable XP editor surface** that matches the real REXPaint interaction model closely enough to count as parity, and that exported XP loads in the Skin Dock runtime.
+- The legacy frame-by-frame inspector in `web/workbench.js` is not the target editor model for parity. It is legacy behavior and may be used only as supporting/diagnostic context while the whole-sheet editor path is built.
+- Any harness that depends on the legacy frame inspector or API scaffolding is diagnostic only; it is not parity proof.
+- The previous blank-flow single-frame harness was deleted on 2026-03-15 because it flattened geometry, skipped layers, and misrepresented coverage. See `PLAYWRIGHT_FAILURE_LOG.md` for the deletion record and the later strict-diagnostic restore note.
+- UX/UI polish follows parity, but the editor model itself (whole-sheet REXPaint-style editing instead of frame-by-frame inspection) is part of parity, not post-parity polish.
 
 ## Current High-Signal Truths
 
 - As of the 2026-03-13 audit, the shared worktree at `/Users/r/Downloads/asciicker-pipeline-v2` was on `master` at `5caeb07` and should be treated as `stale/unknown` for bundle-restore truth until re-audited.
 - Live workbench XP editing still runs through the legacy inspector in `web/workbench.js`; `EditorApp` is not embedded into shipped workbench on audited `master`.
+- The correct direction is to pivot away from the legacy frame inspector as the primary editor path and toward a whole-sheet XP editor aligned with the REXPaint UI docs, using the debug/legacy grid as navigation/preview support rather than the main editing model.
 - `EditorApp.undo()` / `redo()` are still TODO stubs in the audited codepath.
 - Current JS XP codec code uses 10-byte REXPaint cells; older docs/tests may still mention 7-byte cells.
 - `window.__wb_debug` is the live browser automation surface for the workbench inspector path.
-- `workbench_upload_xp()` in `service.py` hardcodes `angles=1, anims=[1], projs=1` — it does not read geometry from the uploaded XP file. This is a blocking backend gap for any multi-frame XP load test.
+- `workbench_upload_xp()` geometry hardcoding was a blocking backend gap; after the 2026-03-15 B1 patch, geometry should be re-audited as L0-derived instead of assumed stale.
 
 ## Do Not Assume
 

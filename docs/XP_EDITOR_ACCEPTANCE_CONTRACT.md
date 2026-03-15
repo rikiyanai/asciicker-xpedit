@@ -16,6 +16,7 @@ The goal is full XP-editor parity for the shipped workbench.
 - the workbench can create new XP files with the intended structure
 - the workbench can load existing XP files with their real structure
 - the workbench can edit those XP files through shipped controls
+- the primary editor surface is a whole-sheet XP editor aligned with the REXPaint interaction model, not a legacy frame-by-frame inspector used as a substitute for that model
 - the workbench can export XP without structural corruption
 - the exported XP works in the Skin Dock/runtime
 
@@ -96,6 +97,7 @@ Hard fail if the claimed editor-path proof depends on:
 - fake frame layout
 - skipped layers
 - synthetic shortcuts that bypass shipped controls
+- substituting a frame-by-frame inspector workflow for the required whole-sheet editor workflow
 
 Read-only instrumentation is allowed. State mutation shortcuts are not.
 
@@ -128,6 +130,7 @@ The following are forbidden in any artifact described as fidelity/parity/accepta
 - targeting only one layer while skipping others
 - `skipped_layers` semantics
 - skipping cells to make a result "close enough"
+- treating a legacy frame-by-frame inspector as the parity target when the required editor model is whole-sheet REXPaint-style editing
 - claiming new-file creation proves existing-file load fidelity
 - claiming existing-file load proves new-file authoring fidelity
 - reporting `PASS` with `SKIP` on a required gate

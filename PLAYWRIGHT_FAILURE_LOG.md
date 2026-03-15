@@ -239,6 +239,53 @@ If XP verification work resumes, it must start from the original goal:
 - preserve and verify real geometry/metadata/layers
 - hard-fail on any UI, backend, visual, export, or runtime mismatch
 
+---
+
+# Restored XP Harness (Strict Mode)
+
+**Date:** 2026-03-15
+**Status:** RESTORED AS HARD-FAIL VERIFIER
+
+The XP harness was restored in a different form under `scripts/xp_fidelity_test/`.
+
+What changed:
+
+- no blank-flow `1,1,1` assumption
+- metadata and frame geometry now derive from `scripts/rex_mcp/xp_core.py:get_metadata()`
+- recipe generation is frame-aware (`angles`, `anims`, `projs`, `frame_w`, `frame_h`)
+- export comparison checks the full XP truth table, not just layer 2
+- the missing user-reachable workbench XP import path is recorded as an explicit failure
+
+What this restored harness is expected to fail on today:
+
+- **user reachability:** shipped workbench still has no XP import control for the editor path
+- **geometry:** `/api/workbench/upload-xp` still hardcodes `angles=1, anims=[1], projs=1`
+- **layers:** upload still discards non-L2 layers
+- **export:** workbench export still fabricates native/template layers instead of preserving loaded layers
+
+Current intent:
+
+- fail honestly and early on the real blockers
+- do not flatten geometry
+- do not skip preserved-only layers
+- do not claim parity while the workbench violates the contract
+
+## Relevant Direction Correction (2026-03-15)
+
+The restored strict harness exposed a useful backend blocker (`workbench_upload_xp()` geometry hardcoding), but it must **not** become the new product target. The correct product target remains:
+
+- whole-sheet XP editing
+- user-reachable controls
+- REXPaint-style editor interaction model
+
+The legacy frame-by-frame inspector may still be used as a diagnostic/editing stopgap, but it is not the required parity surface.
+
+Specific correction:
+
+- do **not** spend the next phase optimizing the harness around `#cellInspectorPanel` or per-frame inspector behavior as if that were the milestone
+- keep real backend fixes like L0-derived geometry
+- pivot frontend/editor work toward the whole-sheet XP editor, using the grid/debug sheet as preview/navigation support only
+
 ## Expected Next Action
 
 The next action is not to build another harness.

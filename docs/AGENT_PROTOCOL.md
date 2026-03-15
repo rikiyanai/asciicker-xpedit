@@ -13,12 +13,14 @@ This protocol defines the minimum required startup, debugging, and handoff behav
 Agents must keep the current XP-editor milestone framed correctly:
 
 - The current milestone is **functional XP-file editor parity first**.
-- The proof mechanism is the oracle -> recipe -> execute-via-UI -> export -> compare harness.
-- A passing blank-flow `1,1,1` recreation run is evidence for the milestone, but it is **not** the whole milestone.
+- The proof mechanism is the hard-fail gate sequence defined in `docs/XP_EDITOR_ACCEPTANCE_CONTRACT.md`. There is no oracle/recipe/harness shortcut — the deleted blank-flow harness is not a valid proof path.
+- No narrow slice (blank-flow, single-frame, single-layer, `1,1,1` geometry) may be treated as milestone evidence. Evidence must cover both workflow families (new XP authoring and existing XP load/edit/export) with real geometry and all layers.
+- Only user-reachable controls count toward editor parity. Hidden state mutation, fake geometry, and skipped layers are forbidden in any artifact described as fidelity or parity proof.
+- The primary editor target is a **whole-sheet XP editing surface** aligned with the REXPaint UI model, not the legacy frame-by-frame inspector. The grid/debug sheet may support navigation and atlas structure, but per-frame inspection is not itself the parity target.
 - Agents must not collapse the goal down to "single-frame blank-session fidelity" when writing plans, handoffs, or status updates.
-- UX/UI work to make the editor feel like REXPaint belongs **after** capability parity is demonstrated and verified.
+- UX/UI polish to make the editor feel like REXPaint belongs **after** capability parity is demonstrated and verified, but replacing the frame-by-frame inspector with a whole-sheet REXPaint-style editor is part of capability parity itself.
 
-If an agent is only working on a narrow harness slice, it must say so explicitly and tie that slice back to the larger parity milestone.
+If an agent is only working on a narrow diagnostic slice, it must say so explicitly, label the artifact as diagnostic (not fidelity/parity), and tie that slice back to the larger parity milestone.
 
 ---
 

@@ -2063,21 +2063,52 @@ def workbench_export_xp(session_id: str, req_id: str) -> dict[str, Any]:
     sess = load_json(p)
     cols = int(sess["grid_cols"])
     rows = int(sess["grid_rows"])
-    cells = [
-        (int(c["glyph"]), tuple(c["fg"]), tuple(c["bg"]))
-        for c in sess["cells"]
-    ]
+    expected_cells = cols * rows
 
-    if len(cells) != cols * rows:
-        raise ApiError("session cell geometry mismatch", "session_geometry_invalid", "workbench", req_id, 422)
+    # B4: If session has persisted real layers (from uploaded XP), export them
+    # directly instead of fabricating L0/L1/L3 from templates.
+    persisted_layers = sess.get("layers")
+    if persisted_layers and isinstance(persisted_layers, list) and len(persisted_layers) >= 1:
+        # Hard-fail: every layer must have exactly cols*rows cells
+        layers: list[list[Cell]] = []
+        for li, raw_layer in enumerate(persisted_layers):
+            if not isinstance(raw_layer, list):
+                raise ApiError(
+                    f"persisted layer {li} is not a list",
+                    "export_layer_malformed", "workbench", req_id, 422,
+                )
+            if len(raw_layer) != expected_cells:
+                raise ApiError(
+                    f"persisted layer {li} has {len(raw_layer)} cells, expected {expected_cells}",
+                    "export_layer_geometry_mismatch", "workbench", req_id, 422,
+                )
+            layer_cells: list[Cell] = []
+            for ci, c in enumerate(raw_layer):
+                if not isinstance(c, dict):
+                    raise ApiError(
+                        f"persisted layer {li} cell {ci} is not a dict",
+                        "export_layer_malformed", "workbench", req_id, 422,
+                    )
+                layer_cells.append(
+                    (int(c["glyph"]), tuple(c["fg"]), tuple(c["bg"]))
+                )
+            layers.append(layer_cells)
+    else:
+        # Legacy/template path: fabricate L0/L1/L3 around L2 from session cells.
+        cells = [
+            (int(c["glyph"]), tuple(c["fg"]), tuple(c["bg"]))
+            for c in sess["cells"]
+        ]
+        if len(cells) != expected_cells:
+            raise ApiError("session cell geometry mismatch", "session_geometry_invalid", "workbench", req_id, 422)
 
-    # Read family from session metadata; default to "player" for pre-existing sessions
-    family = str(sess.get("family", "player"))
+        # Read family from session metadata; default to "player" for pre-existing sessions
+        family = str(sess.get("family", "player"))
 
-    layers = _build_native_layers(
-        family=family, cells_layer2=cells, cols=cols, rows=rows,
-        stage="workbench", req_id=req_id,
-    )
+        layers = _build_native_layers(
+            family=family, cells_layer2=cells, cols=cols, rows=rows,
+            stage="workbench", req_id=req_id,
+        )
 
     out = EXPORT_DIR / f"session-{session_id}.xp"
     write_xp(out, cols, rows, layers)
@@ -2086,6 +2117,8 @@ def workbench_export_xp(session_id: str, req_id: str) -> dict[str, Any]:
         "session_id": session_id,
         "xp_path": str(out.resolve()),
         "checksum": _sha256(out),
+        "layer_count": len(layers),
+        "source": "persisted_layers" if persisted_layers and isinstance(persisted_layers, list) and len(persisted_layers) >= 1 else "template",
     }
 
 

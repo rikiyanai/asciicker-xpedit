@@ -102,6 +102,7 @@
     rowCategories: {},
     frameGroups: [],
     layers: [],
+    hasUploadedLayers: false,
     layerNames: [...DEFAULT_LAYER_NAMES],
     activeLayer: 2,
     visibleLayers: new Set([2]),
@@ -2082,13 +2083,27 @@
     if (visual.length !== count) {
       state.cells = buildBlankLayerCells();
     }
-    state.layers = [
-      buildMetadataLayerCells(),
-      buildBlankLayerCells(),
-      deepCloneCells(state.cells),
-      buildBlankLayerCells(),
-    ];
-    state.layerNames = [...DEFAULT_LAYER_NAMES];
+
+    if (state.hasUploadedLayers
+        && Array.isArray(state.layers) && state.layers.length > 0
+        && state.layers.every((l) => Array.isArray(l) && l.length === count)) {
+      // Uploaded-XP session: real layers are the source of truth.
+      // Only sync the visual layer (L2) from state.cells; non-visual layers are preserved.
+      if (state.layers.length > 2) {
+        state.layers[2] = deepCloneCells(state.cells);
+      }
+    } else {
+      // Non-upload session or grid dimensions changed: synthetic rebuild.
+      state.hasUploadedLayers = false;
+      state.layers = [
+        buildMetadataLayerCells(),
+        buildBlankLayerCells(),
+        deepCloneCells(state.cells),
+        buildBlankLayerCells(),
+      ];
+      state.layerNames = [...DEFAULT_LAYER_NAMES];
+    }
+
     if (state.activeLayer < 0 || state.activeLayer >= state.layers.length) state.activeLayer = 2;
     if (!state.visibleLayers || state.visibleLayers.size <= 0) state.visibleLayers = new Set([2]);
     if (![...state.visibleLayers].some((v) => v >= 0 && v < state.layers.length)) {
@@ -3462,6 +3477,7 @@
       const payload = {
         session_id: state.sessionId,
         cells: state.cells,
+        layers: state.hasUploadedLayers ? state.layers : undefined,
         angles: state.angles,
         anims: state.anims,
         projs: state.projs,
@@ -3583,7 +3599,18 @@
       updateSourceToolUI();
       updateUndoRedoButtons();
       $("btnExport").disabled = false;
-      syncLayersFromSessionCells();
+      // Use real layers from backend when available (B3: persisted layers are
+      // the source of truth for uploaded XP sessions).
+      if (Array.isArray(j.layers) && j.layers.length > 0) {
+        state.layers = j.layers.map((l) => deepCloneCells(l));
+        state.hasUploadedLayers = true;
+        state.layerNames = j.layers.map((_, i) => DEFAULT_LAYER_NAMES[i] || `Layer ${i}`);
+        if (state.activeLayer < 0 || state.activeLayer >= state.layers.length) state.activeLayer = 2;
+        if (!state.visibleLayers || state.visibleLayers.size <= 0) state.visibleLayers = new Set([2]);
+      } else {
+        state.hasUploadedLayers = false;
+        syncLayersFromSessionCells();
+      }
       status(`Session active: ${state.sessionId.slice(0, 8)}...`, "ok");
       renderAll();
       // Avoid an expensive immediate full-session save (and background webbuild boot) right after convert/load.

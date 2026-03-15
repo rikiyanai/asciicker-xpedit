@@ -1934,14 +1934,21 @@ def workbench_load_from_job(job_id: str, req_id: str) -> dict[str, Any]:
     parsed = read_xp(xp_path)
     width = parsed["width"]
     height = parsed["height"]
-    visual = parsed["cells"][2] if parsed["layers"] >= 3 else parsed["cells"][0]
+    layer_count = int(parsed["layers"])
 
-    cells = []
-    populated = 0
-    for idx, (glyph, fg, bg) in enumerate(visual):
-        if glyph not in (0, 32):
-            populated += 1
-        cells.append({"idx": idx, "glyph": glyph, "fg": list(fg), "bg": list(bg)})
+    # Convert ALL layers to standard dict format (B2: stop discarding non-L2 layers)
+    all_layers: list[list[dict]] = []
+    for li in range(layer_count):
+        layer_raw = parsed["cells"][li]
+        layer_cells: list[dict] = []
+        for idx, (glyph, fg, bg) in enumerate(layer_raw):
+            layer_cells.append({"idx": idx, "glyph": glyph, "fg": list(fg), "bg": list(bg)})
+        all_layers.append(layer_cells)
+
+    # Visual layer (L2) for backward compatibility
+    visual_layer_idx = 2 if layer_count >= 3 else 0
+    cells = all_layers[visual_layer_idx]
+    populated = sum(1 for c in cells if c["glyph"] not in (0, 32))
 
     if populated <= 0:
         raise ApiError("workbench session would be empty", "empty_workbench", "workbench", req_id, 422)
@@ -1959,6 +1966,7 @@ def workbench_load_from_job(job_id: str, req_id: str) -> dict[str, Any]:
         grid_cols=width,
         grid_rows=height,
         cells=cells,
+        layers=all_layers,
     )
     sess_dict = sess.to_dict()
     sess_dict["family"] = str(meta.get("family", "player"))
@@ -1968,8 +1976,8 @@ def workbench_load_from_job(job_id: str, req_id: str) -> dict[str, Any]:
         "session_id": session_id,
         "job_id": job_id,
         "populated_cells": populated,
-        "layer_count": int(parsed["layers"]),
-        "layer_names": ["Metadata", "Layer 1", "Visual", "Layer 3"][: int(parsed["layers"])],
+        "layer_count": layer_count,
+        "layer_names": ["Metadata", "Layer 1", "Visual", "Layer 3"][:layer_count],
         "grid_cols": width,
         "grid_rows": height,
         "cell_w": sess.cell_w,
@@ -1984,6 +1992,7 @@ def workbench_load_from_job(job_id: str, req_id: str) -> dict[str, Any]:
         "source_cuts_v": [],
         "source_cuts_h": [],
         "cells": cells,
+        "layers": all_layers,
     }
 
 
@@ -2101,22 +2110,27 @@ def workbench_upload_xp(xp_bytes: bytes, req_id: str) -> dict[str, Any]:
     if layer_count < 3:
         raise ApiError(f"XP must have at least 3 layers, got {layer_count}", "insufficient_layers", "workbench", req_id, 422)
 
-    # Extract visual layer (layer 2, or layer 0 if file is simplified)
-    visual_layer_idx = 2 if layer_count >= 3 else 0
-    cells_raw = xp_data["cells"][visual_layer_idx]
+    # Convert ALL layers to standard dict format (B2: stop discarding non-L2 layers)
+    all_layers: list[list[dict]] = []
+    for layer_idx in range(layer_count):
+        layer_raw = xp_data["cells"][layer_idx]
+        layer_cells: list[dict] = []
+        for i in range(cols * rows):
+            if layer_raw[i] is None:
+                layer_cells.append({"glyph": 0, "fg": [255, 255, 255], "bg": [0, 0, 0]})
+            else:
+                glyph, fg, bg = layer_raw[i]
+                layer_cells.append({
+                    "glyph": int(glyph),
+                    "fg": list(fg) if isinstance(fg, tuple) else fg,
+                    "bg": list(bg) if isinstance(bg, tuple) else bg,
+                })
+        all_layers.append(layer_cells)
 
-    # Convert cell data to standard format
-    cells = []
-    for i in range(cols * rows):
-        if cells_raw[i] is None:
-            cells.append({"glyph": 0, "fg": [255, 255, 255], "bg": [0, 0, 0]})
-        else:
-            glyph, fg, bg = cells_raw[i]
-            cells.append({
-                "glyph": int(glyph),
-                "fg": list(fg) if isinstance(fg, tuple) else fg,
-                "bg": list(bg) if isinstance(bg, tuple) else bg,
-            })
+    # Visual layer (L2) extracted for backward compatibility only.
+    # `layers` is the source of truth for uploaded XP sessions.
+    visual_layer_idx = 2 if layer_count >= 3 else 0
+    cells = all_layers[visual_layer_idx]
 
     # Derive geometry from L0 row 0 metadata (matches xp_core.py:242-292).
     # Hard-fails if metadata is absent, malformed, or inconsistent with grid dims.
@@ -2150,7 +2164,7 @@ def workbench_upload_xp(xp_bytes: bytes, req_id: str) -> dict[str, Any]:
     )
     save_json(_job_path(job_id), record.to_dict())
 
-    # Create workbench session
+    # Create workbench session (B3: session carries full layer set)
     session_id = str(uuid.uuid4())
     sess = WorkbenchSession(
         session_id=session_id,
@@ -2163,6 +2177,7 @@ def workbench_upload_xp(xp_bytes: bytes, req_id: str) -> dict[str, Any]:
         grid_cols=cols,
         grid_rows=rows,
         cells=cells,
+        layers=all_layers,
     )
 
     # Save session
@@ -2754,6 +2769,36 @@ def workbench_save_session(session_id: str, payload: dict[str, Any], req_id: str
                 raise ApiError(f"invalid cell {idx}: {e}", "invalid_cells", "workbench", req_id, 422)
             coerced.append({"idx": idx, "glyph": glyph, "fg": fg, "bg": bg})
         sess["cells"] = coerced
+
+    # Persist full layer set if provided (B3: layers are source of truth for
+    # uploaded XP sessions; cells is backward-compat only).
+    raw_layers = payload.get("layers")
+    if raw_layers is not None:
+        if not isinstance(raw_layers, list):
+            raise ApiError("layers must be a list", "invalid_layers", "workbench", req_id, 422)
+        coerced_layers: list[list[dict]] = []
+        for li, layer in enumerate(raw_layers):
+            if not isinstance(layer, list):
+                raise ApiError(f"layer {li} must be a list", "invalid_layers", "workbench", req_id, 422)
+            if len(layer) != expected_cells:
+                raise ApiError(
+                    f"layer {li} has {len(layer)} cells, expected {expected_cells}",
+                    "invalid_layers", "workbench", req_id, 422,
+                )
+            coerced_layer: list[dict] = []
+            for idx, c in enumerate(layer):
+                if not isinstance(c, dict):
+                    raise ApiError(f"layer {li} cell {idx} must be object", "invalid_layers", "workbench", req_id, 422)
+                glyph = int(c.get("glyph", 0))
+                fg = c.get("fg", [0, 0, 0])
+                bg = c.get("bg", [0, 0, 0])
+                if not (isinstance(fg, list) and len(fg) == 3 and isinstance(bg, list) and len(bg) == 3):
+                    raise ApiError(f"layer {li} cell {idx}: fg/bg must be rgb triplets", "invalid_layers", "workbench", req_id, 422)
+                fg = [max(0, min(255, int(v))) for v in fg]
+                bg = [max(0, min(255, int(v))) for v in bg]
+                coerced_layer.append({"idx": idx, "glyph": glyph, "fg": fg, "bg": bg})
+            coerced_layers.append(coerced_layer)
+        sess["layers"] = coerced_layers
 
     if "anims" in payload:
         raw_anims = payload.get("anims")

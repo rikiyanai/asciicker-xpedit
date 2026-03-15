@@ -102,6 +102,10 @@ class WorkbenchSession:
     grid_cols: int
     grid_rows: int
     cells: list[dict[str, Any]]
+    # Full layer set from uploaded XP.  When present, this is the source of truth
+    # for non-visual layers.  `cells` is kept for backward compatibility only and
+    # is always derived from the visual layer (layers[2]).
+    layers: list[list[dict[str, Any]]] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

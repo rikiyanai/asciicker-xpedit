@@ -363,6 +363,29 @@ label.inline {
   display: block;
 }
 
+/* ── Whole-Sheet XP Editor ── */
+#wholeSheetPanel {
+  max-width: none;
+}
+.ws-info-bar {
+  display: flex;
+  gap: 16px;
+  padding: 6px 0;
+  font-size: 12px;
+  color: var(--muted);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+.ws-scroll-wrap {
+  overflow: auto;
+  max-height: 600px;
+  border: 1px solid #334;
+  border-radius: 4px;
+  background: #000;
+}
+.ws-scroll-wrap canvas {
+  display: block;
+}
+
 @media (max-width: 1100px) {
   .two-col {
     grid-template-columns: 1fr;

@@ -3529,6 +3529,7 @@
     const row = state.selectedRow === null ? 0 : state.selectedRow;
     renderPreviewFrame(Math.max(0, Math.min(state.angles - 1, row)), 0);
     renderInspector();
+    syncWholeSheetFromState();
     updateSessionDirtyBadge();
   }
 
@@ -3613,6 +3614,7 @@
       }
       status(`Session active: ${state.sessionId.slice(0, 8)}...`, "ok");
       renderAll();
+      hydrateWholeSheetEditor();
       // Avoid an expensive immediate full-session save (and background webbuild boot) right after convert/load.
       // Large sprite sheets can make the UI feel frozen here; defer both until the user edits or runs skin test.
       stopWebbuildReadyPoll();
@@ -5214,6 +5216,7 @@
     renderJitterInfo();
     const semanticFrames = Math.max(1, state.anims.reduce((a, b) => a + b, 0));
     renderPreviewFrame(row, Math.max(0, Math.min(semanticFrames - 1, col % semanticFrames)));
+    panWholeSheetToFrame(row, col);
   }
 
   function openInspectorForSelectedFrame() {
@@ -5232,6 +5235,60 @@
       row: Number(state.selectedRow),
       col: Number(Math.min(...state.selectedCols)),
     };
+  }
+
+  // ── Whole-Sheet Editor Integration (B6) ──
+
+  function hydrateWholeSheetEditor() {
+    const wsEditor = window.__wholeSheetEditor;
+    if (!wsEditor || typeof wsEditor.mount !== "function") return;
+    const panel = $("wholeSheetPanel");
+    const mount = $("wholeSheetMount");
+    const wsStatus = $("wholeSheetStatus");
+    if (!panel || !mount) return;
+
+    if (!state.sessionId || !state.layers || state.layers.length === 0 || state.gridCols <= 0 || state.gridRows <= 0) {
+      panel.classList.add("hidden");
+      if (wsStatus) wsStatus.textContent = "not loaded";
+      return;
+    }
+
+    panel.classList.remove("hidden");
+    if (wsStatus) wsStatus.textContent = "loading...";
+
+    wsEditor.mount({
+      container: mount,
+      gridCols: state.gridCols,
+      gridRows: state.gridRows,
+      layers: state.layers,
+      layerNames: state.layerNames,
+      activeLayer: state.activeLayer,
+      visibleLayers: state.visibleLayers,
+    }).then(() => {
+      if (wsStatus) {
+        const st = wsEditor.getState();
+        wsStatus.textContent = st.hasFontLoaded
+          ? `${st.gridCols}\u00d7${st.gridRows}, ${st.layerCount} layers`
+          : `${st.gridCols}\u00d7${st.gridRows}, ${st.layerCount} layers (font fallback)`;
+      }
+    }).catch((err) => {
+      console.error("[whole-sheet] mount failed:", err);
+      if (wsStatus) wsStatus.textContent = "mount failed";
+    });
+  }
+
+  function panWholeSheetToFrame(row, col) {
+    const wsEditor = window.__wholeSheetEditor;
+    if (!wsEditor || typeof wsEditor.panToFrame !== "function") return;
+    if (!wsEditor.getState || !wsEditor.getState().mounted) return;
+    wsEditor.panToFrame(row, col, state.frameWChars, state.frameHChars);
+  }
+
+  function syncWholeSheetFromState() {
+    const wsEditor = window.__wholeSheetEditor;
+    if (!wsEditor || typeof wsEditor.syncFromState !== "function") return;
+    if (!wsEditor.getState || !wsEditor.getState().mounted) return;
+    wsEditor.syncFromState(state.layers);
   }
 
   function gridFrameSignature(row, col) {
@@ -6879,6 +6936,11 @@
         }
       }
       return vals.join("|");
+    },
+    getWholeSheetEditorState: () => {
+      const ws = window.__wholeSheetEditor;
+      if (!ws || typeof ws.getState !== "function") return { available: false };
+      return { available: true, ...ws.getState() };
     },
   };
   installUiRecorderHooks();

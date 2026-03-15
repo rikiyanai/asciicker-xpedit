@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Pipeline V2 Workbench</title>
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/rexpaint-editor/styles.css">
 </head>
 <body>
 <div class="wrap">
@@ -134,6 +135,11 @@
         <button id="ctxDelete">Delete</button>
       </div>
     </div>
+  </div>
+
+  <div class="panel hidden" id="wholeSheetPanel">
+    <h3>Whole-Sheet XP Editor <span id="wholeSheetStatus" class="small" style="font-weight:normal;">not loaded</span></h3>
+    <div id="wholeSheetMount"></div>
   </div>
 
   <details id="legacyGridDetails" class="legacy-grid-debug">
@@ -403,5 +409,6 @@
   </div>
 </div>
 <script src="/workbench.js"></script>
+<script type="module" src="/whole-sheet-init.js"></script>
 </body>
 </html>

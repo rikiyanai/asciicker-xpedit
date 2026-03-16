@@ -220,10 +220,65 @@ The only acceptable loop is:
 
 Do not introduce a narrower substitute verifier just to get a pass signal.
 
+## Verification Evidence Protocol
+
+### Canonical Verifier Path
+
+Acceptance evidence for XP-editor parity must come from the canonical recipe-driven verifier:
+
+1. `scripts/xp_fidelity_test/truth_table.py` — ground truth extraction
+2. `scripts/xp_fidelity_test/recipe_generator.py` — spec-constrained recipe of user-reachable actions
+3. `scripts/xp_fidelity_test/run_fidelity_test.mjs` — recipe execution and truth comparison
+
+No other script, manual test, browser-console probe, or ad hoc harness may be cited as
+acceptance evidence.
+
+### Ad Hoc Scripts Are Diagnostic Only
+
+Ad hoc Playwright scripts, `page.evaluate()` mutations, `window.__wb_debug` calls, and
+one-off test files are permitted for implementation diagnosis. They may NOT:
+
+- be cited as acceptance evidence
+- use reserved words (fidelity, parity, acceptance, verified, PASS) in their names or output
+- substitute for the canonical verifier
+
+### Verifier Inability Is a Verifier Bug
+
+If the canonical verifier cannot express a required workflow (whole-sheet tool activation,
+multi-layer editing, apply-mode toggling, etc.), that is a verifier failure. The correct
+response is to fix the verifier, not to bypass it with an ad hoc script.
+
+### Recipe Mode Enforcement
+
+The recipe generator and test runner must support two modes:
+
+- **acceptance** (`--mode acceptance`): only user-reachable whole-sheet editor actions.
+  Inspector-only and debug-only actions are refused. Only this mode produces acceptance
+  evidence.
+- **diagnostic** (`--mode diagnostic`): may include inspector or debug actions for
+  implementation diagnosis. Results must be labeled diagnostic, not acceptance.
+
+Running the verifier without `--mode` defaults to diagnostic mode. Acceptance claims
+require explicit `--mode acceptance`.
+
 ## Current Repo Truth
 
-As of 2026-03-15:
+As of 2026-03-16:
 
-- no valid XP fidelity harness exists in this repo
+### Protocol requirements (now in effect)
+
+- ad hoc scripts are diagnostic only — never acceptance evidence
+- acceptance evidence must come from the canonical verifier path
+- verifier inability to express a workflow is a verifier bug, not bypass permission
+- recipe mode enforcement (acceptance vs diagnostic) is required before any parity claim
+
+### Implementation status
+
+- the canonical verifier exists at `scripts/xp_fidelity_test/` in restored strict form
+- recipe generator supports `--mode acceptance` (whole-sheet) and `--mode diagnostic`
+  (inspector); acceptance mode emits only `ws_*` actions, zero inspector selectors
+- test runner enforces mode consistency: refuses diagnostic-only actions in acceptance mode
+- both modes generate and parse correctly against real XP files (verified 2026-03-16)
 - the previous blank-flow single-frame harness was deleted because it violated this contract
-- future XP verification work must restart from this contract, not from deleted harness artifacts
+- verifier does NOT yet cover: Skin Dock runtime test, new-file authoring workflow,
+  multi-layer editing recipe, user-reachable XP import UI — these are open verifier gaps

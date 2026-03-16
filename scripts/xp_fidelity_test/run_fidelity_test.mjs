@@ -18,9 +18,15 @@ const truthTablePath = getArg('--truth-table');
 const recipePath = getArg('--recipe');
 const url = getArg('--url', 'http://127.0.0.1:5071/workbench');
 const headed = args.includes('--headed');
+const mode = getArg('--mode', 'diagnostic');
 
 if (!xpPath || !truthTablePath || !recipePath) {
-  console.error('Usage: node run_fidelity_test.mjs --xp <xp> --truth-table <json> --recipe <json> [--url <url>] [--headed]');
+  console.error('Usage: node run_fidelity_test.mjs --xp <xp> --truth-table <json> --recipe <json> [--url <url>] [--headed] [--mode acceptance|diagnostic]');
+  process.exit(1);
+}
+
+if (mode !== 'acceptance' && mode !== 'diagnostic') {
+  console.error(`Unknown --mode: ${mode}. Use 'acceptance' or 'diagnostic'.`);
   process.exit(1);
 }
 
@@ -28,14 +34,26 @@ const truthTable = JSON.parse(fs.readFileSync(truthTablePath, 'utf-8'));
 const recipe = JSON.parse(fs.readFileSync(recipePath, 'utf-8'));
 const outDir = path.dirname(path.resolve(truthTablePath));
 
+// Validate mode consistency between recipe and runner
+const recipeMode = recipe.mode || 'diagnostic';
+if (mode === 'acceptance' && recipeMode !== 'acceptance') {
+  console.error(`[REFUSE] Runner in acceptance mode but recipe was generated in '${recipeMode}' mode. Re-generate recipe with --mode acceptance.`);
+  process.exit(1);
+}
+
 const failures = [];
 const report = {
   source_xp: path.resolve(xpPath),
+  mode,
   setup_mode: 'api_scaffold',
   user_reachable_load_pass: false,
   geometry_pass: false,
+  frame_layout_pass: false,
+  all_layers_pass: false,
   execute_pass: false,
+  cell_fidelity_pass: false,
   export_pass: false,
+  skin_dock_pass: false,
   overall_pass: false,
   failures,
 };
@@ -73,6 +91,10 @@ function sameRgb(a, b) {
 
 function compareTruth(expected, actual) {
   const mismatches = [];
+  // Track which layers have mismatches so we can separate preserved-layer
+  // fidelity (all_layers_pass) from editable-layer fidelity (cell_fidelity_pass).
+  const layerMismatchCounts = {};  // layer index → count
+
   const metaKeys = ['angles', 'projs', 'frame_rows', 'frame_cols', 'frame_w', 'frame_h'];
   for (const key of metaKeys) {
     if ((expected.metadata?.[key] ?? null) !== (actual.metadata?.[key] ?? null)) {
@@ -91,10 +113,12 @@ function compareTruth(expected, actual) {
   }
   const layerCount = Math.max(expected.layers?.length || 0, actual.layers?.length || 0);
   for (let i = 0; i < layerCount; i++) {
+    layerMismatchCounts[i] = 0;
     const expLayer = expected.layers?.[i];
     const actLayer = actual.layers?.[i];
     if (!expLayer || !actLayer) {
       mismatches.push({ type: 'layer_missing', layer: i, expected: !!expLayer, actual: !!actLayer });
+      layerMismatchCounts[i]++;
       continue;
     }
     if (expLayer.width !== actLayer.width || expLayer.height !== actLayer.height) {
@@ -104,6 +128,7 @@ function compareTruth(expected, actual) {
         expected: `${expLayer.width}x${expLayer.height}`,
         actual: `${actLayer.width}x${actLayer.height}`,
       });
+      layerMismatchCounts[i]++;
       continue;
     }
     const cells = Math.max(expLayer.cells.length, actLayer.cells.length);
@@ -112,6 +137,7 @@ function compareTruth(expected, actual) {
       const actCell = actLayer.cells[idx];
       if (!expCell || !actCell) {
         mismatches.push({ type: 'cell_missing', layer: i, index: idx });
+        layerMismatchCounts[i]++;
         continue;
       }
       if (
@@ -127,12 +153,13 @@ function compareTruth(expected, actual) {
           expected: expCell,
           actual: actCell,
         });
+        layerMismatchCounts[i]++;
         if (mismatches.length >= 50) break;
       }
     }
     if (mismatches.length >= 50) break;
   }
-  return { ok: mismatches.length === 0, mismatches };
+  return { ok: mismatches.length === 0, mismatches, layerMismatchCounts };
 }
 
 async function readSummary(page) {
@@ -144,18 +171,64 @@ async function readSummary(page) {
   };
 }
 
+// ── Inspector-mode action helpers ──
+
 async function getZoom(page) {
   const value = await page.locator('#inspectorZoom').inputValue();
   const zoom = Number.parseInt(value || '10', 10);
   return Number.isFinite(zoom) && zoom > 0 ? zoom : 10;
 }
 
+// ── Action classification (whitelist for acceptance mode) ──
+
+const ACCEPTANCE_ACTIONS = new Set([
+  'wait_visible',
+  'ws_tool_activate',
+  'ws_ensure_apply',
+  'ws_set_draw_state',
+  'ws_paint_cell',
+  'ws_eyedropper_sample',
+  'ws_erase_cell',
+]);
+
+// ── Scroll helper for whole-sheet canvas ──
+
+async function scrollToCell(page, targetPx, targetPy, cellSize) {
+  await page.evaluate(({ tx, ty, cs }) => {
+    const scroll = document.getElementById('wholeSheetScroll');
+    if (!scroll) return;
+    const viewW = scroll.clientWidth;
+    const viewH = scroll.clientHeight;
+    const cx = tx + cs / 2;
+    const cy = ty + cs / 2;
+    const needX = cx < scroll.scrollLeft || cx > scroll.scrollLeft + viewW;
+    const needY = cy < scroll.scrollTop || cy > scroll.scrollTop + viewH;
+    if (needX || needY) {
+      scroll.scrollLeft = Math.max(0, tx - viewW / 2);
+      scroll.scrollTop = Math.max(0, ty - viewH / 2);
+    }
+  }, { tx: targetPx, ty: targetPy, cs: cellSize });
+}
+
+// ── Recipe executor ──
+
 async function executeRecipe(page) {
   for (const action of recipe.actions || []) {
+    // Acceptance mode: whitelist enforcement — only ACCEPTANCE_ACTIONS allowed.
+    // Any action not in the whitelist is refused, whether it is a known
+    // diagnostic action or a future unknown action type.
+    if (mode === 'acceptance' && !ACCEPTANCE_ACTIONS.has(action.action)) {
+      fail('mode_violation', `Acceptance mode only allows whitelisted actions. Refused: ${action.action}`);
+      return false;
+    }
+
     switch (action.action) {
+      // ── Shared actions ──
       case 'wait_visible':
         await page.waitForSelector(action.selector, { state: 'visible', timeout: action.timeout_ms || 5000 });
         break;
+
+      // ── Diagnostic (inspector) actions — refused in acceptance mode above ──
       case 'open_frame':
         await page.dblclick(action.selector);
         break;
@@ -180,6 +253,87 @@ async function executeRecipe(page) {
         await page.click(action.selector, { position: { x, y } });
         break;
       }
+
+      // ── Acceptance (whole-sheet) actions ──
+      case 'ws_tool_activate':
+        await page.click(action.selector);
+        break;
+
+      case 'ws_ensure_apply': {
+        // Ensure the apply-mode toggle is in the desired state.
+        // The toggle button has class 'ws-toggle-on' when active.
+        const btn = page.locator(action.selector);
+        const isOn = await btn.evaluate((el) => el.classList.contains('ws-toggle-on'));
+        if (isOn !== action.state) {
+          await btn.click();
+        }
+        break;
+      }
+
+      case 'ws_set_draw_state':
+        // Set glyph code, fg color, bg color through whole-sheet toolbar inputs
+        await page.fill(action.glyph_selector, String(action.glyph));
+        // Trigger change event for glyph input
+        await page.locator(action.glyph_selector).dispatchEvent('change');
+        await page.fill(action.fg_selector, action.fg);
+        await page.locator(action.fg_selector).dispatchEvent('input');
+        await page.fill(action.bg_selector, action.bg);
+        await page.locator(action.bg_selector).dispatchEvent('input');
+        break;
+
+      case 'ws_paint_cell': {
+        // Scroll #wholeSheetScroll so the target cell is in the viewport,
+        // then click at the cell's center on the whole-sheet canvas.
+        const cs = action.cell_size;
+        const targetPx = action.x * cs;
+        const targetPy = action.y * cs;
+        await scrollToCell(page, targetPx, targetPy, cs);
+        const px = Math.floor(action.x * cs + cs / 2);
+        const py = Math.floor(action.y * cs + cs / 2);
+        await page.click(action.selector, { position: { x: px, y: py } });
+        break;
+      }
+
+      case 'ws_eyedropper_sample': {
+        // Click the eyedropper on a cell, then verify draw state was updated.
+        const cs2 = action.cell_size;
+        await scrollToCell(page, action.x * cs2, action.y * cs2, cs2);
+        const spx = Math.floor(action.x * cs2 + cs2 / 2);
+        const spy = Math.floor(action.y * cs2 + cs2 / 2);
+        await page.click(action.selector, { position: { x: spx, y: spy } });
+        // Verify the eyedropper updated the draw state inputs
+        if (action.expected_glyph !== undefined) {
+          const actualGlyph = await page.locator('#wsGlyphCode').inputValue();
+          if (String(action.expected_glyph) !== actualGlyph) {
+            fail('tool_eyedropper', `Eyedropper glyph mismatch: expected ${action.expected_glyph}, got ${actualGlyph}`);
+          }
+        }
+        if (action.expected_fg) {
+          const actualFg = await page.locator('#wsFgColor').inputValue();
+          if (action.expected_fg.toLowerCase() !== actualFg.toLowerCase()) {
+            fail('tool_eyedropper', `Eyedropper FG mismatch: expected ${action.expected_fg}, got ${actualFg}`);
+          }
+        }
+        if (action.expected_bg) {
+          const actualBg = await page.locator('#wsBgColor').inputValue();
+          if (action.expected_bg.toLowerCase() !== actualBg.toLowerCase()) {
+            fail('tool_eyedropper', `Eyedropper BG mismatch: expected ${action.expected_bg}, got ${actualBg}`);
+          }
+        }
+        break;
+      }
+
+      case 'ws_erase_cell': {
+        // Click the erase tool on a cell. The erase tool should clear the
+        // cell to transparent state (glyph=0, fg=white, bg=black).
+        const cs3 = action.cell_size;
+        await scrollToCell(page, action.x * cs3, action.y * cs3, cs3);
+        const epx = Math.floor(action.x * cs3 + cs3 / 2);
+        const epy = Math.floor(action.y * cs3 + cs3 / 2);
+        await page.click(action.selector, { position: { x: epx, y: epy } });
+        break;
+      }
+
       default:
         fail('unknown_action', `Unknown recipe action: ${action.action}`);
         return false;
@@ -215,8 +369,16 @@ async function main() {
 
     await page.goto(`${url}?job_id=${encodeURIComponent(uploadJson.job_id)}`, { waitUntil: 'networkidle', timeout: 30000 });
     await page.waitForSelector('#sessionOut', { state: 'visible', timeout: 10000 });
-    await page.waitForSelector('.frame-cell[data-row][data-col]', { state: 'attached', timeout: 10000 });
 
+    // Mode-specific element waits
+    if (mode === 'acceptance') {
+      // Wait for whole-sheet canvas to mount
+      await page.waitForSelector('#wholeSheetCanvas', { state: 'attached', timeout: 15000 });
+    } else {
+      await page.waitForSelector('.frame-cell[data-row][data-col]', { state: 'attached', timeout: 10000 });
+    }
+
+    // Validate required selectors from the recipe
     for (const [name, selector] of Object.entries(recipe.required_selectors || {})) {
       const count = await page.locator(selector).count();
       if (count <= 0) {
@@ -235,11 +397,7 @@ async function main() {
       throw new Error('session/meta summary missing');
     }
 
-    const expectedFrameCount = expected.frame_rows * expected.frame_cols;
-    const actualFrameCount = await page.locator('.frame-cell[data-row][data-col]').count();
-    if (actualFrameCount !== expectedFrameCount) {
-      fail('geometry', `Frame cell count mismatch: expected ${expectedFrameCount}, got ${actualFrameCount}`);
-    }
+    // Geometry checks (mode-independent)
     if (actual.angles !== expected.angles) fail('geometry', `angles mismatch: expected ${expected.angles}, got ${actual.angles}`);
     if (JSON.stringify(actual.anims || []) !== JSON.stringify(expected.anims || [])) {
       fail('geometry', `anims mismatch: expected ${JSON.stringify(expected.anims)}, got ${JSON.stringify(actual.anims)}`);
@@ -249,10 +407,45 @@ async function main() {
     if (actualMeta.frame_h_chars !== expected.frame_h) fail('geometry', `frame_h mismatch: expected ${expected.frame_h}, got ${actualMeta.frame_h_chars}`);
 
     report.geometry_pass = !failures.some((f) => f.class === 'geometry');
+
+    // Frame layout is verified independently: check that the session exposes
+    // the correct number of frame tiles matching the expected grid shape.
+    const expectedFrameCount = expected.frame_rows * expected.frame_cols;
+    if (mode === 'diagnostic') {
+      const actualFrameCount = await page.locator('.frame-cell[data-row][data-col]').count();
+      if (actualFrameCount !== expectedFrameCount) {
+        fail('frame_layout', `Frame cell count mismatch: expected ${expectedFrameCount}, got ${actualFrameCount}`);
+      }
+    } else {
+      // In acceptance mode, verify frame layout from session metadata rather
+      // than inspecting DOM tiles (the whole-sheet editor does not use .frame-cell).
+      const sessionFrameRows = actualMeta.frame_rows ?? actual.angles ?? null;
+      const sessionFrameCols = actualMeta.frame_cols ?? null;
+      if (sessionFrameRows !== null && sessionFrameCols !== null) {
+        const sessionFrameCount = sessionFrameRows * sessionFrameCols;
+        if (sessionFrameCount !== expectedFrameCount) {
+          fail('frame_layout', `Session frame count mismatch: expected ${expectedFrameCount}, got ${sessionFrameCount}`);
+        }
+      } else {
+        fail('frame_layout', 'Cannot verify frame layout: session metadata missing frame_rows/frame_cols');
+      }
+    }
+    report.frame_layout_pass = !failures.some((f) => f.class === 'frame_layout');
+
+    // Preliminary layer count check (quick fail before recipe execution)
+    const expectedLayerCount = truthTable.layer_count;
+    if (summary.session?.layer_count !== undefined && summary.session.layer_count !== expectedLayerCount) {
+      fail('layers', `Layer count mismatch: expected ${expectedLayerCount}, got ${summary.session.layer_count}`);
+    }
+    // NOTE: all_layers_pass is set later from per-layer export comparison,
+    // not from this count check alone. The count check is a preliminary gate.
+
+    // Execute recipe if geometry passed
     if (report.geometry_pass) {
       report.execute_pass = await executeRecipe(page);
     }
 
+    // Export and compare
     await page.click('#btnExport');
     await page.waitForTimeout(1000);
     const exportText = await page.locator('#exportOut').textContent();
@@ -268,18 +461,67 @@ async function main() {
         ok: comparison.ok,
         mismatch_count: comparison.mismatches.length,
         mismatches: comparison.mismatches.slice(0, 20),
+        layer_mismatch_counts: comparison.layerMismatchCounts,
       };
+
       if (!comparison.ok) {
         fail('export_compare', `Exported XP mismatched source XP (${comparison.mismatches.length} mismatches)`);
       } else {
         report.export_pass = true;
       }
+
+      // all_layers_pass: every layer must have zero mismatches in the export
+      // comparison. This verifies per-layer content preservation, not just
+      // that the layer count is correct.
+      const lmc = comparison.layerMismatchCounts;
+      const preservedLayers = recipe.preserved_only_layers || [];
+      const preservedOk = preservedLayers.every((idx) => (lmc[idx] || 0) === 0);
+      const layerCountOk = !failures.some((f) => f.class === 'layers');
+      const allLayersExist = (truthTable.layers || []).every(
+        (_, i) => lmc[i] !== undefined
+      );
+      report.all_layers_pass = layerCountOk && preservedOk && allLayersExist;
+      if (!report.all_layers_pass) {
+        const badLayers = Object.entries(lmc)
+          .filter(([, count]) => count > 0)
+          .map(([idx, count]) => `L${idx}:${count}`)
+          .join(', ');
+        if (badLayers) {
+          fail('layer_fidelity', `Per-layer content mismatches: ${badLayers}`);
+        }
+      }
+
+      // cell_fidelity_pass: L2 (editable layer) must have zero mismatches
+      const editableLayer = recipe.editable_layer ?? 2;
+      report.cell_fidelity_pass = (lmc[editableLayer] || 0) === 0;
+      if (!report.cell_fidelity_pass) {
+        fail('cell_fidelity', `Editable layer ${editableLayer} has ${lmc[editableLayer]} cell mismatches`);
+      }
     }
+
+    // Skin dock not yet testable from this harness
+    report.skin_dock_pass = false;
+
   } catch (err) {
     fail('fatal', err instanceof Error ? err.message : String(err));
   } finally {
-    report.overall_pass = failures.length === 0;
-    fs.writeFileSync(path.join(outDir, 'result.json'), JSON.stringify(report, null, 2));
+    // overall_pass is the conjunction of ALL required contract gates.
+    // It may only be true when every individual gate is true.
+    // failures.length === 0 is necessary but not sufficient — a gate that
+    // was never evaluated (still false) also blocks overall_pass.
+    report.overall_pass =
+      report.user_reachable_load_pass &&
+      report.geometry_pass &&
+      report.frame_layout_pass &&
+      report.all_layers_pass &&
+      report.execute_pass &&
+      report.cell_fidelity_pass &&
+      report.export_pass &&
+      report.skin_dock_pass;
+    const resultPath = path.join(outDir, 'result.json');
+    fs.writeFileSync(resultPath, JSON.stringify(report, null, 2));
+    console.error(`\n[${mode.toUpperCase()}] Result: ${report.overall_pass ? 'PASS' : 'FAIL'} (${failures.length} failures)`);
+    console.error(`Report: ${resultPath}`);
     await browser.close();
   }
   process.exit(report.overall_pass ? 0 : 1);

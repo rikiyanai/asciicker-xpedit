@@ -286,3 +286,69 @@ That older handoff explains:
 ## 12. Decision Rule
 
 If the agent has not identified the exact branch/runtime baseline, it is not ready to fix the bug.
+
+---
+
+## 13. Verification Evidence Protocol
+
+### 13a. Canonical Verifier Path
+
+The only path that may produce acceptance evidence for XP-editor parity is the canonical
+recipe-driven verifier:
+
+1. `scripts/xp_fidelity_test/truth_table.py` — extracts ground truth from source XP
+2. `scripts/xp_fidelity_test/recipe_generator.py` — generates a spec-constrained recipe of
+   user-reachable actions
+3. `scripts/xp_fidelity_test/run_fidelity_test.mjs` — executes the recipe through the shipped
+   workbench and compares the result against the truth table
+
+Acceptance evidence must come from this path. No other script, harness, or manual procedure
+may be cited as acceptance evidence for parity claims.
+
+### 13b. Ad Hoc Scripts Are Diagnostic Only
+
+Ad hoc Playwright scripts, browser-console probes, `page.evaluate()` state mutations,
+`window.__wb_debug` calls, and one-off test files are permitted for **implementation diagnosis
+only**. They may:
+
+- help narrow down a specific bug
+- verify a single code change in isolation
+- explore browser behavior during development
+
+They may NOT:
+
+- be cited as acceptance evidence
+- be labeled with reserved words (fidelity, parity, acceptance, verified, PASS)
+- substitute for the canonical verifier when the canonical verifier fails or cannot express
+  the workflow under test
+
+### 13c. Verifier Inability Is a Verifier Bug
+
+If the canonical verifier cannot express a required workflow (e.g., whole-sheet tool
+activation, apply-mode toggling, multi-layer editing), that is a **failure in the verifier**,
+not permission to bypass it.
+
+The correct response is:
+
+1. record the verifier gap as a blocking issue
+2. fix the verifier so it can express the workflow
+3. then run the workflow through the fixed verifier
+
+The incorrect response is:
+
+- writing an ad hoc script that tests the workflow outside the verifier
+- citing that ad hoc script as acceptance evidence
+- claiming the workflow is verified because the ad hoc script passed
+
+### 13d. Recipe Mode Requirement
+
+The recipe generator must distinguish between:
+
+- **acceptance mode** (`--mode acceptance`): emits only user-reachable actions through the
+  shipped whole-sheet editor surface. Inspector-only, debug-only, and hidden actions are
+  refused. Only this mode produces acceptance-eligible recipes.
+- **diagnostic mode** (`--mode diagnostic`): may emit inspector-primary actions for
+  implementation debugging. Results must be labeled as diagnostic, not acceptance.
+
+The test runner must enforce the same mode distinction and refuse to execute debug-only
+actions when running in acceptance mode.

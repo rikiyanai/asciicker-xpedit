@@ -515,3 +515,126 @@ The user explicitly rejected this product direction earlier:
   shipped workbench, using the improved backend truth path.
 - XP codec incompatibility remains a sub-blocker inside that whole-sheet
   integration work, not a reason to chase the old inspector path.
+
+---
+
+# Product Gap: Whole-Sheet Import Renders Colored Cells Without Visible Glyphs
+
+**Date:** 2026-03-16
+**Status:** FIXED (glyph rendering fix verified 2026-03-16)
+
+## What Was Observed
+
+During a real browser import of an XP file through the visible workbench import UI,
+the whole-sheet editor mounted successfully, but the imported sheet showed colored
+cells without visible glyphs.
+
+This is a parity blocker, not cosmetic polish.
+
+## Why This Matters
+
+- The whole-sheet editor is supposed to render full CP437 glyph cells, not merely
+  colored blocks.
+- A user cannot meaningfully verify or edit REXPaint-style content if glyphs are
+  missing from the rendered sheet.
+- This undermines the whole-sheet acceptance path even if session hydration and
+  geometry are otherwise correct.
+
+## Likely Area To Audit
+
+- `web/whole-sheet-init.js` font loading and Canvas setup
+- CP437 font atlas path / runtime availability
+- whole-sheet canvas render path compared with the expected full-cell glyph model
+
+## Correct Conclusion
+
+- Treat missing glyph rendering as a first-class product blocker.
+- Do not classify this as minor UI polish.
+- Fix or explain the whole-sheet glyph-render path before claiming meaningful
+  whole-sheet parity progress.
+
+---
+
+# Product Gap: Shipped Whole-Sheet Layout Still Mismatches REXPaint Spec
+
+**Date:** 2026-03-16
+**Status:** OPEN
+
+## What Was Observed
+
+The shipped whole-sheet UI layout is still structurally wrong versus the REXPaint
+parity target. The current surface is a mounted toolbar/panel arrangement, not the
+spec-defined REXPaint-style layout with the correct regions in the correct places.
+
+## Why This Matters
+
+- The parity spec makes layout part of the editor-surface requirement, not a
+  post-parity polish pass.
+- The spec requires:
+  - left sidebar
+  - center whole-sheet canvas
+  - secondary frame navigator
+  - status region
+- Leaving controls in the wrong places while adding features risks cementing the
+  wrong interaction model.
+
+## Existing Plan Awareness
+
+The repo already recognizes this category in general:
+
+- `docs/plans/2026-03-15-xp-editor-hard-fail-plan.md` lists `UI layout mismatch`
+- `docs/REXPAINT_PARITY_EDITOR_SURFACE_SPEC.md` defines the required layout regions
+
+But this specific shipped-layout failure should be treated as an active product
+blocker now, not just a theoretical future cleanup.
+
+## Correct Conclusion
+
+- Before piling on more feature slices, audit the shipped whole-sheet surface
+  against the parity spec and identify the first concrete layout correction.
+- Missing regions/buttons may remain blank or disabled, but they should migrate
+  toward the correct REXPaint-aligned structure rather than reinforcing the wrong
+  layout.
+
+---
+
+# Glyph Rendering Fix: Verified 2026-03-16
+
+**Date:** 2026-03-16
+**Status:** VERIFIED — glyph rendering works after luminance-mask fix
+
+## What Was Fixed
+
+The CP437 font spritesheet (`cp437_12x12.png`) is RGB (white glyphs on black
+background), not RGBA with transparent backgrounds. The original `drawGlyph()`
+in `web/rexpaint-editor/cp437-font.js` used the source alpha channel directly,
+which produced solid colored blocks because every pixel had alpha=255.
+
+The fix (lines 173-189) computes luminance from the RGB channels:
+`luminance = round((R + G + B) / 3)` and uses that as the glyph mask alpha.
+Pixels with luminance > 0 get the foreground color with luminance-derived alpha;
+pixels with luminance = 0 remain transparent, letting the background fill show
+through.
+
+## How It Was Verified
+
+- Imported `sprites/character.xp` through the visible workbench XP import UI
+  (`#xpImportFile` + `#xpImportBtn`)
+- Whole-sheet editor mounted: 14x6 grid, 3 layers, CP437 font loaded
+- Canvas screenshot shows shaped, colored glyphs — recognizable character sprite
+  with body, eyes, and limbs — not solid color blocks
+- Editor state confirmed: `hasFontLoaded: true`, `mounted: true`
+
+## What This Does NOT Fix
+
+- The layout mismatch (section "Shipped Whole-Sheet Layout Still Mismatches
+  REXPaint Spec" above) remains OPEN
+- The glyph fix only affects rendering; no structural, layer, or export issues
+  were addressed
+- The font is loaded from `/termpp-web-flat/fonts/cp437_12x12.png` which
+  requires the runtime directory to be built; this is an existing deployment
+  dependency, not a new one
+
+## File Changed
+
+- `web/rexpaint-editor/cp437-font.js` (dirty, uncommitted)

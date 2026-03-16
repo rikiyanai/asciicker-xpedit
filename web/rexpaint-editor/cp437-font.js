@@ -170,18 +170,20 @@ export class CP437Font {
     const blendedData = blendCtx.createImageData(this.glyphWidth, this.glyphHeight);
     const blendedPixels = blendedData.data;
 
-    // Apply foreground color where glyph has alpha > 0
+    // The bundled CP437 sheet is RGB (white glyphs on black), not RGBA.
+    // Use source luminance as the glyph mask so imported sheets render shaped glyphs,
+    // not solid color blocks.
     for (let i = 0; i < data.length; i += 4) {
-      const alpha = data[i + 3]; // Alpha channel
+      const luminance = Math.round((data[i] + data[i + 1] + data[i + 2]) / 3);
 
-      if (alpha > 0) {
-        // Non-transparent pixel: use foreground color with glyph's alpha
+      if (luminance > 0) {
+        // Glyph pixel: use foreground color with mask derived from brightness
         blendedPixels[i] = fg[0]; // Red
         blendedPixels[i + 1] = fg[1]; // Green
         blendedPixels[i + 2] = fg[2]; // Blue
-        blendedPixels[i + 3] = alpha; // Preserve original alpha
+        blendedPixels[i + 3] = luminance; // Brightness -> alpha
       } else {
-        // Transparent pixel: keep transparent
+        // Background pixel: keep transparent so the background fill shows through
         blendedPixels[i + 3] = 0;
       }
     }

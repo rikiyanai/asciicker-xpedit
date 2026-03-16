@@ -117,6 +117,8 @@ let editorState = {
   onActiveLayerChanged: null,
   onLayerVisibilityChanged: null,
   _strokeDirty: false,
+  _originalGridParent: null,
+  _originalGridNextSibling: null,
 };
 
 // ── mount ──
@@ -157,6 +159,15 @@ async function mount({ container, gridCols, gridRows, layers, layerNames, active
   canvasEl.style.imageRendering = 'pixelated';
   canvasEl.style.cursor = 'crosshair';
   scrollWrap.appendChild(canvasEl);
+
+  // Secondary frame navigation region (spec §3.8)
+  const frameNav = document.createElement('div');
+  frameNav.className = 'ws-frame-nav';
+  frameNav.id = 'wsFrameNav';
+  const frameNavLabel = document.createElement('h4');
+  frameNavLabel.textContent = 'Frame Navigation';
+  frameNav.appendChild(frameNavLabel);
+  canvasArea.appendChild(frameNav);
 
   layout.appendChild(canvasArea);
   container.appendChild(layout);
@@ -267,6 +278,16 @@ async function mount({ container, gridCols, gridRows, layers, layerNames, active
   editorState.mounted = true;
   canvas.render();
   _updateToolUI();
+  _renderGlyphPicker();
+
+  // Integrate frame navigation into the layout (spec §3.8)
+  const gridPanel = document.getElementById('gridPanel');
+  const frameNavEl = document.getElementById('wsFrameNav');
+  if (gridPanel && frameNavEl) {
+    editorState._originalGridParent = gridPanel.parentElement;
+    editorState._originalGridNextSibling = gridPanel.nextSibling;
+    frameNavEl.appendChild(gridPanel);
+  }
 }
 
 // ── Stroke tracking ──
@@ -304,6 +325,8 @@ function _applyEyedropperSample(glyph, fg, bg) {
     const ch = (glyph > 31 && glyph < 127) ? String.fromCharCode(glyph) : '\u00b7';
     cellEl.textContent = `Sampled: ${glyph} (${ch})`;
   }
+
+  _renderGlyphPicker();
 }
 
 // ── Tool switching ──
@@ -367,6 +390,64 @@ function _onKeyDown(e) {
   }
 }
 
+// ── Glyph picker ──
+
+function _setDrawGlyph(code) {
+  code = Math.max(0, Math.min(255, code));
+  editorState.drawGlyph = code;
+  if (editorState.cellTool) editorState.cellTool.setGlyph(code);
+
+  const glyphEl = document.getElementById('wsGlyphCode');
+  if (glyphEl) glyphEl.value = String(code);
+  const charEl = document.getElementById('wsGlyphChar');
+  if (charEl) charEl.value = (code > 31 && code < 127) ? String.fromCharCode(code) : '';
+
+  _renderGlyphPicker();
+}
+
+function _renderGlyphPicker() {
+  const canvas = document.getElementById('wsGlyphPickerCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const font = editorState.cp437Font;
+  const cw = CELL_SIZE;
+  const ch = CELL_SIZE;
+
+  ctx.fillStyle = '#0a0e14';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  for (let code = 0; code < 256; code++) {
+    const col = code % 16;
+    const row = Math.floor(code / 16);
+    const x = col * cw;
+    const y = row * ch;
+    const sel = (code === editorState.drawGlyph);
+
+    if (font && font.spriteSheet) {
+      const fg = sel ? editorState.drawFg : [180, 185, 195];
+      const bg = sel ? editorState.drawBg : [10, 14, 20];
+      font.drawGlyph(ctx, code, x, y, fg, bg);
+    } else if (code > 31 && code < 127) {
+      if (sel) {
+        ctx.fillStyle = `rgb(${editorState.drawBg[0]},${editorState.drawBg[1]},${editorState.drawBg[2]})`;
+        ctx.fillRect(x, y, cw, ch);
+      }
+      const fc = sel ? editorState.drawFg : [180, 185, 195];
+      ctx.fillStyle = `rgb(${fc[0]},${fc[1]},${fc[2]})`;
+      ctx.font = `${Math.floor(cw * 0.7)}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String.fromCharCode(code), x + cw / 2, y + ch / 2);
+    }
+
+    if (sel) {
+      ctx.strokeStyle = '#4ea1ff';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 1, y + 1, cw - 2, ch - 2);
+    }
+  }
+}
+
 // ── Sidebar builders ──
 
 function _buildSection(title) {
@@ -406,8 +487,32 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   modeSection.appendChild(modeGroup);
   sidebar.appendChild(modeSection);
 
-  // 3.2 Glyph
+  // 3.2 Glyph — 16x16 CP437 picker (spec §3.2)
   const glyphSection = _buildSection('Glyph');
+
+  const pickerCanvas = document.createElement('canvas');
+  pickerCanvas.id = 'wsGlyphPickerCanvas';
+  pickerCanvas.className = 'ws-glyph-picker-canvas';
+  pickerCanvas.width = 16 * CELL_SIZE;
+  pickerCanvas.height = 16 * CELL_SIZE;
+  pickerCanvas.style.imageRendering = 'pixelated';
+  pickerCanvas.style.cursor = 'pointer';
+  pickerCanvas.title = 'Click to select glyph';
+
+  pickerCanvas.addEventListener('click', (e) => {
+    const rect = pickerCanvas.getBoundingClientRect();
+    const scaleX = pickerCanvas.width / rect.width;
+    const scaleY = pickerCanvas.height / rect.height;
+    const px = (e.clientX - rect.left) * scaleX;
+    const py = (e.clientY - rect.top) * scaleY;
+    const col = Math.floor(px / CELL_SIZE);
+    const row = Math.floor(py / CELL_SIZE);
+    if (col < 0 || col >= 16 || row < 0 || row >= 16) return;
+    _setDrawGlyph(row * 16 + col);
+  });
+
+  glyphSection.appendChild(pickerCanvas);
+
   const glyphRow = document.createElement('div');
   glyphRow.className = 'ws-glyph-row';
   const glyphInput = document.createElement('input');
@@ -426,25 +531,17 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   glyphChar.title = 'Type a character';
 
   glyphInput.addEventListener('change', () => {
-    const code = Math.max(0, Math.min(255, parseInt(glyphInput.value, 10) || 0));
-    glyphInput.value = String(code);
-    editorState.drawGlyph = code;
-    glyphChar.value = (code > 31 && code < 127) ? String.fromCharCode(code) : '';
-    if (editorState.cellTool) editorState.cellTool.setGlyph(code);
+    _setDrawGlyph(Math.max(0, Math.min(255, parseInt(glyphInput.value, 10) || 0)));
   });
   glyphChar.addEventListener('input', () => {
     if (glyphChar.value.length === 1) {
-      const code = glyphChar.value.charCodeAt(0) & 0xFF;
-      editorState.drawGlyph = code;
-      glyphInput.value = String(code);
-      if (editorState.cellTool) editorState.cellTool.setGlyph(code);
+      _setDrawGlyph(glyphChar.value.charCodeAt(0) & 0xFF);
     }
   });
 
   glyphRow.appendChild(glyphInput);
   glyphRow.appendChild(glyphChar);
   glyphSection.appendChild(glyphRow);
-  glyphSection.appendChild(_placeholder('16x16 glyph grid (deferred)'));
   sidebar.appendChild(glyphSection);
 
   // 3.3 Palette
@@ -714,6 +811,18 @@ function unmount() {
     }
     if (typeof editorState.canvas.dispose === 'function') editorState.canvas.dispose();
   }
+  // Restore frame grid to original location
+  if (editorState._originalGridParent) {
+    const gridPanel = document.getElementById('gridPanel');
+    if (gridPanel) {
+      if (editorState._originalGridNextSibling) {
+        editorState._originalGridParent.insertBefore(gridPanel, editorState._originalGridNextSibling);
+      } else {
+        editorState._originalGridParent.appendChild(gridPanel);
+      }
+    }
+  }
+
   if (editorState.containerEl) editorState.containerEl.innerHTML = '';
 
   editorState = {
@@ -740,6 +849,8 @@ function unmount() {
     onActiveLayerChanged: null,
     onLayerVisibilityChanged: null,
     _strokeDirty: false,
+    _originalGridParent: null,
+    _originalGridNextSibling: null,
   };
 }
 
@@ -844,6 +955,7 @@ function setDrawState({ glyph, fg, bg, applyGlyph, applyFg, applyBg }) {
     const el = document.getElementById('wsApplyBg');
     if (el) el.classList.toggle('ws-toggle-on', applyBg);
   }
+  _renderGlyphPicker();
 }
 
 function setActiveLayer(index) {

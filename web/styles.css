@@ -651,6 +651,41 @@ label.inline {
   padding: 1px 6px;
 }
 
+/* Glyph picker canvas */
+.ws-glyph-picker-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid #232937;
+  border-radius: 3px;
+  margin-bottom: 4px;
+}
+
+/* Frame navigation strip (integrated into whole-sheet layout — spec §3.8) */
+.ws-frame-nav {
+  border-top: 1px solid #232937;
+  background: #0d1118;
+  max-height: 200px;
+  overflow: auto;
+  padding: 6px 8px;
+}
+
+.ws-frame-nav h4 {
+  margin: 0 0 4px 0;
+  font-size: 10px;
+  color: #5a6a7a;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.ws-frame-nav .frame-grid {
+  min-height: 0;
+  padding: 4px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
 @media (max-width: 1100px) {
   .two-col {
     grid-template-columns: 1fr;

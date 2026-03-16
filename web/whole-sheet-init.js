@@ -17,6 +17,23 @@ import { CellTool } from './rexpaint-editor/tools/cell-tool.js';
 
 const FONT_URL = '/termpp-web-flat/fonts/cp437_12x12.png';
 const CELL_SIZE = 12;
+const PALETTE_CELL = 11;
+const DEFAULT_PALETTE = [
+  // Grayscale
+  [0,0,0],[17,17,17],[34,34,34],[51,51,51],[68,68,68],[85,85,85],[102,102,102],[119,119,119],
+  [136,136,136],[153,153,153],[170,170,170],[187,187,187],[204,204,204],[221,221,221],[238,238,238],[255,255,255],
+  // Saturated hues
+  [255,0,0],[255,85,0],[255,170,0],[255,255,0],[170,255,0],[85,255,0],[0,255,0],[0,255,85],
+  [0,255,170],[0,255,255],[0,170,255],[0,85,255],[0,0,255],[85,0,255],[170,0,255],[255,0,170],
+  // Light / pastel
+  [255,128,128],[255,170,128],[255,213,128],[255,255,128],[213,255,128],[170,255,128],[128,255,128],[128,255,170],
+  [128,255,213],[128,255,255],[128,213,255],[128,170,255],[128,128,255],[170,128,255],[213,128,255],[255,128,213],
+  // Dark
+  [128,0,0],[128,43,0],[128,85,0],[128,128,0],[85,128,0],[43,128,0],[0,128,0],[0,128,43],
+  [0,128,85],[0,128,128],[0,85,128],[0,43,128],[0,0,128],[43,0,128],[85,0,128],[128,0,85],
+];
+const PALETTE_COLS = 16;
+const PALETTE_ROWS = Math.ceil(DEFAULT_PALETTE.length / PALETTE_COLS);
 
 // ── Inline tool classes ──
 
@@ -279,6 +296,7 @@ async function mount({ container, gridCols, gridRows, layers, layerNames, active
   canvas.render();
   _updateToolUI();
   _renderGlyphPicker();
+  _renderPaletteGrid();
 
   // Integrate frame navigation into the layout (spec §3.8)
   const gridPanel = document.getElementById('gridPanel');
@@ -327,6 +345,7 @@ function _applyEyedropperSample(glyph, fg, bg) {
   }
 
   _renderGlyphPicker();
+  _renderPaletteGrid();
 }
 
 // ── Tool switching ──
@@ -544,96 +563,176 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   glyphSection.appendChild(glyphRow);
   sidebar.appendChild(glyphSection);
 
-  // 3.3 Palette
+  // 3.3 Palette (spec §3.3: color grid + fg/bg swatches)
   const paletteSection = _buildSection('Palette');
-  const fgRow = document.createElement('div');
-  fgRow.className = 'ws-color-row';
-  const fgLabel = document.createElement('label');
+
+  const paletteCanvas = document.createElement('canvas');
+  paletteCanvas.id = 'wsPaletteCanvas';
+  paletteCanvas.className = 'ws-palette-canvas';
+  paletteCanvas.width = PALETTE_COLS * PALETTE_CELL;
+  paletteCanvas.height = PALETTE_ROWS * PALETTE_CELL;
+  paletteCanvas.style.imageRendering = 'pixelated';
+  paletteCanvas.style.cursor = 'pointer';
+  paletteCanvas.title = 'LMB = set foreground, RMB = set background';
+  paletteCanvas.addEventListener('click', (e) => _onPaletteClick(e, 'fg'));
+  paletteCanvas.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    _onPaletteClick(e, 'bg');
+  });
+  paletteSection.appendChild(paletteCanvas);
+
+  const swatchRow = document.createElement('div');
+  swatchRow.className = 'ws-swatch-row';
+
+  const fgLabel = document.createElement('span');
+  fgLabel.className = 'ws-swatch-label';
   fgLabel.textContent = 'f';
   const fgInput = document.createElement('input');
   fgInput.type = 'color';
   fgInput.id = 'wsFgColor';
   fgInput.value = _rgbToHex(editorState.drawFg);
+  fgInput.title = 'Foreground color';
   fgInput.addEventListener('input', () => {
     editorState.drawFg = _hexToRgb(fgInput.value);
     if (editorState.cellTool) editorState.cellTool.setColors(editorState.drawFg, editorState.drawBg);
+    _renderGlyphPicker();
+    _renderPaletteGrid();
   });
-  fgRow.appendChild(fgLabel);
-  fgRow.appendChild(fgInput);
 
-  const bgRow = document.createElement('div');
-  bgRow.className = 'ws-color-row';
-  const bgLabel = document.createElement('label');
+  const bgLabel = document.createElement('span');
+  bgLabel.className = 'ws-swatch-label';
   bgLabel.textContent = 'b';
   const bgInput = document.createElement('input');
   bgInput.type = 'color';
   bgInput.id = 'wsBgColor';
   bgInput.value = _rgbToHex(editorState.drawBg);
+  bgInput.title = 'Background color';
   bgInput.addEventListener('input', () => {
     editorState.drawBg = _hexToRgb(bgInput.value);
     if (editorState.cellTool) editorState.cellTool.setColors(editorState.drawFg, editorState.drawBg);
+    _renderGlyphPicker();
+    _renderPaletteGrid();
   });
-  bgRow.appendChild(bgLabel);
-  bgRow.appendChild(bgInput);
 
-  paletteSection.appendChild(fgRow);
-  paletteSection.appendChild(bgRow);
-  paletteSection.appendChild(_placeholder('Palette grid (deferred)'));
+  swatchRow.appendChild(fgLabel);
+  swatchRow.appendChild(fgInput);
+  swatchRow.appendChild(bgLabel);
+  swatchRow.appendChild(bgInput);
+  paletteSection.appendChild(swatchRow);
   sidebar.appendChild(paletteSection);
 
-  // 3.4 Tools / Apply
+  // 3.4 Tools / Apply (spec §3.4: two-column layout)
   const toolsSection = _buildSection('Tools / Apply');
+  const taCols = document.createElement('div');
+  taCols.className = 'ws-ta-cols';
 
-  const toolGroup = document.createElement('div');
-  toolGroup.className = 'ws-tool-group';
+  // Left column — Tools: Undo, Redo, Grid
+  const toolsCol = document.createElement('div');
+  toolsCol.className = 'ws-ta-col';
+  const toolsLabel = document.createElement('span');
+  toolsLabel.className = 'ws-ta-label';
+  toolsLabel.textContent = 'Tools';
+  toolsCol.appendChild(toolsLabel);
+
+  const undoBtn = document.createElement('button');
+  undoBtn.className = 'ws-tool-btn';
+  undoBtn.textContent = 'Undo';
+  undoBtn.title = 'Undo (Z / Ctrl+Z)';
+  undoBtn.disabled = true;
+  toolsCol.appendChild(undoBtn);
+
+  const redoBtn = document.createElement('button');
+  redoBtn.className = 'ws-tool-btn';
+  redoBtn.textContent = 'Redo';
+  redoBtn.title = 'Redo (Y / Ctrl+Y)';
+  redoBtn.disabled = true;
+  toolsCol.appendChild(redoBtn);
+
+  toolsCol.appendChild(_buildToggle('Grid', 'wsGridToggle', false, (on) => {
+    if (editorState.canvas) editorState.canvas.setGridVisible(on);
+  }));
+
+  // Right column — Apply: G, F, B toggles
+  const applyCol = document.createElement('div');
+  applyCol.className = 'ws-ta-col';
+  const applyLabel = document.createElement('span');
+  applyLabel.className = 'ws-ta-label';
+  applyLabel.textContent = 'Apply';
+  applyCol.appendChild(applyLabel);
+
+  applyCol.appendChild(_buildToggle('G', 'wsApplyGlyph', editorState.applyGlyph, (on) => {
+    editorState.applyGlyph = on;
+    if (editorState.cellTool) editorState.cellTool.setApplyModes({ glyph: on });
+  }));
+  applyCol.appendChild(_buildToggle('F', 'wsApplyFg', editorState.applyFg, (on) => {
+    editorState.applyFg = on;
+    if (editorState.cellTool) editorState.cellTool.setApplyModes({ foreground: on });
+  }));
+  applyCol.appendChild(_buildToggle('B', 'wsApplyBg', editorState.applyBg, (on) => {
+    editorState.applyBg = on;
+    if (editorState.cellTool) editorState.cellTool.setApplyModes({ background: on });
+  }));
+
+  taCols.appendChild(toolsCol);
+  taCols.appendChild(applyCol);
+  toolsSection.appendChild(taCols);
+  sidebar.appendChild(toolsSection);
+
+  // 3.5 Image / Draw (spec §3.5: two-column layout)
+  const imageDrawSection = _buildSection('Image / Draw');
+  const idCols = document.createElement('div');
+  idCols.className = 'ws-ta-cols';
+
+  // Left column — Image: Save, Export, Resize
+  const imageCol = document.createElement('div');
+  imageCol.className = 'ws-ta-col';
+  const imageLabel = document.createElement('span');
+  imageLabel.className = 'ws-ta-label';
+  imageLabel.textContent = 'Image';
+  imageCol.appendChild(imageLabel);
+  imageCol.appendChild(_placeholder('New'));
+  imageCol.appendChild(_placeholder('Save'));
+  imageCol.appendChild(_placeholder('Export'));
+
+  // Right column — Draw: active tool selector
+  const drawCol = document.createElement('div');
+  drawCol.className = 'ws-ta-col';
+  const drawLabel = document.createElement('span');
+  drawLabel.className = 'ws-ta-label';
+  drawLabel.textContent = 'Draw';
+  drawCol.appendChild(drawLabel);
+
   const toolCellBtn = document.createElement('button');
   toolCellBtn.id = 'wsToolCell';
   toolCellBtn.textContent = 'Cell';
   toolCellBtn.className = 'ws-tool-btn ws-tool-active';
   toolCellBtn.title = 'Cell draw tool (C)';
   toolCellBtn.addEventListener('click', () => _switchTool('cell'));
+  drawCol.appendChild(toolCellBtn);
+
   const toolEyedropperBtn = document.createElement('button');
   toolEyedropperBtn.id = 'wsToolEyedropper';
   toolEyedropperBtn.textContent = 'Pick';
   toolEyedropperBtn.className = 'ws-tool-btn';
   toolEyedropperBtn.title = 'Eyedropper (D)';
   toolEyedropperBtn.addEventListener('click', () => _switchTool('eyedropper'));
+  drawCol.appendChild(toolEyedropperBtn);
+
   const toolEraseBtn = document.createElement('button');
   toolEraseBtn.id = 'wsToolErase';
   toolEraseBtn.textContent = 'Erase';
   toolEraseBtn.className = 'ws-tool-btn';
   toolEraseBtn.title = 'Erase tool (E)';
   toolEraseBtn.addEventListener('click', () => _switchTool('erase'));
+  drawCol.appendChild(toolEraseBtn);
 
-  toolGroup.appendChild(toolCellBtn);
-  toolGroup.appendChild(toolEyedropperBtn);
-  toolGroup.appendChild(toolEraseBtn);
-  toolsSection.appendChild(toolGroup);
+  drawCol.appendChild(_placeholder('Line'));
+  drawCol.appendChild(_placeholder('Rect'));
+  drawCol.appendChild(_placeholder('Fill'));
 
-  const applyRow = document.createElement('div');
-  applyRow.style.cssText = 'display:flex; gap:4px; margin-top:6px;';
-  applyRow.appendChild(_buildToggle('G', 'wsApplyGlyph', editorState.applyGlyph, (on) => {
-    editorState.applyGlyph = on;
-    if (editorState.cellTool) editorState.cellTool.setApplyModes({ glyph: on });
-  }));
-  applyRow.appendChild(_buildToggle('F', 'wsApplyFg', editorState.applyFg, (on) => {
-    editorState.applyFg = on;
-    if (editorState.cellTool) editorState.cellTool.setApplyModes({ foreground: on });
-  }));
-  applyRow.appendChild(_buildToggle('B', 'wsApplyBg', editorState.applyBg, (on) => {
-    editorState.applyBg = on;
-    if (editorState.cellTool) editorState.cellTool.setApplyModes({ background: on });
-  }));
-  applyRow.appendChild(_buildToggle('Grid', 'wsGridToggle', false, (on) => {
-    if (editorState.canvas) editorState.canvas.setGridVisible(on);
-  }));
-  toolsSection.appendChild(applyRow);
-  sidebar.appendChild(toolsSection);
-
-  // 3.5 Image / Draw
-  const imageDrawSection = _buildSection('Image / Draw');
-  imageDrawSection.appendChild(_placeholder('Save, Export, Resize'));
-  imageDrawSection.appendChild(_placeholder('Line, Rect, Fill, Text'));
+  idCols.appendChild(imageCol);
+  idCols.appendChild(drawCol);
+  imageDrawSection.appendChild(idCols);
   sidebar.appendChild(imageDrawSection);
 
   // 3.6 Layers
@@ -771,6 +870,80 @@ function _hexToRgb(hex) {
   const m = hex.match(/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
   if (!m) return [255, 255, 255];
   return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
+}
+
+function _setDrawColor(channel, rgb) {
+  if (channel === 'fg') {
+    editorState.drawFg = [...rgb];
+    const el = document.getElementById('wsFgColor');
+    if (el) el.value = _rgbToHex(rgb);
+  } else {
+    editorState.drawBg = [...rgb];
+    const el = document.getElementById('wsBgColor');
+    if (el) el.value = _rgbToHex(rgb);
+  }
+  if (editorState.cellTool) editorState.cellTool.setColors(editorState.drawFg, editorState.drawBg);
+  _renderGlyphPicker();
+  _renderPaletteGrid();
+}
+
+function _renderPaletteGrid() {
+  const canvas = document.getElementById('wsPaletteCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const cs = PALETTE_CELL;
+
+  ctx.fillStyle = '#0a0e14';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  for (let i = 0; i < DEFAULT_PALETTE.length; i++) {
+    const col = i % PALETTE_COLS;
+    const row = Math.floor(i / PALETTE_COLS);
+    const x = col * cs;
+    const y = row * cs;
+    const [r, g, b] = DEFAULT_PALETTE[i];
+
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    ctx.fillRect(x, y, cs, cs);
+
+    // Thin grid lines
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(x, y, cs, cs);
+
+    // Highlight if matches current fg or bg
+    const matchFg = editorState.drawFg[0] === r && editorState.drawFg[1] === g && editorState.drawFg[2] === b;
+    const matchBg = editorState.drawBg[0] === r && editorState.drawBg[1] === g && editorState.drawBg[2] === b;
+    if (matchFg) {
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 1, y + 1, cs - 2, cs - 2);
+    }
+    if (matchBg) {
+      ctx.strokeStyle = '#aaa';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 1]);
+      ctx.strokeRect(x + 0.5, y + 0.5, cs - 1, cs - 1);
+      ctx.setLineDash([]);
+    }
+  }
+}
+
+function _onPaletteClick(e, channel) {
+  const canvas = document.getElementById('wsPaletteCanvas');
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const px = (e.clientX - rect.left) * scaleX;
+  const py = (e.clientY - rect.top) * scaleY;
+  const col = Math.floor(px / PALETTE_CELL);
+  const row = Math.floor(py / PALETTE_CELL);
+  if (col < 0 || col >= PALETTE_COLS || row < 0 || row >= PALETTE_ROWS) return;
+  const idx = row * PALETTE_COLS + col;
+  if (idx >= 0 && idx < DEFAULT_PALETTE.length) {
+    _setDrawColor(channel, DEFAULT_PALETTE[idx]);
+  }
 }
 
 function _onCanvasMouseMove(e) {
@@ -956,6 +1129,7 @@ function setDrawState({ glyph, fg, bg, applyGlyph, applyFg, applyBg }) {
     if (el) el.classList.toggle('ws-toggle-on', applyBg);
   }
   _renderGlyphPicker();
+  _renderPaletteGrid();
 }
 
 function setActiveLayer(index) {

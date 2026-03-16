@@ -651,6 +651,73 @@ label.inline {
   padding: 1px 6px;
 }
 
+/* Palette grid canvas */
+.ws-palette-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid #232937;
+  border-radius: 3px;
+  margin-bottom: 4px;
+}
+
+/* Palette swatch row (f/b labels + color inputs) */
+.ws-swatch-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ws-swatch-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  min-width: 10px;
+  text-align: center;
+}
+
+.ws-swatch-row input[type="color"] {
+  width: 32px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid #445;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+/* Tools/Apply and Image/Draw two-column layout (spec §3.4, §3.5) */
+.ws-ta-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.ws-ta-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ws-ta-label {
+  font-size: 9px;
+  color: #4a5a6a;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+
+.ws-ta-col .ws-tool-btn {
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+
+.ws-ta-col .ws-toggle {
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+
 /* Glyph picker canvas */
 .ws-glyph-picker-canvas {
   display: block;

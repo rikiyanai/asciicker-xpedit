@@ -1,10 +1,10 @@
 /**
- * Whole-Sheet XP Editor Integration (B6 Slice + B7 Cell Draw)
+ * Whole-Sheet XP Editor Integration (B6 Slice + B7 Cell Draw + B8 Eyedropper/Erase)
  *
  * Mounts a whole-sheet Canvas editor surface into the workbench.
  * Hydrates from backend session layers (state.layers), NOT from JS XP file I/O.
- * Supports cell draw on the whole-sheet canvas with active-layer-aware editing
- * that writes back to workbench/session truth via callbacks.
+ * Supports cell draw, eyedropper, and erase on the whole-sheet canvas with
+ * active-layer-aware editing that writes back to workbench/session truth via callbacks.
  *
  * Reuses salvageable rexpaint-editor modules:
  *   Canvas, LayerStack, CP437Font, CellTool
@@ -19,12 +19,132 @@ import { CellTool } from './rexpaint-editor/tools/cell-tool.js';
 const FONT_URL = '/termpp-web-flat/fonts/cp437_12x12.png';
 const CELL_SIZE = 12;
 
+// ── Inline tool classes for Eyedropper and Erase ──
+
+/**
+ * EyedropperTool - Samples cell data from the canvas and updates draw state.
+ * On click, reads the active layer cell at the target position and copies
+ * glyph/fg/bg into the editor's drawing state.
+ */
+class EyedropperTool {
+  constructor() {
+    this.canvas = null;
+    this._onSample = null; // callback(glyph, fg, bg)
+  }
+
+  setCanvas(canvas) {
+    this.canvas = canvas;
+  }
+
+  setOnSample(fn) {
+    this._onSample = fn;
+  }
+
+  startDrag(x, y) {
+    this._sample(x, y);
+  }
+
+  drag(x, y) {
+    this._sample(x, y);
+  }
+
+  endDrag() {}
+
+  _sample(x, y) {
+    if (!this.canvas) return;
+    if (x < 0 || y < 0 || x >= this.canvas.width || y >= this.canvas.height) return;
+    // Read from the active layer specifically, not the composite
+    const ls = this.canvas.layerStack;
+    let cell;
+    if (ls) {
+      const activeLayer = ls.getActiveLayer();
+      cell = activeLayer ? activeLayer.getCell(x, y) : null;
+    }
+    if (!cell) {
+      // fallback to composite
+      try { cell = this.canvas.getCell(x, y); } catch (_) { return; }
+    }
+    if (cell && this._onSample) {
+      this._onSample(cell.glyph, [...(cell.fg || [255,255,255])], [...(cell.bg || [0,0,0])]);
+    }
+  }
+}
+
+/**
+ * EraseTool - Clears cells to transparent state (glyph=0, fg=white, bg=black).
+ * Supports drag to erase multiple cells. Erases on the active layer via
+ * canvas.setCell, which triggers the same onCellEdited callback as CellTool.
+ */
+class EraseTool {
+  constructor() {
+    this.canvas = null;
+    this.isDragging = false;
+    this.lastX = 0;
+    this.lastY = 0;
+  }
+
+  setCanvas(canvas) {
+    this.canvas = canvas;
+  }
+
+  startDrag(x, y) {
+    this.isDragging = true;
+    this.lastX = x;
+    this.lastY = y;
+    this._erase(x, y);
+  }
+
+  drag(x, y) {
+    if (!this.isDragging) return;
+    const cells = this._lineBresenham(this.lastX, this.lastY, x, y);
+    for (const c of cells) {
+      this._erase(c.x, c.y);
+    }
+    this.lastX = x;
+    this.lastY = y;
+  }
+
+  endDrag() {
+    this.isDragging = false;
+  }
+
+  _erase(x, y) {
+    if (!this.canvas) return;
+    if (x < 0 || y < 0 || x >= this.canvas.width || y >= this.canvas.height) return;
+    // XP transparent cell: glyph 0, white fg, black bg
+    this.canvas.setCell(x, y, 0, [255, 255, 255], [0, 0, 0]);
+  }
+
+  _lineBresenham(x0, y0, x1, y1) {
+    const cells = [];
+    const dx = Math.abs(x1 - x0);
+    const dy = Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1;
+    const sy = y0 < y1 ? 1 : -1;
+    let err = dx - dy;
+    let x = x0, y = y0;
+    while (true) {
+      cells.push({ x, y });
+      if (x === x1 && y === y1) break;
+      const e2 = 2 * err;
+      if (e2 > -dy) { err -= dy; x += sx; }
+      if (e2 < dx) { err += dx; y += sy; }
+    }
+    return cells;
+  }
+}
+
+// ── Editor state ──
+
 let editorState = {
   mounted: false,
   canvas: null,
   layerStack: null,
   cp437Font: null,
   cellTool: null,
+  eyedropperTool: null,
+  eraseTool: null,
+  activeTool: 'cell', // 'cell' | 'eyedropper' | 'erase'
   gridCols: 0,
   gridRows: 0,
   containerEl: null,
@@ -167,7 +287,19 @@ async function mount({ container, gridCols, gridRows, layers, layerNames, active
   });
   editorState.cellTool = cellTool;
 
-  // Activate CellTool on the canvas — this wires mouse→tool delegation
+  // Create EyedropperTool
+  const eyedropperTool = new EyedropperTool();
+  eyedropperTool.setOnSample((glyph, fg, bg) => {
+    _applyEyedropperSample(glyph, fg, bg);
+  });
+  editorState.eyedropperTool = eyedropperTool;
+
+  // Create EraseTool
+  const eraseTool = new EraseTool();
+  editorState.eraseTool = eraseTool;
+
+  // Activate default tool (Cell) on the canvas
+  editorState.activeTool = 'cell';
   canvas.toolActivated(cellTool);
 
   // Proxy canvas.setCell to fire callbacks:
@@ -192,8 +324,12 @@ async function mount({ container, gridCols, gridRows, layers, layerNames, active
   // Mouse position tracking on canvas
   canvasEl.addEventListener('mousemove', _onCanvasMouseMove);
 
+  // Keyboard shortcuts for tool switching
+  document.addEventListener('keydown', _onKeyDown);
+
   editorState.mounted = true;
   canvas.render();
+  _updateToolUI();
 }
 
 function _onStrokeEnd() {
@@ -206,11 +342,149 @@ function _onStrokeEnd() {
 }
 
 /**
+ * Apply an eyedropper sample to the editor draw state and UI.
+ */
+function _applyEyedropperSample(glyph, fg, bg) {
+  editorState.drawGlyph = glyph & 0xFF;
+  editorState.drawFg = [...fg];
+  editorState.drawBg = [...bg];
+
+  // Update CellTool so next draw uses sampled values
+  if (editorState.cellTool) {
+    editorState.cellTool.setGlyph(editorState.drawGlyph);
+    editorState.cellTool.setColors(editorState.drawFg, editorState.drawBg);
+  }
+
+  // Update toolbar UI inputs
+  const glyphEl = document.getElementById('wsGlyphCode');
+  if (glyphEl) glyphEl.value = String(editorState.drawGlyph);
+  const charEl = document.getElementById('wsGlyphChar');
+  if (charEl) charEl.value = (glyph > 31 && glyph < 127) ? String.fromCharCode(glyph) : '';
+  const fgEl = document.getElementById('wsFgColor');
+  if (fgEl) fgEl.value = _rgbToHex(editorState.drawFg);
+  const bgEl = document.getElementById('wsBgColor');
+  if (bgEl) bgEl.value = _rgbToHex(editorState.drawBg);
+
+  // Update info bar with sampled cell
+  const cellEl = document.getElementById('wsCell');
+  if (cellEl) {
+    const ch = (glyph > 31 && glyph < 127) ? String.fromCharCode(glyph) : '\u00b7';
+    cellEl.textContent = `Sampled: ${glyph} (${ch})`;
+  }
+}
+
+/**
+ * Switch active tool by name.
+ */
+function _switchTool(name) {
+  if (!editorState.mounted || !editorState.canvas) return;
+
+  editorState.activeTool = name;
+  const canvasEl = editorState.canvas.canvasElement;
+
+  switch (name) {
+    case 'cell':
+      editorState.canvas.toolActivated(editorState.cellTool);
+      if (canvasEl) canvasEl.style.cursor = 'crosshair';
+      break;
+    case 'eyedropper':
+      editorState.canvas.toolActivated(editorState.eyedropperTool);
+      if (canvasEl) canvasEl.style.cursor = 'copy';
+      break;
+    case 'erase':
+      editorState.canvas.toolActivated(editorState.eraseTool);
+      if (canvasEl) canvasEl.style.cursor = 'not-allowed';
+      break;
+    default:
+      return;
+  }
+
+  _updateToolUI();
+}
+
+/**
+ * Update tool button active states and info bar.
+ */
+function _updateToolUI() {
+  const names = { cell: 'Cell', eyedropper: 'Eyedropper', erase: 'Erase' };
+  const toolEl = document.getElementById('wsActiveTool');
+  if (toolEl) toolEl.textContent = `Tool: ${names[editorState.activeTool] || editorState.activeTool}`;
+
+  // Update button active states
+  for (const id of ['wsToolCell', 'wsToolEyedropper', 'wsToolErase']) {
+    const btn = document.getElementById(id);
+    if (!btn) continue;
+    const toolName = id.replace('wsTool', '').toLowerCase();
+    btn.classList.toggle('ws-tool-active', toolName === editorState.activeTool);
+  }
+}
+
+/**
+ * Keyboard shortcut handler for tool switching.
+ */
+function _onKeyDown(e) {
+  if (!editorState.mounted) return;
+  // Don't capture shortcuts when typing in inputs
+  const tag = e.target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+  switch (e.key.toLowerCase()) {
+    case 'c':
+      _switchTool('cell');
+      e.preventDefault();
+      break;
+    case 'e':
+      _switchTool('erase');
+      e.preventDefault();
+      break;
+    case 'd':
+      _switchTool('eyedropper');
+      e.preventDefault();
+      break;
+  }
+}
+
+/**
  * Build the drawing toolbar DOM.
  */
 function _buildToolbar(layerCount, activeLayer, layerNames) {
   const bar = document.createElement('div');
   bar.className = 'ws-toolbar';
+
+  // ── Tool Switcher ──
+  const toolGroup = document.createElement('div');
+  toolGroup.className = 'ws-tool-group';
+
+  const toolCellBtn = document.createElement('button');
+  toolCellBtn.id = 'wsToolCell';
+  toolCellBtn.textContent = 'Cell';
+  toolCellBtn.className = 'ws-tool-btn ws-tool-active';
+  toolCellBtn.title = 'Cell draw tool (C)';
+  toolCellBtn.addEventListener('click', () => _switchTool('cell'));
+
+  const toolEyedropperBtn = document.createElement('button');
+  toolEyedropperBtn.id = 'wsToolEyedropper';
+  toolEyedropperBtn.textContent = 'Pick';
+  toolEyedropperBtn.className = 'ws-tool-btn';
+  toolEyedropperBtn.title = 'Eyedropper / color picker (D)';
+  toolEyedropperBtn.addEventListener('click', () => _switchTool('eyedropper'));
+
+  const toolEraseBtn = document.createElement('button');
+  toolEraseBtn.id = 'wsToolErase';
+  toolEraseBtn.textContent = 'Erase';
+  toolEraseBtn.className = 'ws-tool-btn';
+  toolEraseBtn.title = 'Erase tool (E)';
+  toolEraseBtn.addEventListener('click', () => _switchTool('erase'));
+
+  toolGroup.appendChild(toolCellBtn);
+  toolGroup.appendChild(toolEyedropperBtn);
+  toolGroup.appendChild(toolEraseBtn);
+  bar.appendChild(toolGroup);
+
+  // Separator
+  const sep = document.createElement('span');
+  sep.className = 'ws-toolbar-sep';
+  bar.appendChild(sep);
 
   // Glyph input
   const glyphLabel = document.createElement('label');
@@ -378,6 +652,9 @@ function _onCanvasMouseMove(e) {
  * Tear down the editor and release resources.
  */
 function unmount() {
+  // Remove keyboard handler
+  document.removeEventListener('keydown', _onKeyDown);
+
   if (editorState.canvas) {
     const canvasEl = editorState.canvas.canvasElement;
     if (canvasEl) {
@@ -395,6 +672,9 @@ function unmount() {
     layerStack: null,
     cp437Font: null,
     cellTool: null,
+    eyedropperTool: null,
+    eraseTool: null,
+    activeTool: 'cell',
     gridCols: 0,
     gridRows: 0,
     containerEl: null,
@@ -484,7 +764,7 @@ function getState() {
     gridRows: editorState.gridRows,
     layerCount: editorState.layerStack ? editorState.layerStack.layers.length : 0,
     hasFontLoaded: !!(editorState.cp437Font && editorState.cp437Font.spriteSheet),
-    activeTool: editorState.cellTool ? 'cell' : null,
+    activeTool: editorState.activeTool,
     drawGlyph: editorState.drawGlyph,
     drawFg: editorState.drawFg,
     drawBg: editorState.drawBg,

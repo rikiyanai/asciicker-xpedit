@@ -1240,6 +1240,8 @@ def _derive_geometry_from_l0(
         "projs": projs,
         "cell_w": cell_w,
         "cell_h": cell_h,
+        "frame_rows": frame_rows,
+        "frame_cols": frame_cols,
     }
 
 
@@ -1972,6 +1974,9 @@ def workbench_load_from_job(job_id: str, req_id: str) -> dict[str, Any]:
     sess_dict["family"] = str(meta.get("family", "player"))
     save_json(_session_path(session_id), sess_dict)
 
+    frame_cols = sum(sess.anims) * sess.projs
+    frame_rows = sess.angles
+
     return {
         "session_id": session_id,
         "job_id": job_id,
@@ -1986,6 +1991,8 @@ def workbench_load_from_job(job_id: str, req_id: str) -> dict[str, Any]:
         "anims": sess.anims,
         "source_projs": int(meta.get("source_projs", 1)),
         "projs": sess.projs,
+        "frame_rows": frame_rows,
+        "frame_cols": frame_cols,
         "source_boxes": [],
         "source_anchor_box": None,
         "source_draft_box": None,
@@ -2229,6 +2236,8 @@ def workbench_upload_xp(xp_bytes: bytes, req_id: str) -> dict[str, Any]:
         "projs": geo["projs"],
         "cell_w": geo["cell_w"],
         "cell_h": geo["cell_h"],
+        "frame_rows": geo["frame_rows"],
+        "frame_cols": geo["frame_cols"],
     }
 
 

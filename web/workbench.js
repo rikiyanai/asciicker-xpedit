@@ -2471,6 +2471,8 @@
   }
 
   function renderSession() {
+    const frameColsVal = (state.anims || []).reduce((a, b) => a + b, 0) * (state.projs || 1);
+    const frameRowsVal = state.angles || 1;
     const summary = {
       session_id: state.sessionId,
       job_id: state.jobId,
@@ -2482,6 +2484,8 @@
       grid_rows: state.gridRows,
       cell_w: state.cellWChars,
       cell_h: state.cellHChars,
+      frame_rows: frameRowsVal,
+      frame_cols: frameColsVal,
       render_resolution: Number($("wbRenderRes").value || 12),
       cell_count: (state.layers && state.layers[2]) ? state.layers[2].length : (state.gridCols * state.gridRows),
       source_boxes: state.extractedBoxes.length,
@@ -3687,6 +3691,45 @@
       setWebbuildState("Webbuild not loaded", "");
     } catch (e) {
       status("Load failed: fetch/timeout", "err");
+      $("sessionOut").textContent = String(e);
+    } finally {
+      clearTimeout(t);
+    }
+  }
+
+  async function importXp() {
+    const fileInput = $("xpImportFile");
+    const file = fileInput && fileInput.files && fileInput.files[0];
+    if (!file) {
+      status("Select an .xp file first", "err");
+      return;
+    }
+    if (!file.name.toLowerCase().endsWith(".xp")) {
+      status("File must have .xp extension", "err");
+      return;
+    }
+    status("Importing XP...", "warn");
+    const fd = new FormData();
+    fd.append("file", file);
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 30000);
+    try {
+      const r = await fetch("/api/workbench/upload-xp", {
+        method: "POST",
+        body: fd,
+        signal: ctl.signal,
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        status("Import failed: " + (j.error || "unknown"), "err");
+        $("sessionOut").textContent = JSON.stringify(j, null, 2);
+        return;
+      }
+      // Reuse loadFromJob for full session hydration
+      state.jobId = j.job_id;
+      await loadFromJob();
+    } catch (e) {
+      status("Import failed: " + String(e), "err");
       $("sessionOut").textContent = String(e);
     } finally {
       clearTimeout(t);
@@ -6022,6 +6065,7 @@
     renderInspectorPaletteSwatches();
     updateSessionDirtyBadge();
     $("btnLoad").addEventListener("click", loadFromJob);
+    $("xpImportBtn").addEventListener("click", importXp);
     $("btnExport").addEventListener("click", exportXp);
     $("openXpToolBtn").addEventListener("click", openInXpTool);
     $("webbuildOpenBtn").addEventListener("click", openWebbuild);

@@ -1729,6 +1729,13 @@
   function snapshot() {
     return {
       cells: deepCloneCells(state.cells),
+      layers: state.layers.map((l) => deepCloneCells(l)),
+      hasUploadedLayers: !!state.hasUploadedLayers,
+      layerNames: [...state.layerNames],
+      activeLayer: state.activeLayer,
+      visibleLayers: new Set(state.visibleLayers),
+      gridCols: state.gridCols,
+      gridRows: state.gridRows,
       angles: state.angles,
       anims: [...state.anims],
       projs: state.projs,
@@ -1752,7 +1759,22 @@
   }
 
   function restore(snap) {
-    state.cells = deepCloneCells(snap.cells);
+    // Restore full layer state from snapshot (prevents non-L2 data loss on undo/redo).
+    if (Array.isArray(snap.layers) && snap.layers.length > 0) {
+      state.layers = snap.layers.map((l) => deepCloneCells(l));
+      state.hasUploadedLayers = !!snap.hasUploadedLayers;
+      state.layerNames = Array.isArray(snap.layerNames) ? [...snap.layerNames] : [...DEFAULT_LAYER_NAMES];
+      state.activeLayer = typeof snap.activeLayer === "number" ? snap.activeLayer : 2;
+      state.visibleLayers = snap.visibleLayers instanceof Set ? new Set(snap.visibleLayers) : new Set([2]);
+      state.gridCols = typeof snap.gridCols === "number" ? snap.gridCols : state.gridCols;
+      state.gridRows = typeof snap.gridRows === "number" ? snap.gridRows : state.gridRows;
+      // Derive state.cells from layers[2] — layers are the source of truth.
+      state.cells = state.layers[2] ? deepCloneCells(state.layers[2]) : deepCloneCells(snap.cells);
+    } else {
+      // Legacy snapshot without layers — fall back to cells then syncLayersFromSessionCells.
+      state.cells = deepCloneCells(snap.cells);
+      syncLayersFromSessionCells();
+    }
     state.angles = Number(snap.angles || 1);
     state.anims = (snap.anims || [1]).map((x) => Number(x));
     state.sourceProjs = Number(snap.sourceProjs || state.sourceProjs || 1);
@@ -1781,7 +1803,6 @@
     state.sourceContextTarget = null;
     const rapid = $("rapidManualAdd");
     if (rapid) rapid.checked = !!state.rapidManualAdd;
-    syncLayersFromSessionCells();
     recomputeFrameGeometry();
       updateSourceToolUI();
       updateVerifyUI();
@@ -1844,7 +1865,9 @@
 
   function cellAt(x, y) {
     const idx = y * state.gridCols + x;
-    return state.cells[idx] || { idx, glyph: 0, fg: [0, 0, 0], bg: [...MAGENTA] };
+    const layer = state.layers[2];
+    if (layer && layer[idx]) return layer[idx];
+    return { idx, glyph: 0, fg: [0, 0, 0], bg: [...MAGENTA] };
   }
 
   function setCell(x, y, c) {
@@ -1855,8 +1878,8 @@
       fg: [Number(c.fg?.[0] || 0), Number(c.fg?.[1] || 0), Number(c.fg?.[2] || 0)],
       bg: [Number(c.bg?.[0] || 0), Number(c.bg?.[1] || 0), Number(c.bg?.[2] || 0)],
     };
-    state.cells[idx] = cell;
-    if (state.layers[2]) state.layers[2][idx] = { ...cell };
+    const targetLayer = state.layers[state.activeLayer];
+    if (targetLayer) targetLayer[idx] = { ...cell };
   }
 
   function isMagenta(rgb) {
@@ -2070,6 +2093,22 @@
     return layer;
   }
 
+  function applyMetadataRowToLayer(layer) {
+    const count = state.gridCols * state.gridRows;
+    const base = Array.isArray(layer) && layer.length === count ? deepCloneCells(layer) : buildBlankLayerCells();
+    if (count <= 0 || state.gridCols <= 0 || state.gridRows <= 0) return base;
+    for (let x = 0; x < state.gridCols; x++) {
+      const idx = x;
+      base[idx] = transparentCell(idx);
+    }
+    base[0] = { idx: 0, glyph: digitGlyph(state.angles), fg: [255, 255, 255], bg: [0, 0, 0] };
+    for (let i = 0; i < state.anims.length && i + 1 < state.gridCols; i++) {
+      const idx = i + 1;
+      base[idx] = { idx, glyph: digitGlyph(Number(state.anims[i] || 0)), fg: [255, 255, 255], bg: [0, 0, 0] };
+    }
+    return base;
+  }
+
   function buildBlankLayerCells() {
     const count = state.gridCols * state.gridRows;
     const layer = [];
@@ -2079,21 +2118,23 @@
 
   function syncLayersFromSessionCells() {
     const count = state.gridCols * state.gridRows;
-    const visual = deepCloneCells(state.cells);
-    if (visual.length !== count) {
-      state.cells = buildBlankLayerCells();
-    }
 
     if (state.hasUploadedLayers
         && Array.isArray(state.layers) && state.layers.length > 0
         && state.layers.every((l) => Array.isArray(l) && l.length === count)) {
-      // Uploaded-XP session: real layers are the source of truth.
-      // Only sync the visual layer (L2) from state.cells; non-visual layers are preserved.
+      // Uploaded-XP session: layers are the source of truth.
+      // Derive state.cells (compatibility mirror) from layers[2].
       if (state.layers.length > 2) {
-        state.layers[2] = deepCloneCells(state.cells);
+        state.cells = deepCloneCells(state.layers[2]);
+      } else {
+        state.cells = buildBlankLayerCells();
       }
     } else {
       // Non-upload session or grid dimensions changed: synthetic rebuild.
+      // state.cells drives the initial L2 content, then becomes a mirror.
+      if (!Array.isArray(state.cells) || state.cells.length !== count) {
+        state.cells = buildBlankLayerCells();
+      }
       state.hasUploadedLayers = false;
       state.layers = [
         buildMetadataLayerCells(),
@@ -2442,7 +2483,7 @@
       cell_w: state.cellWChars,
       cell_h: state.cellHChars,
       render_resolution: Number($("wbRenderRes").value || 12),
-      cell_count: state.cells.length,
+      cell_count: (state.layers && state.layers[2]) ? state.layers[2].length : (state.gridCols * state.gridRows),
       source_boxes: state.extractedBoxes.length,
       source_cuts_v: state.sourceCutsV.length,
       source_mode: state.sourceMode,
@@ -2585,7 +2626,7 @@
       for (let x = 0; x < state.frameWChars; x++) {
         const gx = col * state.frameWChars + x;
         const gy = row * state.frameHChars + y;
-        line.push(gx >= state.gridCols || gy >= state.gridRows ? transparentCell(0) : { ...cellAt(gx, gy) });
+        line.push(gx >= state.gridCols || gy >= state.gridRows ? transparentCell(0) : { ...cellForRender(gx, gy) });
       }
       out.push(line);
     }
@@ -2655,7 +2696,7 @@
     const gx = col * state.frameWChars + cx;
     const gy = row * state.frameHChars + cy;
     if (gx < 0 || gy < 0 || gx >= state.gridCols || gy >= state.gridRows) return null;
-    return { gx, gy, cell: cellAt(gx, gy) };
+    return { gx, gy, cell: cellForRender(gx, gy) };
   }
 
   function cellEquals(a, b) {
@@ -3338,10 +3379,11 @@
     const prev = cellAt(gx, gy);
     const halves = decodeCellHalves(prev);
     if (state.inspectorTool === "inspect") {
-      setInspectorGlyphUIFromCell(prev);
+      const visible = cellForRender(gx, gy);
+      setInspectorGlyphUIFromCell(visible);
       updateInspectorToolUI();
       renderInspector();
-      status(`Inspected cell glyph=${Number(prev.glyph || 0)} fg=${rgbToHex(prev.fg || [0, 0, 0])} bg=${rgbToHex(prev.bg || [0, 0, 0])}`, "ok");
+      status(`Inspected cell glyph=${Number(visible.glyph || 0)} fg=${rgbToHex(visible.fg || [0, 0, 0])} bg=${rgbToHex(visible.bg || [0, 0, 0])}`, "ok");
       return false;
     }
     if (state.inspectorTool === "dropper") {
@@ -3474,9 +3516,11 @@
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), timeoutMs);
     try {
+      // Derive cells from layers[2] for save — layers are the source of truth.
+      const saveCells = (state.layers && state.layers[2]) ? state.layers[2] : state.cells;
       const payload = {
         session_id: state.sessionId,
-        cells: state.cells,
+        cells: saveCells,
         layers: state.hasUploadedLayers ? state.layers : undefined,
         angles: state.angles,
         anims: state.anims,
@@ -3556,7 +3600,6 @@
         return;
       }
       state.sessionId = j.session_id;
-      state.cells = deepCloneCells(j.cells || []);
       state.gridCols = Number(j.grid_cols || 0);
       state.gridRows = Number(j.grid_rows || 0);
       state.angles = Number(j.angles || 1);
@@ -3606,9 +3649,18 @@
         state.layers = j.layers.map((l) => deepCloneCells(l));
         state.hasUploadedLayers = true;
         state.layerNames = j.layers.map((_, i) => DEFAULT_LAYER_NAMES[i] || `Layer ${i}`);
+        // Derive state.cells mirror from layers[2].  j.cells is ignored when
+        // j.layers exists — layers are the sole source of truth.
+        state.cells = state.layers.length > 2
+          ? deepCloneCells(state.layers[2])
+          : buildBlankLayerCells();
         if (state.activeLayer < 0 || state.activeLayer >= state.layers.length) state.activeLayer = 2;
         if (!state.visibleLayers || state.visibleLayers.size <= 0) state.visibleLayers = new Set([2]);
       } else {
+        // Seed state.cells from j.cells only for sessions without persisted
+        // layers — syncLayersFromSessionCells reads state.cells to build the
+        // initial layer stack.
+        state.cells = deepCloneCells(j.cells || []);
         state.hasUploadedLayers = false;
         syncLayersFromSessionCells();
       }
@@ -3750,28 +3802,47 @@
     const oldCols = Math.max(0, Number(state.gridCols || 0));
     const oldRows = Math.max(0, Number(state.gridRows || 0));
     if (nextCols === oldCols && nextRows === oldRows) return false;
-    const oldCells = deepCloneCells(Array.isArray(state.cells) ? state.cells : []);
-    const next = [];
-    for (let y = 0; y < nextRows; y++) {
-      for (let x = 0; x < nextCols; x++) {
-        const idx = y * nextCols + x;
-        if (x < oldCols && y < oldRows) {
-          const prev = oldCells[y * oldCols + x] || transparentCell(idx);
-          next.push({
-            idx,
-            glyph: Number(prev.glyph || 0),
-            fg: [Number(prev.fg?.[0] || 0), Number(prev.fg?.[1] || 0), Number(prev.fg?.[2] || 0)],
-            bg: [Number(prev.bg?.[0] || 0), Number(prev.bg?.[1] || 0), Number(prev.bg?.[2] || 0)],
-          });
-        } else {
-          next.push(transparentCell(idx));
+
+    // Helper: resize a flat cell array from oldCols×oldRows to nextCols×nextRows,
+    // preserving data in the overlap region and filling new cells with transparent.
+    function resizeFlat(oldFlat) {
+      const src = Array.isArray(oldFlat) ? oldFlat : [];
+      const out = [];
+      for (let y = 0; y < nextRows; y++) {
+        for (let x = 0; x < nextCols; x++) {
+          const idx = y * nextCols + x;
+          if (x < oldCols && y < oldRows) {
+            const prev = src[y * oldCols + x] || transparentCell(idx);
+            out.push({
+              idx,
+              glyph: Number(prev.glyph || 0),
+              fg: [Number(prev.fg?.[0] || 0), Number(prev.fg?.[1] || 0), Number(prev.fg?.[2] || 0)],
+              bg: [Number(prev.bg?.[0] || 0), Number(prev.bg?.[1] || 0), Number(prev.bg?.[2] || 0)],
+            });
+          } else {
+            out.push(transparentCell(idx));
+          }
         }
       }
+      return out;
     }
+
     state.gridCols = nextCols;
     state.gridRows = nextRows;
-    state.cells = next;
-    syncLayersFromSessionCells();
+
+    // Resize all existing layers to match, preserving non-L2 data in the overlap region.
+    if (Array.isArray(state.layers) && state.layers.length > 0) {
+      state.layers = state.layers.map((l) => resizeFlat(l));
+      // Preserve existing L0 content where possible; only update the metadata row.
+      if (state.layers[0]) {
+        state.layers[0] = applyMetadataRowToLayer(state.layers[0]);
+      }
+      // Derive state.cells from resized layers[2] — layers are the source of truth.
+      state.cells = state.layers[2] ? deepCloneCells(state.layers[2]) : resizeFlat(state.cells);
+    } else {
+      state.cells = resizeFlat(state.cells);
+      syncLayersFromSessionCells();
+    }
     return true;
   }
 
@@ -4519,7 +4590,7 @@
         const gx = col * state.frameWChars + x;
         const gy = row * state.frameHChars + y;
         if (gx >= state.gridCols || gy >= state.gridRows) continue;
-        const c = cellAt(gx, gy);
+        const c = cellForRender(gx, gy);
         if (Number(c.glyph || 0) > 32) return false;
       }
     }
@@ -4540,7 +4611,7 @@
         const gx = col * state.frameWChars + x;
         const gy = row * state.frameHChars + y;
         if (gx >= state.gridCols || gy >= state.gridRows) continue;
-        const c = cellAt(gx, gy);
+        const c = cellForRender(gx, gy);
         if (Number(c.glyph || 0) <= 32) continue;
         minX = minX === null ? x : Math.min(minX, x);
         minY = minY === null ? y : Math.min(minY, y);
@@ -5264,6 +5335,17 @@
       layerNames: state.layerNames,
       activeLayer: state.activeLayer,
       visibleLayers: state.visibleLayers,
+      onCellEdited: function(x, y, glyph, fg, bg) {
+        if (x < 0 || x >= state.gridCols || y < 0 || y >= state.gridRows) return;
+        setCell(x, y, { glyph: glyph, fg: fg, bg: bg });
+      },
+      onStrokeStart: function() {
+        pushHistory();
+      },
+      onStrokeComplete: function() {
+        renderAll();
+        saveSessionState("whole-sheet-draw");
+      },
     }).then(() => {
       if (wsStatus) {
         const st = wsEditor.getState();
@@ -5298,7 +5380,7 @@
         const gx = col * state.frameWChars + x;
         const gy = row * state.frameHChars + y;
         if (gx >= state.gridCols || gy >= state.gridRows) continue;
-        const c = cellAt(gx, gy);
+        const c = cellForRender(gx, gy);
         vals.push(`${c.glyph}:${c.fg[0]}:${c.fg[1]}:${c.fg[2]}:${c.bg[0]}:${c.bg[1]}:${c.bg[2]}`);
       }
     }
@@ -5773,6 +5855,7 @@
       // Empty action — clear session
       state.sessionId = null;
       state.jobId = "";
+      state.layers = [];
       state.cells = [];
       state.gridCols = 0;
       state.gridRows = 0;
@@ -6662,6 +6745,12 @@
       out.overrideMode = OVERRIDE_MODE;
       return out;
     },
+    // Layer-aware accessors for browser-level proof automation.
+    _state: () => state,
+    _setCell: (x, y, c) => setCell(x, y, c),
+    _pushHistory: () => pushHistory(),
+    _undo: () => undo(),
+    _redo: () => redo(),
     startUiRecorder: () => startUiRecorder(),
     stopUiRecorder: () => stopUiRecorder(),
     clearUiRecorder: () => clearUiRecorder(),
@@ -6931,7 +7020,7 @@
           const gx = col * state.frameWChars + x;
           const gy = row * state.frameHChars + y;
           if (gx >= state.gridCols || gy >= state.gridRows) continue;
-          const c = cellAt(gx, gy);
+          const c = cellForRender(gx, gy);
           vals.push(`${c.glyph}:${c.fg[0]}:${c.fg[1]}:${c.fg[2]}:${c.bg[0]}:${c.bg[1]}:${c.bg[2]}`);
         }
       }
@@ -6941,6 +7030,22 @@
       const ws = window.__wholeSheetEditor;
       if (!ws || typeof ws.getState !== "function") return { available: false };
       return { available: true, ...ws.getState() };
+    },
+    readLayerCell: (layerIdx, x, y) => {
+      const li = Number(layerIdx || 0);
+      const lx = Number(x || 0);
+      const ly = Number(y || 0);
+      if (!state.layers[li]) return null;
+      const idx = ly * state.gridCols + lx;
+      const c = state.layers[li][idx];
+      if (!c) return null;
+      return { glyph: Number(c.glyph || 0), fg: [...(c.fg || [0,0,0])], bg: [...(c.bg || [0,0,0])] };
+    },
+    setActiveLayer: (layerIdx) => {
+      const li = Math.max(0, Math.min(state.layers.length - 1, Number(layerIdx || 0)));
+      state.activeLayer = li;
+      renderAll();
+      return { activeLayer: state.activeLayer, layerCount: state.layers.length };
     },
   };
   installUiRecorderHooks();

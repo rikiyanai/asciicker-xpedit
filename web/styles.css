@@ -467,6 +467,190 @@ label.inline {
   flex-shrink: 0;
 }
 
+/* ── Whole-Sheet REXPaint Layout (§3.1-3.9) ── */
+
+.ws-layout {
+  display: flex;
+  gap: 0;
+  min-height: 400px;
+  max-height: 700px;
+}
+
+.ws-sidebar {
+  width: 200px;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  background: #0d1118;
+  border-right: 1px solid #232937;
+  overflow-y: auto;
+}
+
+.ws-sidebar-section {
+  padding: 6px 8px;
+  border-bottom: 1px solid #1a2030;
+}
+
+.ws-sidebar-section h4 {
+  margin: 0 0 4px 0;
+  font-size: 10px;
+  color: #5a6a7a;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.ws-canvas-area {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ws-layout .ws-scroll-wrap {
+  flex: 1;
+  max-height: none;
+}
+
+.ws-placeholder {
+  font-size: 10px;
+  color: #3a4450;
+  font-style: italic;
+  padding: 2px 0;
+}
+
+.ws-glyph-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ws-glyph-row input {
+  font-size: 11px;
+  padding: 2px 3px;
+}
+
+.ws-color-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.ws-color-row label {
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 12px;
+  color: var(--muted);
+}
+
+.ws-color-row input[type="color"] {
+  width: 32px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid #445;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+/* Layers panel */
+.ws-layers-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ws-layer-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px solid transparent;
+  user-select: none;
+}
+
+.ws-layer-row:hover {
+  background: #1a2030;
+}
+
+.ws-layer-row.ws-layer-active {
+  background: #173860;
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.ws-layer-row.ws-layer-hidden {
+  opacity: 0.5;
+}
+
+.ws-layer-row.ws-layer-active.ws-layer-hidden {
+  opacity: 0.7;
+}
+
+.ws-layer-vis-btn {
+  font-size: 10px;
+  padding: 1px 4px;
+  border: 1px solid #334;
+  border-radius: 2px;
+  background: var(--bg);
+  color: var(--muted);
+  cursor: pointer;
+  min-width: 20px;
+  text-align: center;
+  line-height: 1;
+}
+
+.ws-layer-vis-btn.ws-layer-visible {
+  background: #1a5a3a;
+  color: #6fcf97;
+  border-color: #2a7a4a;
+}
+
+.ws-layer-index {
+  font-weight: 700;
+  min-width: 14px;
+  text-align: center;
+  font-size: 10px;
+}
+
+.ws-layer-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Status / Info in sidebar */
+.ws-status-section {
+  margin-top: auto;
+}
+
+.ws-status-section span {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.6;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+/* Sidebar tool/toggle adjustments */
+.ws-sidebar .ws-tool-group {
+  flex-wrap: wrap;
+}
+
+.ws-sidebar .ws-tool-btn {
+  font-size: 10px;
+  padding: 2px 6px;
+}
+
+.ws-sidebar .ws-toggle {
+  font-size: 10px;
+  padding: 1px 6px;
+}
+
 @media (max-width: 1100px) {
   .two-col {
     grid-template-columns: 1fr;

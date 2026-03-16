@@ -5389,6 +5389,23 @@
         renderAll();
         saveSessionState("whole-sheet-draw");
       },
+      onActiveLayerChanged: function(index) {
+        state.activeLayer = index;
+        var sel = $("layerSelect");
+        if (sel) sel.value = String(index);
+        renderAll();
+        saveSessionState("whole-sheet-active-layer");
+      },
+      onLayerVisibilityChanged: function(index, visible) {
+        if (!state.visibleLayers) {
+          state.visibleLayers = new Set();
+          for (var i = 0; i < state.layers.length; i++) state.visibleLayers.add(i);
+        }
+        if (visible) state.visibleLayers.add(index);
+        else state.visibleLayers.delete(index);
+        renderAll();
+        saveSessionState("whole-sheet-layer-visibility");
+      },
     }).then(() => {
       if (wsStatus) {
         const st = wsEditor.getState();

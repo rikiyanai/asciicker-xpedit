@@ -1,14 +1,13 @@
 /**
- * Whole-Sheet XP Editor Integration (B6 Slice + B7 Cell Draw + B8 Eyedropper/Erase)
+ * Whole-Sheet XP Editor Integration
  *
- * Mounts a whole-sheet Canvas editor surface into the workbench.
+ * REXPaint-style left-sidebar + canvas layout (spec sections 3.1-3.9).
  * Hydrates from backend session layers (state.layers), NOT from JS XP file I/O.
- * Supports cell draw, eyedropper, and erase on the whole-sheet canvas with
- * active-layer-aware editing that writes back to workbench/session truth via callbacks.
+ * Supports cell draw, eyedropper, erase with active-layer-aware editing.
  *
- * Reuses salvageable rexpaint-editor modules:
- *   Canvas, LayerStack, CP437Font, CellTool
- * Does NOT import EditorApp (which depends on XPFileReader/Writer → Node.js zlib).
+ * Layout regions:
+ *   Left sidebar: Mode, Glyph, Palette, Tools/Apply, Image/Draw, Layers, Info
+ *   Center: Whole-sheet canvas (primary editing surface)
  */
 
 import { Canvas } from './rexpaint-editor/canvas.js';
@@ -19,41 +18,21 @@ import { CellTool } from './rexpaint-editor/tools/cell-tool.js';
 const FONT_URL = '/termpp-web-flat/fonts/cp437_12x12.png';
 const CELL_SIZE = 12;
 
-// ── Inline tool classes for Eyedropper and Erase ──
+// ── Inline tool classes ──
 
-/**
- * EyedropperTool - Samples cell data from the canvas and updates draw state.
- * On click, reads the active layer cell at the target position and copies
- * glyph/fg/bg into the editor's drawing state.
- */
 class EyedropperTool {
   constructor() {
     this.canvas = null;
-    this._onSample = null; // callback(glyph, fg, bg)
+    this._onSample = null;
   }
-
-  setCanvas(canvas) {
-    this.canvas = canvas;
-  }
-
-  setOnSample(fn) {
-    this._onSample = fn;
-  }
-
-  startDrag(x, y) {
-    this._sample(x, y);
-  }
-
-  drag(x, y) {
-    this._sample(x, y);
-  }
-
+  setCanvas(canvas) { this.canvas = canvas; }
+  setOnSample(fn) { this._onSample = fn; }
+  startDrag(x, y) { this._sample(x, y); }
+  drag(x, y) { this._sample(x, y); }
   endDrag() {}
-
   _sample(x, y) {
     if (!this.canvas) return;
     if (x < 0 || y < 0 || x >= this.canvas.width || y >= this.canvas.height) return;
-    // Read from the active layer specifically, not the composite
     const ls = this.canvas.layerStack;
     let cell;
     if (ls) {
@@ -61,7 +40,6 @@ class EyedropperTool {
       cell = activeLayer ? activeLayer.getCell(x, y) : null;
     }
     if (!cell) {
-      // fallback to composite
       try { cell = this.canvas.getCell(x, y); } catch (_) { return; }
     }
     if (cell && this._onSample) {
@@ -70,11 +48,6 @@ class EyedropperTool {
   }
 }
 
-/**
- * EraseTool - Clears cells to transparent state (glyph=0, fg=white, bg=black).
- * Supports drag to erase multiple cells. Erases on the active layer via
- * canvas.setCell, which triggers the same onCellEdited callback as CellTool.
- */
 class EraseTool {
   constructor() {
     this.canvas = null;
@@ -82,47 +55,31 @@ class EraseTool {
     this.lastX = 0;
     this.lastY = 0;
   }
-
-  setCanvas(canvas) {
-    this.canvas = canvas;
-  }
-
+  setCanvas(canvas) { this.canvas = canvas; }
   startDrag(x, y) {
     this.isDragging = true;
     this.lastX = x;
     this.lastY = y;
     this._erase(x, y);
   }
-
   drag(x, y) {
     if (!this.isDragging) return;
-    const cells = this._lineBresenham(this.lastX, this.lastY, x, y);
-    for (const c of cells) {
-      this._erase(c.x, c.y);
-    }
+    const cells = this._line(this.lastX, this.lastY, x, y);
+    for (const c of cells) this._erase(c.x, c.y);
     this.lastX = x;
     this.lastY = y;
   }
-
-  endDrag() {
-    this.isDragging = false;
-  }
-
+  endDrag() { this.isDragging = false; }
   _erase(x, y) {
     if (!this.canvas) return;
     if (x < 0 || y < 0 || x >= this.canvas.width || y >= this.canvas.height) return;
-    // XP transparent cell: glyph 0, white fg, black bg
     this.canvas.setCell(x, y, 0, [255, 255, 255], [0, 0, 0]);
   }
-
-  _lineBresenham(x0, y0, x1, y1) {
+  _line(x0, y0, x1, y1) {
     const cells = [];
-    const dx = Math.abs(x1 - x0);
-    const dy = Math.abs(y1 - y0);
-    const sx = x0 < x1 ? 1 : -1;
-    const sy = y0 < y1 ? 1 : -1;
-    let err = dx - dy;
-    let x = x0, y = y0;
+    const dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+    let err = dx - dy, x = x0, y = y0;
     while (true) {
       cells.push({ x, y });
       if (x === x1 && y === y1) break;
@@ -144,44 +101,28 @@ let editorState = {
   cellTool: null,
   eyedropperTool: null,
   eraseTool: null,
-  activeTool: 'cell', // 'cell' | 'eyedropper' | 'erase'
+  activeTool: 'cell',
   gridCols: 0,
   gridRows: 0,
   containerEl: null,
-  // Drawing state
-  drawGlyph: 64,   // '@'
+  drawGlyph: 64,
   drawFg: [255, 255, 255],
   drawBg: [0, 0, 0],
   applyGlyph: true,
   applyFg: true,
   applyBg: true,
-  // Callbacks to workbench
   onCellEdited: null,
   onStrokeStart: null,
   onStrokeComplete: null,
-  // Stroke tracking
+  onActiveLayerChanged: null,
+  onLayerVisibilityChanged: null,
   _strokeDirty: false,
 };
 
-/**
- * Mount the whole-sheet editor into the given container.
- *
- * @param {Object} opts
- * @param {HTMLElement} opts.container - DOM element to mount into
- * @param {number} opts.gridCols - grid width in cells
- * @param {number} opts.gridRows - grid height in cells
- * @param {Array<Array<Object>>} opts.layers - flat cell arrays per layer from backend
- * @param {string[]} opts.layerNames - layer name labels
- * @param {number} [opts.activeLayer=2] - active layer index
- * @param {Set<number>} [opts.visibleLayers] - set of visible layer indices
- * @param {Function} [opts.onCellEdited] - callback(x, y, glyph, fg, bg) per cell edit
- * @param {Function} [opts.onStrokeStart] - callback() before the first cell edit in a stroke
- * @param {Function} [opts.onStrokeComplete] - callback() when a draw stroke finishes
- */
-async function mount({ container, gridCols, gridRows, layers, layerNames, activeLayer, visibleLayers, onCellEdited, onStrokeStart, onStrokeComplete }) {
-  if (editorState.mounted) {
-    unmount();
-  }
+// ── mount ──
+
+async function mount({ container, gridCols, gridRows, layers, layerNames, activeLayer, visibleLayers, onCellEdited, onStrokeStart, onStrokeComplete, onActiveLayerChanged, onLayerVisibilityChanged }) {
+  if (editorState.mounted) unmount();
 
   editorState.gridCols = gridCols;
   editorState.gridRows = gridRows;
@@ -189,37 +130,36 @@ async function mount({ container, gridCols, gridRows, layers, layerNames, active
   editorState.onCellEdited = onCellEdited || null;
   editorState.onStrokeStart = onStrokeStart || null;
   editorState.onStrokeComplete = onStrokeComplete || null;
+  editorState.onActiveLayerChanged = onActiveLayerChanged || null;
+  editorState.onLayerVisibilityChanged = onLayerVisibilityChanged || null;
 
-  // Build DOM structure
+  // Build DOM — REXPaint-style sidebar + canvas layout
   container.innerHTML = '';
 
-  // Toolbar
-  const toolbar = _buildToolbar(layers.length, activeLayer, layerNames);
-  container.appendChild(toolbar);
+  const layout = document.createElement('div');
+  layout.className = 'ws-layout';
 
-  // Info bar
-  const infoBar = document.createElement('div');
-  infoBar.className = 'ws-info-bar';
-  infoBar.innerHTML =
-    `<span id="wsPos">Pos: -,-</span>` +
-    ` <span id="wsCell">Cell: --</span>` +
-    ` <span id="wsDims">${gridCols}\u00d7${gridRows}</span>` +
-    ` <span id="wsLayers">${layers.length} layers</span>` +
-    ` <span id="wsActiveTool">Tool: Cell</span>`;
-  container.appendChild(infoBar);
+  // Left sidebar (spec sections 3.1-3.6, 3.9)
+  const sidebar = _buildSidebar(layers.length, activeLayer, layerNames, visibleLayers, gridCols, gridRows);
+  layout.appendChild(sidebar);
 
-  // Scrollable canvas wrapper
+  // Center canvas area (spec section 3.7)
+  const canvasArea = document.createElement('div');
+  canvasArea.className = 'ws-canvas-area';
+
   const scrollWrap = document.createElement('div');
   scrollWrap.id = 'wholeSheetScroll';
   scrollWrap.className = 'ws-scroll-wrap';
-  container.appendChild(scrollWrap);
+  canvasArea.appendChild(scrollWrap);
 
-  // Canvas element
   const canvasEl = document.createElement('canvas');
   canvasEl.id = 'wholeSheetCanvas';
   canvasEl.style.imageRendering = 'pixelated';
   canvasEl.style.cursor = 'crosshair';
   scrollWrap.appendChild(canvasEl);
+
+  layout.appendChild(canvasArea);
+  container.appendChild(layout);
 
   // Create Canvas renderer
   const canvas = new Canvas(canvasEl, gridCols, gridRows, CELL_SIZE);
@@ -237,7 +177,6 @@ async function mount({ container, gridCols, gridRows, layers, layerNames, active
 
   // Build LayerStack from backend session layers
   const layerStack = new LayerStack(gridCols, gridRows);
-  // Remove default "Layer 0" created by constructor
   layerStack.layers.splice(0, 1);
 
   for (let li = 0; li < layers.length; li++) {
@@ -245,16 +184,13 @@ async function mount({ container, gridCols, gridRows, layers, layerNames, active
     layerStack.addLayer(name);
     const stackLayer = layerStack.layers[li];
     const flatCells = layers[li];
-
     if (!Array.isArray(flatCells)) continue;
-
     for (let i = 0; i < flatCells.length; i++) {
       const cell = flatCells[i];
       if (!cell) continue;
       const x = i % gridCols;
       const y = Math.floor(i / gridCols);
       if (x >= gridCols || y >= gridRows) continue;
-
       const glyph = Number(cell.glyph || 0);
       const fg = Array.isArray(cell.fg) ? cell.fg.map(Number) : [255, 255, 255];
       const bg = Array.isArray(cell.bg) ? cell.bg.map(Number) : [0, 0, 0];
@@ -276,7 +212,10 @@ async function mount({ container, gridCols, gridRows, layers, layerNames, active
   editorState.layerStack = layerStack;
   canvas.setLayerStack(layerStack);
 
-  // Create CellTool for drawing
+  // Populate layers panel now that LayerStack is ready
+  _updateLayersPanelUI();
+
+  // Create CellTool
   const cellTool = new CellTool();
   cellTool.setGlyph(editorState.drawGlyph);
   cellTool.setColors(editorState.drawFg, editorState.drawBg);
@@ -298,13 +237,11 @@ async function mount({ container, gridCols, gridRows, layers, layerNames, active
   const eraseTool = new EraseTool();
   editorState.eraseTool = eraseTool;
 
-  // Activate default tool (Cell) on the canvas
+  // Activate default tool
   editorState.activeTool = 'cell';
   canvas.toolActivated(cellTool);
 
-  // Proxy canvas.setCell to fire callbacks:
-  // - onStrokeStart before the first edit in a stroke (for undo snapshot)
-  // - onCellEdited per cell (for workbench state sync)
+  // Proxy canvas.setCell for callbacks
   const originalSetCell = canvas.setCell.bind(canvas);
   canvas.setCell = function(x, y, glyph, fg, bg) {
     if (!editorState._strokeDirty && editorState.onStrokeStart) {
@@ -317,14 +254,14 @@ async function mount({ container, gridCols, gridRows, layers, layerNames, active
     }
   };
 
-  // Stroke-complete detection: fire callback on mouseup/mouseleave after drawing
+  // Stroke-complete detection
   canvasEl.addEventListener('mouseup', _onStrokeEnd);
   canvasEl.addEventListener('mouseleave', _onStrokeEnd);
 
-  // Mouse position tracking on canvas
+  // Mouse tracking
   canvasEl.addEventListener('mousemove', _onCanvasMouseMove);
 
-  // Keyboard shortcuts for tool switching
+  // Keyboard shortcuts
   document.addEventListener('keydown', _onKeyDown);
 
   editorState.mounted = true;
@@ -332,30 +269,27 @@ async function mount({ container, gridCols, gridRows, layers, layerNames, active
   _updateToolUI();
 }
 
+// ── Stroke tracking ──
+
 function _onStrokeEnd() {
   if (editorState._strokeDirty) {
     editorState._strokeDirty = false;
-    if (editorState.onStrokeComplete) {
-      editorState.onStrokeComplete();
-    }
+    if (editorState.onStrokeComplete) editorState.onStrokeComplete();
   }
 }
 
-/**
- * Apply an eyedropper sample to the editor draw state and UI.
- */
+// ── Eyedropper sample ──
+
 function _applyEyedropperSample(glyph, fg, bg) {
   editorState.drawGlyph = glyph & 0xFF;
   editorState.drawFg = [...fg];
   editorState.drawBg = [...bg];
 
-  // Update CellTool so next draw uses sampled values
   if (editorState.cellTool) {
     editorState.cellTool.setGlyph(editorState.drawGlyph);
     editorState.cellTool.setColors(editorState.drawFg, editorState.drawBg);
   }
 
-  // Update toolbar UI inputs
   const glyphEl = document.getElementById('wsGlyphCode');
   if (glyphEl) glyphEl.value = String(editorState.drawGlyph);
   const charEl = document.getElementById('wsGlyphChar');
@@ -365,7 +299,6 @@ function _applyEyedropperSample(glyph, fg, bg) {
   const bgEl = document.getElementById('wsBgColor');
   if (bgEl) bgEl.value = _rgbToHex(editorState.drawBg);
 
-  // Update info bar with sampled cell
   const cellEl = document.getElementById('wsCell');
   if (cellEl) {
     const ch = (glyph > 31 && glyph < 127) ? String.fromCharCode(glyph) : '\u00b7';
@@ -373,15 +306,12 @@ function _applyEyedropperSample(glyph, fg, bg) {
   }
 }
 
-/**
- * Switch active tool by name.
- */
+// ── Tool switching ──
+
 function _switchTool(name) {
   if (!editorState.mounted || !editorState.canvas) return;
-
   editorState.activeTool = name;
   const canvasEl = editorState.canvas.canvasElement;
-
   switch (name) {
     case 'cell':
       editorState.canvas.toolActivated(editorState.cellTool);
@@ -398,19 +328,14 @@ function _switchTool(name) {
     default:
       return;
   }
-
   _updateToolUI();
 }
 
-/**
- * Update tool button active states and info bar.
- */
 function _updateToolUI() {
   const names = { cell: 'Cell', eyedropper: 'Eyedropper', erase: 'Erase' };
   const toolEl = document.getElementById('wsActiveTool');
   if (toolEl) toolEl.textContent = `Tool: ${names[editorState.activeTool] || editorState.activeTool}`;
 
-  // Update button active states
   for (const id of ['wsToolCell', 'wsToolEyedropper', 'wsToolErase']) {
     const btn = document.getElementById(id);
     if (!btn) continue;
@@ -419,12 +344,10 @@ function _updateToolUI() {
   }
 }
 
-/**
- * Keyboard shortcut handler for tool switching.
- */
+// ── Keyboard shortcuts ──
+
 function _onKeyDown(e) {
   if (!editorState.mounted) return;
-  // Don't capture shortcuts when typing in inputs
   const tag = e.target.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
@@ -444,31 +367,140 @@ function _onKeyDown(e) {
   }
 }
 
-/**
- * Build the drawing toolbar DOM.
- */
-function _buildToolbar(layerCount, activeLayer, layerNames) {
-  const bar = document.createElement('div');
-  bar.className = 'ws-toolbar';
+// ── Sidebar builders ──
 
-  // ── Tool Switcher ──
+function _buildSection(title) {
+  const section = document.createElement('div');
+  section.className = 'ws-sidebar-section';
+  const h4 = document.createElement('h4');
+  h4.textContent = title;
+  section.appendChild(h4);
+  return section;
+}
+
+function _placeholder(text) {
+  const el = document.createElement('div');
+  el.className = 'ws-placeholder';
+  el.textContent = text;
+  return el;
+}
+
+function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridCols, gridRows) {
+  const sidebar = document.createElement('div');
+  sidebar.className = 'ws-sidebar';
+
+  // 3.1 Mode
+  const modeSection = _buildSection('Mode');
+  const modeGroup = document.createElement('div');
+  modeGroup.className = 'ws-tool-group';
+  const paintBtn = document.createElement('button');
+  paintBtn.textContent = 'PAINT';
+  paintBtn.className = 'ws-tool-btn ws-tool-active';
+  const browseBtn = document.createElement('button');
+  browseBtn.textContent = 'BROWSE';
+  browseBtn.className = 'ws-tool-btn';
+  browseBtn.disabled = true;
+  browseBtn.title = 'Browse mode (deferred)';
+  modeGroup.appendChild(paintBtn);
+  modeGroup.appendChild(browseBtn);
+  modeSection.appendChild(modeGroup);
+  sidebar.appendChild(modeSection);
+
+  // 3.2 Glyph
+  const glyphSection = _buildSection('Glyph');
+  const glyphRow = document.createElement('div');
+  glyphRow.className = 'ws-glyph-row';
+  const glyphInput = document.createElement('input');
+  glyphInput.type = 'number';
+  glyphInput.id = 'wsGlyphCode';
+  glyphInput.min = '0';
+  glyphInput.max = '255';
+  glyphInput.value = String(editorState.drawGlyph);
+  glyphInput.style.width = '48px';
+  const glyphChar = document.createElement('input');
+  glyphChar.type = 'text';
+  glyphChar.id = 'wsGlyphChar';
+  glyphChar.maxLength = 1;
+  glyphChar.value = String.fromCharCode(editorState.drawGlyph);
+  glyphChar.style.width = '28px';
+  glyphChar.title = 'Type a character';
+
+  glyphInput.addEventListener('change', () => {
+    const code = Math.max(0, Math.min(255, parseInt(glyphInput.value, 10) || 0));
+    glyphInput.value = String(code);
+    editorState.drawGlyph = code;
+    glyphChar.value = (code > 31 && code < 127) ? String.fromCharCode(code) : '';
+    if (editorState.cellTool) editorState.cellTool.setGlyph(code);
+  });
+  glyphChar.addEventListener('input', () => {
+    if (glyphChar.value.length === 1) {
+      const code = glyphChar.value.charCodeAt(0) & 0xFF;
+      editorState.drawGlyph = code;
+      glyphInput.value = String(code);
+      if (editorState.cellTool) editorState.cellTool.setGlyph(code);
+    }
+  });
+
+  glyphRow.appendChild(glyphInput);
+  glyphRow.appendChild(glyphChar);
+  glyphSection.appendChild(glyphRow);
+  glyphSection.appendChild(_placeholder('16x16 glyph grid (deferred)'));
+  sidebar.appendChild(glyphSection);
+
+  // 3.3 Palette
+  const paletteSection = _buildSection('Palette');
+  const fgRow = document.createElement('div');
+  fgRow.className = 'ws-color-row';
+  const fgLabel = document.createElement('label');
+  fgLabel.textContent = 'f';
+  const fgInput = document.createElement('input');
+  fgInput.type = 'color';
+  fgInput.id = 'wsFgColor';
+  fgInput.value = _rgbToHex(editorState.drawFg);
+  fgInput.addEventListener('input', () => {
+    editorState.drawFg = _hexToRgb(fgInput.value);
+    if (editorState.cellTool) editorState.cellTool.setColors(editorState.drawFg, editorState.drawBg);
+  });
+  fgRow.appendChild(fgLabel);
+  fgRow.appendChild(fgInput);
+
+  const bgRow = document.createElement('div');
+  bgRow.className = 'ws-color-row';
+  const bgLabel = document.createElement('label');
+  bgLabel.textContent = 'b';
+  const bgInput = document.createElement('input');
+  bgInput.type = 'color';
+  bgInput.id = 'wsBgColor';
+  bgInput.value = _rgbToHex(editorState.drawBg);
+  bgInput.addEventListener('input', () => {
+    editorState.drawBg = _hexToRgb(bgInput.value);
+    if (editorState.cellTool) editorState.cellTool.setColors(editorState.drawFg, editorState.drawBg);
+  });
+  bgRow.appendChild(bgLabel);
+  bgRow.appendChild(bgInput);
+
+  paletteSection.appendChild(fgRow);
+  paletteSection.appendChild(bgRow);
+  paletteSection.appendChild(_placeholder('Palette grid (deferred)'));
+  sidebar.appendChild(paletteSection);
+
+  // 3.4 Tools / Apply
+  const toolsSection = _buildSection('Tools / Apply');
+
   const toolGroup = document.createElement('div');
   toolGroup.className = 'ws-tool-group';
-
   const toolCellBtn = document.createElement('button');
   toolCellBtn.id = 'wsToolCell';
   toolCellBtn.textContent = 'Cell';
   toolCellBtn.className = 'ws-tool-btn ws-tool-active';
   toolCellBtn.title = 'Cell draw tool (C)';
   toolCellBtn.addEventListener('click', () => _switchTool('cell'));
-
   const toolEyedropperBtn = document.createElement('button');
   toolEyedropperBtn.id = 'wsToolEyedropper';
   toolEyedropperBtn.textContent = 'Pick';
   toolEyedropperBtn.className = 'ws-tool-btn';
-  toolEyedropperBtn.title = 'Eyedropper / color picker (D)';
+  toolEyedropperBtn.title = 'Eyedropper (D)';
   toolEyedropperBtn.addEventListener('click', () => _switchTool('eyedropper'));
-
   const toolEraseBtn = document.createElement('button');
   toolEraseBtn.id = 'wsToolErase';
   toolEraseBtn.textContent = 'Erase';
@@ -479,133 +511,74 @@ function _buildToolbar(layerCount, activeLayer, layerNames) {
   toolGroup.appendChild(toolCellBtn);
   toolGroup.appendChild(toolEyedropperBtn);
   toolGroup.appendChild(toolEraseBtn);
-  bar.appendChild(toolGroup);
+  toolsSection.appendChild(toolGroup);
 
-  // Separator
-  const sep = document.createElement('span');
-  sep.className = 'ws-toolbar-sep';
-  bar.appendChild(sep);
-
-  // Glyph input
-  const glyphLabel = document.createElement('label');
-  glyphLabel.textContent = 'Glyph';
-  glyphLabel.className = 'ws-toolbar-label';
-  const glyphInput = document.createElement('input');
-  glyphInput.type = 'number';
-  glyphInput.id = 'wsGlyphCode';
-  glyphInput.min = '0';
-  glyphInput.max = '255';
-  glyphInput.value = String(editorState.drawGlyph);
-  glyphInput.style.width = '56px';
-
-  const glyphChar = document.createElement('input');
-  glyphChar.type = 'text';
-  glyphChar.id = 'wsGlyphChar';
-  glyphChar.maxLength = 1;
-  glyphChar.value = String.fromCharCode(editorState.drawGlyph);
-  glyphChar.style.width = '32px';
-  glyphChar.title = 'Type a character';
-
-  glyphInput.addEventListener('change', () => {
-    const code = Math.max(0, Math.min(255, parseInt(glyphInput.value, 10) || 0));
-    glyphInput.value = String(code);
-    editorState.drawGlyph = code;
-    glyphChar.value = (code > 31 && code < 127) ? String.fromCharCode(code) : '';
-    if (editorState.cellTool) editorState.cellTool.setGlyph(code);
-  });
-
-  glyphChar.addEventListener('input', () => {
-    if (glyphChar.value.length === 1) {
-      const code = glyphChar.value.charCodeAt(0) & 0xFF;
-      editorState.drawGlyph = code;
-      glyphInput.value = String(code);
-      if (editorState.cellTool) editorState.cellTool.setGlyph(code);
-    }
-  });
-
-  // FG color
-  const fgLabel = document.createElement('label');
-  fgLabel.textContent = 'FG';
-  fgLabel.className = 'ws-toolbar-label';
-  const fgInput = document.createElement('input');
-  fgInput.type = 'color';
-  fgInput.id = 'wsFgColor';
-  fgInput.value = _rgbToHex(editorState.drawFg);
-  fgInput.addEventListener('input', () => {
-    editorState.drawFg = _hexToRgb(fgInput.value);
-    if (editorState.cellTool) editorState.cellTool.setColors(editorState.drawFg, editorState.drawBg);
-  });
-
-  // BG color
-  const bgLabel = document.createElement('label');
-  bgLabel.textContent = 'BG';
-  bgLabel.className = 'ws-toolbar-label';
-  const bgInput = document.createElement('input');
-  bgInput.type = 'color';
-  bgInput.id = 'wsBgColor';
-  bgInput.value = _rgbToHex(editorState.drawBg);
-  bgInput.addEventListener('input', () => {
-    editorState.drawBg = _hexToRgb(bgInput.value);
-    if (editorState.cellTool) editorState.cellTool.setColors(editorState.drawFg, editorState.drawBg);
-  });
-
-  // Apply mode toggles
-  const applyGlyph = _buildToggle('G', 'wsApplyGlyph', editorState.applyGlyph, (on) => {
+  const applyRow = document.createElement('div');
+  applyRow.style.cssText = 'display:flex; gap:4px; margin-top:6px;';
+  applyRow.appendChild(_buildToggle('G', 'wsApplyGlyph', editorState.applyGlyph, (on) => {
     editorState.applyGlyph = on;
     if (editorState.cellTool) editorState.cellTool.setApplyModes({ glyph: on });
-  });
-  const applyFg = _buildToggle('F', 'wsApplyFg', editorState.applyFg, (on) => {
+  }));
+  applyRow.appendChild(_buildToggle('F', 'wsApplyFg', editorState.applyFg, (on) => {
     editorState.applyFg = on;
     if (editorState.cellTool) editorState.cellTool.setApplyModes({ foreground: on });
-  });
-  const applyBg = _buildToggle('B', 'wsApplyBg', editorState.applyBg, (on) => {
+  }));
+  applyRow.appendChild(_buildToggle('B', 'wsApplyBg', editorState.applyBg, (on) => {
     editorState.applyBg = on;
     if (editorState.cellTool) editorState.cellTool.setApplyModes({ background: on });
-  });
-
-  // Active layer indicator
-  const layerLabel = document.createElement('label');
-  layerLabel.textContent = 'Layer';
-  layerLabel.className = 'ws-toolbar-label';
-  const layerSpan = document.createElement('span');
-  layerSpan.id = 'wsActiveLayer';
-  layerSpan.className = 'ws-toolbar-value';
-  const aIdx = (typeof activeLayer === 'number') ? activeLayer : 2;
-  const lName = (layerNames && layerNames[aIdx]) || `Layer ${aIdx}`;
-  layerSpan.textContent = `${aIdx}: ${lName}`;
-
-  // Grid toggle
-  const gridToggle = _buildToggle('Grid', 'wsGridToggle', false, (on) => {
+  }));
+  applyRow.appendChild(_buildToggle('Grid', 'wsGridToggle', false, (on) => {
     if (editorState.canvas) editorState.canvas.setGridVisible(on);
-  });
+  }));
+  toolsSection.appendChild(applyRow);
+  sidebar.appendChild(toolsSection);
 
-  // Assemble
-  bar.appendChild(glyphLabel);
-  bar.appendChild(glyphInput);
-  bar.appendChild(glyphChar);
-  bar.appendChild(fgLabel);
-  bar.appendChild(fgInput);
-  bar.appendChild(bgLabel);
-  bar.appendChild(bgInput);
-  bar.appendChild(applyGlyph);
-  bar.appendChild(applyFg);
-  bar.appendChild(applyBg);
-  bar.appendChild(layerLabel);
-  bar.appendChild(layerSpan);
-  bar.appendChild(gridToggle);
+  // 3.5 Image / Draw
+  const imageDrawSection = _buildSection('Image / Draw');
+  imageDrawSection.appendChild(_placeholder('Save, Export, Resize'));
+  imageDrawSection.appendChild(_placeholder('Line, Rect, Fill, Text'));
+  sidebar.appendChild(imageDrawSection);
 
-  return bar;
+  // 3.6 Layers
+  const layersSection = _buildSection('Layers');
+  const layersPanel = document.createElement('div');
+  layersPanel.id = 'wsLayersPanel';
+  layersPanel.className = 'ws-layers-panel';
+  layersSection.appendChild(layersPanel);
+  sidebar.appendChild(layersSection);
+
+  // 3.9 Info
+  const statusSection = document.createElement('div');
+  statusSection.className = 'ws-sidebar-section ws-status-section';
+  const statusH4 = document.createElement('h4');
+  statusH4.textContent = 'Info';
+  statusSection.appendChild(statusH4);
+
+  const mkSpan = (id, text) => {
+    const s = document.createElement('span');
+    s.id = id;
+    s.textContent = text;
+    return s;
+  };
+  statusSection.appendChild(mkSpan('wsPos', 'Pos: -,-'));
+  statusSection.appendChild(mkSpan('wsCell', 'Cell: --'));
+  statusSection.appendChild(mkSpan('wsDims', `${gridCols}\u00d7${gridRows}`));
+  statusSection.appendChild(mkSpan('wsLayers', `${layerCount} layers`));
+  statusSection.appendChild(mkSpan('wsActiveTool', 'Tool: Cell'));
+  statusSection.appendChild(mkSpan('wsActiveLayerInfo', `Layer: ${typeof activeLayer === 'number' ? activeLayer : 0}`));
+  sidebar.appendChild(statusSection);
+
+  return sidebar;
 }
 
-/**
- * Build a toggle button element.
- */
+// ── Toggle button builder ──
+
 function _buildToggle(label, id, initial, onChange) {
   const btn = document.createElement('button');
   btn.id = id;
   btn.textContent = label;
   btn.className = 'ws-toggle' + (initial ? ' ws-toggle-on' : '');
-  btn.title = `Toggle ${label} apply mode`;
+  btn.title = `Toggle ${label}`;
   btn.addEventListener('click', () => {
     const on = !btn.classList.contains('ws-toggle-on');
     btn.classList.toggle('ws-toggle-on', on);
@@ -613,6 +586,85 @@ function _buildToggle(label, id, initial, onChange) {
   });
   return btn;
 }
+
+// ── Layer panel ──
+
+function _updateLayersPanelUI() {
+  const panel = document.getElementById('wsLayersPanel');
+  if (!panel || !editorState.layerStack) return;
+
+  panel.innerHTML = '';
+  const layers = editorState.layerStack.layers;
+  const activeIdx = editorState.layerStack.activeIndex;
+
+  for (let i = 0; i < layers.length; i++) {
+    const layer = layers[i];
+    const row = document.createElement('div');
+    row.className = 'ws-layer-row';
+    if (i === activeIdx) row.classList.add('ws-layer-active');
+    if (!layer.visible) row.classList.add('ws-layer-hidden');
+
+    const visBtn = document.createElement('button');
+    visBtn.className = 'ws-layer-vis-btn' + (layer.visible ? ' ws-layer-visible' : '');
+    visBtn.textContent = layer.visible ? 'V' : '-';
+    visBtn.title = layer.visible ? 'Hide layer' : 'Show layer';
+    visBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      _toggleLayerVisibility(i);
+    });
+
+    const idxSpan = document.createElement('span');
+    idxSpan.className = 'ws-layer-index';
+    idxSpan.textContent = String(i);
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'ws-layer-name';
+    nameSpan.textContent = layer.name || `Layer ${i}`;
+
+    row.appendChild(visBtn);
+    row.appendChild(idxSpan);
+    row.appendChild(nameSpan);
+    row.addEventListener('click', () => _switchActiveLayer(i));
+    panel.appendChild(row);
+  }
+
+  // Update status info
+  const infoEl = document.getElementById('wsActiveLayerInfo');
+  if (infoEl && editorState.layerStack) {
+    const layer = editorState.layerStack.layers[activeIdx];
+    infoEl.textContent = `Layer: ${activeIdx}${layer ? ' (' + (layer.name || '') + ')' : ''}`;
+  }
+}
+
+function _switchActiveLayer(index) {
+  if (!editorState.layerStack) return;
+  if (index < 0 || index >= editorState.layerStack.layers.length) return;
+
+  editorState.layerStack.selectLayer(index);
+  _updateLayersPanelUI();
+
+  if (editorState.onActiveLayerChanged) {
+    editorState.onActiveLayerChanged(index);
+  }
+}
+
+function _toggleLayerVisibility(index) {
+  if (!editorState.layerStack) return;
+  const layer = editorState.layerStack.layers[index];
+  if (!layer) return;
+
+  const newVisible = !layer.visible;
+  layer.setVisible(newVisible);
+  _updateLayersPanelUI();
+
+  if (editorState.canvas) editorState.canvas.render();
+
+  if (editorState.onLayerVisibilityChanged) {
+    editorState.onLayerVisibilityChanged(index, newVisible);
+  }
+}
+
+// ── Helpers ──
 
 function _rgbToHex(rgb) {
   return '#' + rgb.map(c => c.toString(16).padStart(2, '0')).join('');
@@ -644,15 +696,13 @@ function _onCanvasMouseMove(e) {
         const ch = (cell.glyph > 31 && cell.glyph < 127) ? String.fromCharCode(cell.glyph) : '\u00b7';
         cellEl.textContent = `Cell: ${cell.glyph} (${ch})`;
       }
-    } catch (_) { /* ignore out-of-bounds during rapid mouse movement */ }
+    } catch (_) {}
   }
 }
 
-/**
- * Tear down the editor and release resources.
- */
+// ── unmount ──
+
 function unmount() {
-  // Remove keyboard handler
   document.removeEventListener('keydown', _onKeyDown);
 
   if (editorState.canvas) {
@@ -687,21 +737,16 @@ function unmount() {
     onCellEdited: null,
     onStrokeStart: null,
     onStrokeComplete: null,
+    onActiveLayerChanged: null,
+    onLayerVisibilityChanged: null,
     _strokeDirty: false,
   };
 }
 
-/**
- * Scroll the whole-sheet editor viewport to center on a specific frame.
- *
- * @param {number} row - frame grid row (angle index)
- * @param {number} col - frame grid column
- * @param {number} frameWChars - frame width in cells
- * @param {number} frameHChars - frame height in cells
- */
+// ── Public API ──
+
 function panToFrame(row, col, frameWChars, frameHChars) {
   if (!editorState.mounted) return;
-
   const scrollWrap = document.getElementById('wholeSheetScroll');
   if (!scrollWrap) return;
 
@@ -710,7 +755,6 @@ function panToFrame(row, col, frameWChars, frameHChars) {
   const framePixelW = frameWChars * CELL_SIZE;
   const framePixelH = frameHChars * CELL_SIZE;
 
-  // Center the frame in the scroll viewport
   const viewW = scrollWrap.clientWidth;
   const viewH = scrollWrap.clientHeight;
   const scrollX = Math.max(0, targetX - (viewW - framePixelW) / 2);
@@ -719,12 +763,6 @@ function panToFrame(row, col, frameWChars, frameHChars) {
   scrollWrap.scrollTo({ left: scrollX, top: scrollY, behavior: 'smooth' });
 }
 
-/**
- * Sync the LayerStack cells from workbench state.layers (flat arrays) and re-render.
- * Called by workbench.js renderAll() to keep the whole-sheet surface in sync after edits.
- *
- * @param {Array<Array<Object>>} layers - flat cell arrays per layer from workbench state
- */
 function syncFromState(layers) {
   if (!editorState.mounted || !editorState.layerStack || !editorState.canvas) return;
   if (!Array.isArray(layers)) return;
@@ -736,14 +774,12 @@ function syncFromState(layers) {
     const flatCells = layers[li];
     const stackLayer = layerStack.layers[li];
     if (!Array.isArray(flatCells)) continue;
-
     for (let i = 0; i < flatCells.length; i++) {
       const cell = flatCells[i];
       if (!cell) continue;
       const x = i % gridCols;
       const y = Math.floor(i / gridCols);
       if (x >= gridCols || y >= gridRows) continue;
-
       const glyph = Number(cell.glyph || 0);
       const fg = Array.isArray(cell.fg) ? cell.fg.map(Number) : [255, 255, 255];
       const bg = Array.isArray(cell.bg) ? cell.bg.map(Number) : [0, 0, 0];
@@ -754,15 +790,13 @@ function syncFromState(layers) {
   editorState.canvas.render();
 }
 
-/**
- * Get current editor state summary.
- */
 function getState() {
   return {
     mounted: editorState.mounted,
     gridCols: editorState.gridCols,
     gridRows: editorState.gridRows,
     layerCount: editorState.layerStack ? editorState.layerStack.layers.length : 0,
+    activeLayerIndex: editorState.layerStack ? editorState.layerStack.activeIndex : 0,
     hasFontLoaded: !!(editorState.cp437Font && editorState.cp437Font.spriteSheet),
     activeTool: editorState.activeTool,
     drawGlyph: editorState.drawGlyph,
@@ -771,9 +805,6 @@ function getState() {
   };
 }
 
-/**
- * Update drawing state externally.
- */
 function setDrawState({ glyph, fg, bg, applyGlyph, applyFg, applyBg }) {
   if (typeof glyph === 'number') {
     editorState.drawGlyph = glyph & 0xFF;
@@ -815,7 +846,30 @@ function setDrawState({ glyph, fg, bg, applyGlyph, applyFg, applyBg }) {
   }
 }
 
-// Expose on window for workbench.js (non-module IIFE) to call
+function setActiveLayer(index) {
+  _switchActiveLayer(index);
+}
+
+function setLayerVisibility(index, visible) {
+  if (!editorState.layerStack) return;
+  const layer = editorState.layerStack.layers[index];
+  if (!layer) return;
+  if (layer.visible === visible) return;
+  _toggleLayerVisibility(index);
+}
+
+function getLayerInfo() {
+  if (!editorState.layerStack) return [];
+  return editorState.layerStack.layers.map((layer, i) => ({
+    index: i,
+    name: layer.name,
+    active: i === editorState.layerStack.activeIndex,
+    visible: layer.visible,
+  }));
+}
+
+// ── Window export ──
+
 window.__wholeSheetEditor = {
   mount,
   unmount,
@@ -823,4 +877,7 @@ window.__wholeSheetEditor = {
   syncFromState,
   getState,
   setDrawState,
+  setActiveLayer,
+  setLayerVisibility,
+  getLayerInfo,
 };

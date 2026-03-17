@@ -3527,7 +3527,7 @@
       const payload = {
         session_id: state.sessionId,
         cells: saveCells,
-        layers: state.hasUploadedLayers ? state.layers : undefined,
+        layers: (state.layers && state.layers.length > 0) ? state.layers : undefined,
         angles: state.angles,
         anims: state.anims,
         projs: state.projs,

@@ -17,9 +17,10 @@ Do not use this file as Milestone 1 acceptance proof. It is a narrow implementat
 ## Handoff Snapshot
 
 - Branch: `master`
-- HEAD: `843941c`
+- HEAD: `63e30ce`
 - Completed:
   - reduced whole-sheet stroke-end redraw churn by replacing `renderAll()` with a targeted refresh in `web/workbench.js` (`843941c`)
+  - added this handoff and indexed it in `docs/INDEX.md` (`63e30ce`)
 - Deferred:
   - full verifier / recipe run (reason: current editor workflow is still not representative enough to make the expensive canonical run high-signal)
   - layer-panel parity work (reason: kept this slice narrow to post-stroke heaviness/reset)

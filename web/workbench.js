@@ -1831,6 +1831,8 @@
   function updateUndoRedoButtons() {
     $("undoBtn").disabled = state.history.length === 0;
     $("redoBtn").disabled = state.future.length === 0;
+    var wsUndo = $("wsUndoBtn"); if (wsUndo) wsUndo.disabled = state.history.length === 0;
+    var wsRedo = $("wsRedoBtn"); if (wsRedo) wsRedo.disabled = state.future.length === 0;
   }
 
   function undo() {
@@ -5406,6 +5408,10 @@
         renderAll();
         saveSessionState("whole-sheet-layer-visibility");
       },
+      onSave: function() { saveSessionState("whole-sheet-save"); },
+      onExport: function() { exportXp(); },
+      onUndo: function() { undo(); },
+      onRedo: function() { redo(); },
     }).then(() => {
       if (wsStatus) {
         const st = wsEditor.getState();
@@ -5413,6 +5419,7 @@
           ? `${st.gridCols}\u00d7${st.gridRows}, ${st.layerCount} layers`
           : `${st.gridCols}\u00d7${st.gridRows}, ${st.layerCount} layers (font fallback)`;
       }
+      updateUndoRedoButtons();
     }).catch((err) => {
       console.error("[whole-sheet] mount failed:", err);
       if (wsStatus) wsStatus.textContent = "mount failed";

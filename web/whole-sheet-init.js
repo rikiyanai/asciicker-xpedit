@@ -140,7 +140,7 @@ let editorState = {
 
 // ── mount ──
 
-async function mount({ container, gridCols, gridRows, layers, layerNames, activeLayer, visibleLayers, onCellEdited, onStrokeStart, onStrokeComplete, onActiveLayerChanged, onLayerVisibilityChanged }) {
+async function mount({ container, gridCols, gridRows, layers, layerNames, activeLayer, visibleLayers, onCellEdited, onStrokeStart, onStrokeComplete, onActiveLayerChanged, onLayerVisibilityChanged, onSave, onExport, onUndo, onRedo }) {
   if (editorState.mounted) unmount();
 
   editorState.gridCols = gridCols;
@@ -151,6 +151,10 @@ async function mount({ container, gridCols, gridRows, layers, layerNames, active
   editorState.onStrokeComplete = onStrokeComplete || null;
   editorState.onActiveLayerChanged = onActiveLayerChanged || null;
   editorState.onLayerVisibilityChanged = onLayerVisibilityChanged || null;
+  editorState.onSave = onSave || null;
+  editorState.onExport = onExport || null;
+  editorState.onUndo = onUndo || null;
+  editorState.onRedo = onRedo || null;
 
   // Build DOM — REXPaint-style sidebar + canvas layout
   container.innerHTML = '';
@@ -635,17 +639,19 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   toolsCol.appendChild(toolsLabel);
 
   const undoBtn = document.createElement('button');
+  undoBtn.id = 'wsUndoBtn';
   undoBtn.className = 'ws-tool-btn';
   undoBtn.textContent = 'Undo';
-  undoBtn.title = 'Undo (Z / Ctrl+Z)';
-  undoBtn.disabled = true;
+  undoBtn.title = 'Undo (Ctrl+Z)';
+  undoBtn.addEventListener('click', () => { if (editorState.onUndo) editorState.onUndo(); });
   toolsCol.appendChild(undoBtn);
 
   const redoBtn = document.createElement('button');
+  redoBtn.id = 'wsRedoBtn';
   redoBtn.className = 'ws-tool-btn';
   redoBtn.textContent = 'Redo';
-  redoBtn.title = 'Redo (Y / Ctrl+Y)';
-  redoBtn.disabled = true;
+  redoBtn.title = 'Redo (Ctrl+Y)';
+  redoBtn.addEventListener('click', () => { if (editorState.onRedo) editorState.onRedo(); });
   toolsCol.appendChild(redoBtn);
 
   toolsCol.appendChild(_buildToggle('Grid', 'wsGridToggle', false, (on) => {
@@ -691,8 +697,22 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   imageLabel.textContent = 'Image';
   imageCol.appendChild(imageLabel);
   imageCol.appendChild(_placeholder('New'));
-  imageCol.appendChild(_placeholder('Save'));
-  imageCol.appendChild(_placeholder('Export'));
+
+  const saveBtn = document.createElement('button');
+  saveBtn.id = 'wsSaveBtn';
+  saveBtn.className = 'ws-tool-btn';
+  saveBtn.textContent = 'Save';
+  saveBtn.title = 'Save session to server';
+  saveBtn.addEventListener('click', () => { if (editorState.onSave) editorState.onSave(); });
+  imageCol.appendChild(saveBtn);
+
+  const exportBtn = document.createElement('button');
+  exportBtn.id = 'wsExportBtn';
+  exportBtn.className = 'ws-tool-btn';
+  exportBtn.textContent = 'Export';
+  exportBtn.title = 'Export XP file (save + download)';
+  exportBtn.addEventListener('click', () => { if (editorState.onExport) editorState.onExport(); });
+  imageCol.appendChild(exportBtn);
 
   // Right column — Draw: active tool selector
   const drawCol = document.createElement('div');
@@ -1021,6 +1041,10 @@ function unmount() {
     onStrokeComplete: null,
     onActiveLayerChanged: null,
     onLayerVisibilityChanged: null,
+    onSave: null,
+    onExport: null,
+    onUndo: null,
+    onRedo: null,
     _strokeDirty: false,
     _originalGridParent: null,
     _originalGridNextSibling: null,

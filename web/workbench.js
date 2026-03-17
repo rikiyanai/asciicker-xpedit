@@ -5414,6 +5414,48 @@
         renderAll();
         saveSessionState("whole-sheet-layer-visibility");
       },
+      onAddLayer: function(newIndex) {
+        var blank = buildBlankLayerCells();
+        state.layers.push(blank);
+        state.layerNames.push("Layer " + newIndex);
+        state.activeLayer = newIndex;
+        state.visibleLayers.add(newIndex);
+        renderLayerControls();
+        saveSessionState("whole-sheet-add-layer");
+      },
+      onDeleteLayer: function(deletedIndex, newActiveIndex) {
+        if (state.layers.length <= 1) return;
+        state.layers.splice(deletedIndex, 1);
+        state.layerNames.splice(deletedIndex, 1);
+        state.visibleLayers.delete(deletedIndex);
+        // Re-map visible layer indices above the deleted one
+        var newVisible = new Set();
+        state.visibleLayers.forEach(function(i) {
+          newVisible.add(i > deletedIndex ? i - 1 : i);
+        });
+        state.visibleLayers = newVisible;
+        state.activeLayer = newActiveIndex;
+        renderLayerControls();
+        saveSessionState("whole-sheet-delete-layer");
+      },
+      onMoveLayer: function(fromIndex, toIndex) {
+        var layer = state.layers.splice(fromIndex, 1)[0];
+        state.layers.splice(toIndex, 0, layer);
+        var name = state.layerNames.splice(fromIndex, 1)[0];
+        state.layerNames.splice(toIndex, 0, name);
+        // Re-map visible layer indices for the swap
+        var newVisible = new Set();
+        state.visibleLayers.forEach(function(i) {
+          if (i === fromIndex) { newVisible.add(toIndex); }
+          else if (toIndex < fromIndex && i >= toIndex && i < fromIndex) { newVisible.add(i + 1); }
+          else if (toIndex > fromIndex && i > fromIndex && i <= toIndex) { newVisible.add(i - 1); }
+          else { newVisible.add(i); }
+        });
+        state.visibleLayers = newVisible;
+        state.activeLayer = toIndex;
+        renderLayerControls();
+        saveSessionState("whole-sheet-move-layer");
+      },
       onSave: function() { saveSessionState("whole-sheet-save"); },
       onExport: function() { exportXp(); },
       onUndo: function() { undo(); },

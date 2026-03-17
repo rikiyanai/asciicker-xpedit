@@ -181,6 +181,9 @@ let editorState = {
   onStrokeComplete: null,
   onActiveLayerChanged: null,
   onLayerVisibilityChanged: null,
+  onAddLayer: null,
+  onDeleteLayer: null,
+  onMoveLayer: null,
   _strokeDirty: false,
   _originalGridParent: null,
   _originalGridNextSibling: null,
@@ -188,7 +191,7 @@ let editorState = {
 
 // ── mount ──
 
-async function mount({ container, gridCols, gridRows, layers, layerNames, activeLayer, visibleLayers, onCellEdited, onStrokeStart, onStrokeComplete, onActiveLayerChanged, onLayerVisibilityChanged, onSave, onExport, onUndo, onRedo }) {
+async function mount({ container, gridCols, gridRows, layers, layerNames, activeLayer, visibleLayers, onCellEdited, onStrokeStart, onStrokeComplete, onActiveLayerChanged, onLayerVisibilityChanged, onAddLayer, onDeleteLayer, onMoveLayer, onSave, onExport, onUndo, onRedo }) {
   if (editorState.mounted) unmount();
 
   editorState.gridCols = gridCols;
@@ -199,6 +202,9 @@ async function mount({ container, gridCols, gridRows, layers, layerNames, active
   editorState.onStrokeComplete = onStrokeComplete || null;
   editorState.onActiveLayerChanged = onActiveLayerChanged || null;
   editorState.onLayerVisibilityChanged = onLayerVisibilityChanged || null;
+  editorState.onAddLayer = onAddLayer || null;
+  editorState.onDeleteLayer = onDeleteLayer || null;
+  editorState.onMoveLayer = onMoveLayer || null;
   editorState.onSave = onSave || null;
   editorState.onExport = onExport || null;
   editorState.onUndo = onUndo || null;
@@ -334,6 +340,11 @@ async function mount({ container, gridCols, gridRows, layers, layerNames, active
   // Proxy canvas.setCell for callbacks
   const originalSetCell = canvas.setCell.bind(canvas);
   canvas.setCell = function(x, y, glyph, fg, bg) {
+    // Reject edits on locked layers
+    if (editorState.layerStack) {
+      const al = editorState.layerStack.getActiveLayer();
+      if (al && al.locked) return;
+    }
     if (!editorState._strokeDirty && editorState.onStrokeStart) {
       editorState.onStrokeStart();
     }
@@ -1030,12 +1041,34 @@ function _updateLayersPanelUI() {
   const layers = editorState.layerStack.layers;
   const activeIdx = editorState.layerStack.activeIndex;
 
+  // Header row: title + Add/Delete buttons
+  const header = document.createElement('div');
+  header.className = 'ws-layers-header';
+
+  const addBtn = document.createElement('button');
+  addBtn.className = 'ws-layer-add-btn';
+  addBtn.textContent = '+';
+  addBtn.title = 'Add layer';
+  addBtn.addEventListener('click', (e) => { e.stopPropagation(); _addLayer(); });
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'ws-layer-del-btn';
+  delBtn.textContent = '−';
+  delBtn.title = 'Delete active layer';
+  delBtn.disabled = layers.length <= 1;
+  delBtn.addEventListener('click', (e) => { e.stopPropagation(); _deleteActiveLayer(); });
+
+  header.appendChild(addBtn);
+  header.appendChild(delBtn);
+  panel.appendChild(header);
+
   for (let i = 0; i < layers.length; i++) {
     const layer = layers[i];
     const row = document.createElement('div');
     row.className = 'ws-layer-row';
     if (i === activeIdx) row.classList.add('ws-layer-active');
     if (!layer.visible) row.classList.add('ws-layer-hidden');
+    if (layer.locked) row.classList.add('ws-layer-locked');
 
     const visBtn = document.createElement('button');
     visBtn.className = 'ws-layer-vis-btn' + (layer.visible ? ' ws-layer-visible' : '');
@@ -1046,6 +1079,15 @@ function _updateLayersPanelUI() {
       _toggleLayerVisibility(i);
     });
 
+    const lockBtn = document.createElement('button');
+    lockBtn.className = 'ws-layer-lock-btn' + (layer.locked ? ' ws-layer-locked-btn' : '');
+    lockBtn.textContent = layer.locked ? 'L' : 'U';
+    lockBtn.title = layer.locked ? 'Unlock layer' : 'Lock layer';
+    lockBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      _toggleLayerLock(i);
+    });
+
     const idxSpan = document.createElement('span');
     idxSpan.className = 'ws-layer-index';
     idxSpan.textContent = String(i);
@@ -1054,9 +1096,26 @@ function _updateLayersPanelUI() {
     nameSpan.className = 'ws-layer-name';
     nameSpan.textContent = layer.name || `Layer ${i}`;
 
+    const upBtn = document.createElement('button');
+    upBtn.className = 'ws-layer-move-btn';
+    upBtn.textContent = '↑';
+    upBtn.title = 'Move layer up';
+    upBtn.disabled = i === 0;
+    upBtn.addEventListener('click', (e) => { e.stopPropagation(); _moveLayerUp(i); });
+
+    const downBtn = document.createElement('button');
+    downBtn.className = 'ws-layer-move-btn';
+    downBtn.textContent = '↓';
+    downBtn.title = 'Move layer down';
+    downBtn.disabled = i === layers.length - 1;
+    downBtn.addEventListener('click', (e) => { e.stopPropagation(); _moveLayerDown(i); });
+
     row.appendChild(visBtn);
+    row.appendChild(lockBtn);
     row.appendChild(idxSpan);
     row.appendChild(nameSpan);
+    row.appendChild(upBtn);
+    row.appendChild(downBtn);
     row.addEventListener('click', () => _switchActiveLayer(i));
     panel.appendChild(row);
   }
@@ -1095,6 +1154,53 @@ function _toggleLayerVisibility(index) {
   if (editorState.onLayerVisibilityChanged) {
     editorState.onLayerVisibilityChanged(index, newVisible);
   }
+}
+
+function _toggleLayerLock(index) {
+  if (!editorState.layerStack) return;
+  const layer = editorState.layerStack.layers[index];
+  if (!layer) return;
+  layer.setLocked(!layer.locked);
+  _updateLayersPanelUI();
+}
+
+function _addLayer() {
+  if (!editorState.layerStack) return;
+  const newIndex = editorState.layerStack.layers.length;
+  editorState.layerStack.addLayer(`Layer ${newIndex}`);
+  editorState.layerStack.selectLayer(newIndex);
+  _updateLayersPanelUI();
+  if (editorState.canvas) editorState.canvas.render();
+  if (editorState.onAddLayer) editorState.onAddLayer(newIndex);
+}
+
+function _deleteActiveLayer() {
+  if (!editorState.layerStack) return;
+  if (editorState.layerStack.layers.length <= 1) return;
+  const deletedIndex = editorState.layerStack.activeIndex;
+  editorState.layerStack.removeLayer(deletedIndex);
+  const newActive = editorState.layerStack.activeIndex;
+  _updateLayersPanelUI();
+  if (editorState.canvas) editorState.canvas.render();
+  if (editorState.onDeleteLayer) editorState.onDeleteLayer(deletedIndex, newActive);
+}
+
+function _moveLayerUp(index) {
+  if (!editorState.layerStack) return;
+  if (index <= 0) return;
+  editorState.layerStack.moveLayer(index, index - 1);
+  _updateLayersPanelUI();
+  if (editorState.canvas) editorState.canvas.render();
+  if (editorState.onMoveLayer) editorState.onMoveLayer(index, index - 1);
+}
+
+function _moveLayerDown(index) {
+  if (!editorState.layerStack) return;
+  if (index >= editorState.layerStack.layers.length - 1) return;
+  editorState.layerStack.moveLayer(index, index + 1);
+  _updateLayersPanelUI();
+  if (editorState.canvas) editorState.canvas.render();
+  if (editorState.onMoveLayer) editorState.onMoveLayer(index, index + 1);
 }
 
 // ── Helpers ──
@@ -1307,6 +1413,9 @@ function unmount() {
     onStrokeComplete: null,
     onActiveLayerChanged: null,
     onLayerVisibilityChanged: null,
+    onAddLayer: null,
+    onDeleteLayer: null,
+    onMoveLayer: null,
     onSave: null,
     onExport: null,
     onUndo: null,
@@ -1443,7 +1552,22 @@ function getLayerInfo() {
     name: layer.name,
     active: i === editorState.layerStack.activeIndex,
     visible: layer.visible,
+    locked: layer.locked,
   }));
+}
+
+function addLayer() {
+  _addLayer();
+}
+
+function deleteLayer() {
+  _deleteActiveLayer();
+}
+
+function moveLayer(fromIndex, toIndex) {
+  if (!editorState.layerStack) return;
+  if (toIndex === fromIndex - 1) { _moveLayerUp(fromIndex); return; }
+  if (toIndex === fromIndex + 1) { _moveLayerDown(fromIndex); return; }
 }
 
 // ── Window export ──
@@ -1458,4 +1582,7 @@ window.__wholeSheetEditor = {
   setActiveLayer,
   setLayerVisibility,
   getLayerInfo,
+  addLayer,
+  deleteLayer,
+  moveLayer,
 };

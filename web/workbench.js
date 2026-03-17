@@ -5388,7 +5388,13 @@
         pushHistory();
       },
       onStrokeComplete: function() {
-        renderAll();
+        // Targeted refresh: skip legacy grid rebuild, source canvas, inspector,
+        // metadata, and syncWholeSheetFromState (editor canvas already correct).
+        renderFrameGrid();
+        var pRow = state.selectedRow === null ? 0 : state.selectedRow;
+        renderPreviewFrame(Math.max(0, Math.min(state.angles - 1, pRow)), 0);
+        updateSessionDirtyBadge();
+        updateUndoRedoButtons();
         saveSessionState("whole-sheet-draw");
       },
       onActiveLayerChanged: function(index) {

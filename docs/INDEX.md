@@ -61,6 +61,8 @@ If a lower-priority doc conflicts with a higher-priority source or with current 
 
 ## Active High-Signal Docs
 
+- `docs/2026-03-17-CLAUDE-HANDOFF-WHOLE-SHEET-STROKE-PATH.md`
+  - latest resume point for the whole-sheet stroke-end perf fix, current open risks, and next blocker ordering
 - `docs/XP_EDITOR_ACCEPTANCE_CONTRACT.md`
   - canonical acceptance contract; this is the source of truth for what counts as XP-editor parity and what shortcuts are forbidden
 - `docs/2026-03-15-CLAUDE-HANDOFF-FOUR-AUDITS-XP-EDITOR.md`

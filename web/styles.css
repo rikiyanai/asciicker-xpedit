@@ -628,12 +628,69 @@ label.inline {
   margin-top: auto;
 }
 
-.ws-status-section span {
-  display: block;
+.ws-info-group {
+  padding: 3px 0;
+  border-bottom: 1px solid #1a2030;
+}
+
+.ws-info-group:last-child {
+  border-bottom: none;
+}
+
+.ws-info-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 10px;
   color: var(--muted);
-  line-height: 1.6;
+  line-height: 1.8;
   font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+.ws-info-label {
+  font-size: 9px;
+  color: #5a6a7a;
+  min-width: 30px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.ws-info-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  border: 1px solid #445;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.ws-info-swatch-empty {
+  background: repeating-linear-gradient(
+    45deg,
+    #1a2030,
+    #1a2030 2px,
+    #0a0e14 2px,
+    #0a0e14 4px
+  );
+}
+
+.ws-info-apply-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 0 4px;
+  border-radius: 2px;
+  color: #4a5a6a;
+  background: #0a0e14;
+  border: 1px solid #1a2030;
+  line-height: 1.4;
+}
+
+.ws-info-apply-tag.ws-info-apply-on {
+  color: #fff;
+  background: #173860;
+  border-color: var(--accent);
 }
 
 /* Sidebar tool/toggle adjustments */

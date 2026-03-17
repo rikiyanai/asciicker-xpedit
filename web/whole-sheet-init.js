@@ -350,6 +350,7 @@ async function mount({ container, gridCols, gridRows, layers, layerNames, active
 
   // Mouse tracking
   canvasEl.addEventListener('mousemove', _onCanvasMouseMove);
+  canvasEl.addEventListener('mouseleave', _onCanvasMouseLeave);
 
   // Keyboard shortcuts
   document.addEventListener('keydown', _onKeyDown);
@@ -359,6 +360,8 @@ async function mount({ container, gridCols, gridRows, layers, layerNames, active
   _updateToolUI();
   _renderGlyphPicker();
   _renderPaletteGrid();
+  _updateInfoDrawState();
+  _updateInfoApplyModes();
 
   // Integrate frame navigation into the layout (spec §3.8)
   const gridPanel = document.getElementById('gridPanel');
@@ -397,14 +400,9 @@ function _applyEyedropperSample(glyph, fg, bg) {
   const bgEl = document.getElementById('wsBgColor');
   if (bgEl) bgEl.value = _rgbToHex(editorState.drawBg);
 
-  const cellEl = document.getElementById('wsCell');
-  if (cellEl) {
-    const ch = (glyph > 31 && glyph < 127) ? String.fromCharCode(glyph) : '\u00b7';
-    cellEl.textContent = `Sampled: ${glyph} (${ch})`;
-  }
-
   _renderGlyphPicker();
   _renderPaletteGrid();
+  _updateInfoDrawState();
 }
 
 // ── Tool switching ──
@@ -447,7 +445,7 @@ function _switchTool(name) {
 function _updateToolUI() {
   const names = { cell: 'Cell', eyedropper: 'Eyedropper', erase: 'Erase', line: 'Line', rect: 'Rect', fill: 'Fill' };
   const toolEl = document.getElementById('wsActiveTool');
-  if (toolEl) toolEl.textContent = `Tool: ${names[editorState.activeTool] || editorState.activeTool}`;
+  if (toolEl) toolEl.textContent = names[editorState.activeTool] || editorState.activeTool;
 
   for (const id of ['wsToolCell', 'wsToolEyedropper', 'wsToolErase', 'wsToolLine', 'wsToolRect', 'wsToolFill']) {
     const btn = document.getElementById(id);
@@ -505,6 +503,7 @@ function _setDrawGlyph(code) {
   if (charEl) charEl.value = (code > 31 && code < 127) ? String.fromCharCode(code) : '';
 
   _renderGlyphPicker();
+  _updateInfoDrawState();
 }
 
 function _renderGlyphPicker() {
@@ -680,6 +679,7 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
     _forEachTool(t => t.setColors(editorState.drawFg, editorState.drawBg));
     _renderGlyphPicker();
     _renderPaletteGrid();
+    _updateInfoDrawState();
   });
 
   const bgLabel = document.createElement('span');
@@ -695,6 +695,7 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
     _forEachTool(t => t.setColors(editorState.drawFg, editorState.drawBg));
     _renderGlyphPicker();
     _renderPaletteGrid();
+    _updateInfoDrawState();
   });
 
   swatchRow.appendChild(fgLabel);
@@ -748,14 +749,17 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   applyCol.appendChild(_buildToggle('G', 'wsApplyGlyph', editorState.applyGlyph, (on) => {
     editorState.applyGlyph = on;
     _forEachTool(t => t.setApplyModes({ glyph: on }));
+    _updateInfoApplyModes();
   }));
   applyCol.appendChild(_buildToggle('F', 'wsApplyFg', editorState.applyFg, (on) => {
     editorState.applyFg = on;
     _forEachTool(t => t.setApplyModes({ foreground: on }));
+    _updateInfoApplyModes();
   }));
   applyCol.appendChild(_buildToggle('B', 'wsApplyBg', editorState.applyBg, (on) => {
     editorState.applyBg = on;
     _forEachTool(t => t.setApplyModes({ background: on }));
+    _updateInfoApplyModes();
   }));
 
   taCols.appendChild(toolsCol);
@@ -862,25 +866,139 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   layersSection.appendChild(layersPanel);
   sidebar.appendChild(layersSection);
 
-  // 3.9 Info
+  // 3.9 Info (spec §3.9: cursor pos, dims, active layer, glyph/fg/bg under cursor)
   const statusSection = document.createElement('div');
   statusSection.className = 'ws-sidebar-section ws-status-section';
   const statusH4 = document.createElement('h4');
   statusH4.textContent = 'Info';
   statusSection.appendChild(statusH4);
 
-  const mkSpan = (id, text) => {
-    const s = document.createElement('span');
-    s.id = id;
-    s.textContent = text;
-    return s;
-  };
-  statusSection.appendChild(mkSpan('wsPos', 'Pos: -,-'));
-  statusSection.appendChild(mkSpan('wsCell', 'Cell: --'));
-  statusSection.appendChild(mkSpan('wsDims', `${gridCols}\u00d7${gridRows}`));
-  statusSection.appendChild(mkSpan('wsLayers', `${layerCount} layers`));
-  statusSection.appendChild(mkSpan('wsActiveTool', 'Tool: Cell'));
-  statusSection.appendChild(mkSpan('wsActiveLayerInfo', `Layer: ${typeof activeLayer === 'number' ? activeLayer : 0}`));
+  // Cursor/hover group
+  const cursorGrp = document.createElement('div');
+  cursorGrp.className = 'ws-info-group';
+
+  const posRow = document.createElement('div');
+  posRow.className = 'ws-info-row';
+  const posLabel = document.createElement('span');
+  posLabel.className = 'ws-info-label';
+  posLabel.textContent = 'Pos';
+  const posVal = document.createElement('span');
+  posVal.id = 'wsPos';
+  posVal.textContent = '-,-';
+  posRow.appendChild(posLabel);
+  posRow.appendChild(posVal);
+  cursorGrp.appendChild(posRow);
+
+  const hoverRow = document.createElement('div');
+  hoverRow.className = 'ws-info-row';
+  const hoverLabel = document.createElement('span');
+  hoverLabel.className = 'ws-info-label';
+  hoverLabel.textContent = 'Cell';
+  const hoverGlyph = document.createElement('span');
+  hoverGlyph.id = 'wsHoverGlyph';
+  hoverGlyph.textContent = '--';
+  const hoverFg = document.createElement('span');
+  hoverFg.id = 'wsHoverFg';
+  hoverFg.className = 'ws-info-swatch ws-info-swatch-empty';
+  hoverFg.title = 'fg under cursor';
+  const hoverBg = document.createElement('span');
+  hoverBg.id = 'wsHoverBg';
+  hoverBg.className = 'ws-info-swatch ws-info-swatch-empty';
+  hoverBg.title = 'bg under cursor';
+  hoverRow.appendChild(hoverLabel);
+  hoverRow.appendChild(hoverGlyph);
+  hoverRow.appendChild(hoverFg);
+  hoverRow.appendChild(hoverBg);
+  cursorGrp.appendChild(hoverRow);
+  statusSection.appendChild(cursorGrp);
+
+  // Draw state group
+  const drawGrp = document.createElement('div');
+  drawGrp.className = 'ws-info-group';
+
+  const drawRow = document.createElement('div');
+  drawRow.className = 'ws-info-row';
+  const drawInfoLabel = document.createElement('span');
+  drawInfoLabel.className = 'ws-info-label';
+  drawInfoLabel.textContent = 'Draw';
+  const drawGlyphEl = document.createElement('span');
+  drawGlyphEl.id = 'wsDrawGlyph';
+  const dg = editorState.drawGlyph;
+  const dch = (dg > 31 && dg < 127) ? String.fromCharCode(dg) : '\u00b7';
+  drawGlyphEl.textContent = dg + ' (' + dch + ')';
+  const drawFgSw = document.createElement('span');
+  drawFgSw.id = 'wsDrawFgSwatch';
+  drawFgSw.className = 'ws-info-swatch';
+  drawFgSw.style.background = _rgbToHex(editorState.drawFg);
+  drawFgSw.title = 'draw fg';
+  const drawBgSw = document.createElement('span');
+  drawBgSw.id = 'wsDrawBgSwatch';
+  drawBgSw.className = 'ws-info-swatch';
+  drawBgSw.style.background = _rgbToHex(editorState.drawBg);
+  drawBgSw.title = 'draw bg';
+  drawRow.appendChild(drawInfoLabel);
+  drawRow.appendChild(drawGlyphEl);
+  drawRow.appendChild(drawFgSw);
+  drawRow.appendChild(drawBgSw);
+  drawGrp.appendChild(drawRow);
+
+  const applyRow = document.createElement('div');
+  applyRow.className = 'ws-info-row';
+  const applyInfoLabel = document.createElement('span');
+  applyInfoLabel.className = 'ws-info-label';
+  applyInfoLabel.textContent = 'Apply';
+  applyRow.appendChild(applyInfoLabel);
+  for (const [ch, on, id] of [['G', editorState.applyGlyph, 'wsInfoApplyG'], ['F', editorState.applyFg, 'wsInfoApplyF'], ['B', editorState.applyBg, 'wsInfoApplyB']]) {
+    const tag = document.createElement('span');
+    tag.id = id;
+    tag.className = 'ws-info-apply-tag' + (on ? ' ws-info-apply-on' : '');
+    tag.textContent = ch;
+    applyRow.appendChild(tag);
+  }
+  drawGrp.appendChild(applyRow);
+  statusSection.appendChild(drawGrp);
+
+  // Status group
+  const statsGrp = document.createElement('div');
+  statsGrp.className = 'ws-info-group';
+
+  const layerRow = document.createElement('div');
+  layerRow.className = 'ws-info-row';
+  const layerLabel = document.createElement('span');
+  layerLabel.className = 'ws-info-label';
+  layerLabel.textContent = 'Layer';
+  const layerVal = document.createElement('span');
+  layerVal.id = 'wsActiveLayerInfo';
+  layerVal.textContent = String(typeof activeLayer === 'number' ? activeLayer : 0);
+  layerRow.appendChild(layerLabel);
+  layerRow.appendChild(layerVal);
+  statsGrp.appendChild(layerRow);
+
+  const toolRow = document.createElement('div');
+  toolRow.className = 'ws-info-row';
+  const toolLabel = document.createElement('span');
+  toolLabel.className = 'ws-info-label';
+  toolLabel.textContent = 'Tool';
+  const toolVal = document.createElement('span');
+  toolVal.id = 'wsActiveTool';
+  toolVal.textContent = 'Cell';
+  toolRow.appendChild(toolLabel);
+  toolRow.appendChild(toolVal);
+  statsGrp.appendChild(toolRow);
+
+  const dimsRow = document.createElement('div');
+  dimsRow.className = 'ws-info-row';
+  const dimsLabel = document.createElement('span');
+  dimsLabel.className = 'ws-info-label';
+  dimsLabel.textContent = 'Size';
+  const dimsVal = document.createElement('span');
+  dimsVal.id = 'wsDims';
+  dimsVal.textContent = gridCols + '\u00d7' + gridRows + ' \u00b7 ' + layerCount + 'L';
+  dimsRow.appendChild(dimsLabel);
+  dimsRow.appendChild(dimsVal);
+  statsGrp.appendChild(dimsRow);
+
+  statusSection.appendChild(statsGrp);
   sidebar.appendChild(statusSection);
 
   return sidebar;
@@ -947,7 +1065,7 @@ function _updateLayersPanelUI() {
   const infoEl = document.getElementById('wsActiveLayerInfo');
   if (infoEl && editorState.layerStack) {
     const layer = editorState.layerStack.layers[activeIdx];
-    infoEl.textContent = `Layer: ${activeIdx}${layer ? ' (' + (layer.name || '') + ')' : ''}`;
+    infoEl.textContent = `${activeIdx}${layer ? ' (' + (layer.name || '') + ')' : ''}`;
   }
 }
 
@@ -1004,6 +1122,40 @@ function _setDrawColor(channel, rgb) {
   _forEachTool(t => t.setColors(editorState.drawFg, editorState.drawBg));
   _renderGlyphPicker();
   _renderPaletteGrid();
+  _updateInfoDrawState();
+}
+
+// ── Info region updaters ──
+
+function _updateInfoDrawState() {
+  const g = editorState.drawGlyph;
+  const ch = (g > 31 && g < 127) ? String.fromCharCode(g) : '\u00b7';
+  const el = document.getElementById('wsDrawGlyph');
+  if (el) el.textContent = g + ' (' + ch + ')';
+  const fgEl = document.getElementById('wsDrawFgSwatch');
+  if (fgEl) fgEl.style.background = _rgbToHex(editorState.drawFg);
+  const bgEl = document.getElementById('wsDrawBgSwatch');
+  if (bgEl) bgEl.style.background = _rgbToHex(editorState.drawBg);
+}
+
+function _updateInfoApplyModes() {
+  const gEl = document.getElementById('wsInfoApplyG');
+  if (gEl) gEl.classList.toggle('ws-info-apply-on', editorState.applyGlyph);
+  const fEl = document.getElementById('wsInfoApplyF');
+  if (fEl) fEl.classList.toggle('ws-info-apply-on', editorState.applyFg);
+  const bEl = document.getElementById('wsInfoApplyB');
+  if (bEl) bEl.classList.toggle('ws-info-apply-on', editorState.applyBg);
+}
+
+function _onCanvasMouseLeave() {
+  const posEl = document.getElementById('wsPos');
+  if (posEl) posEl.textContent = '-,-';
+  const glyphEl = document.getElementById('wsHoverGlyph');
+  if (glyphEl) glyphEl.textContent = '--';
+  const fgEl = document.getElementById('wsHoverFg');
+  if (fgEl) { fgEl.style.background = ''; fgEl.classList.add('ws-info-swatch-empty'); }
+  const bgEl = document.getElementById('wsHoverBg');
+  if (bgEl) { bgEl.style.background = ''; bgEl.classList.add('ws-info-swatch-empty'); }
 }
 
 function _renderPaletteGrid() {
@@ -1074,18 +1226,29 @@ function _onCanvasMouseMove(e) {
   const cy = Math.floor(py / CELL_SIZE);
 
   const posEl = document.getElementById('wsPos');
-  if (posEl) posEl.textContent = `Pos: ${cx},${cy}`;
+  if (posEl) posEl.textContent = cx + ',' + cy;
 
-  const { canvas, gridCols, gridRows } = editorState;
+  const { canvas, layerStack, gridCols, gridRows } = editorState;
   if (canvas && cx >= 0 && cx < gridCols && cy >= 0 && cy < gridRows) {
-    try {
-      const cell = canvas.getCell(cx, cy);
-      const cellEl = document.getElementById('wsCell');
-      if (cellEl && cell) {
-        const ch = (cell.glyph > 31 && cell.glyph < 127) ? String.fromCharCode(cell.glyph) : '\u00b7';
-        cellEl.textContent = `Cell: ${cell.glyph} (${ch})`;
-      }
-    } catch (_) {}
+    let cell = null;
+    if (layerStack) {
+      const activeLayer = layerStack.getActiveLayer();
+      if (activeLayer) cell = activeLayer.getCell(cx, cy);
+    }
+    if (!cell) {
+      try { cell = canvas.getCell(cx, cy); } catch (_) {}
+    }
+    if (cell) {
+      const ch = (cell.glyph > 31 && cell.glyph < 127) ? String.fromCharCode(cell.glyph) : '\u00b7';
+      const glyphEl = document.getElementById('wsHoverGlyph');
+      if (glyphEl) glyphEl.textContent = cell.glyph + ' (' + ch + ')';
+      const fg = cell.fg || [255, 255, 255];
+      const bg = cell.bg || [0, 0, 0];
+      const fgEl = document.getElementById('wsHoverFg');
+      if (fgEl) { fgEl.style.background = _rgbToHex(fg); fgEl.classList.remove('ws-info-swatch-empty'); }
+      const bgEl = document.getElementById('wsHoverBg');
+      if (bgEl) { bgEl.style.background = _rgbToHex(bg); bgEl.classList.remove('ws-info-swatch-empty'); }
+    }
   }
 }
 
@@ -1098,6 +1261,7 @@ function unmount() {
     const canvasEl = editorState.canvas.canvasElement;
     if (canvasEl) {
       canvasEl.removeEventListener('mousemove', _onCanvasMouseMove);
+      canvasEl.removeEventListener('mouseleave', _onCanvasMouseLeave);
       canvasEl.removeEventListener('mouseup', _onStrokeEnd);
       canvasEl.removeEventListener('mouseleave', _onStrokeEnd);
     }
@@ -1256,6 +1420,8 @@ function setDrawState({ glyph, fg, bg, applyGlyph, applyFg, applyBg }) {
   }
   _renderGlyphPicker();
   _renderPaletteGrid();
+  _updateInfoDrawState();
+  _updateInfoApplyModes();
 }
 
 function setActiveLayer(index) {

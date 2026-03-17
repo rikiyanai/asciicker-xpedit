@@ -45,7 +45,7 @@ const failures = [];
 const report = {
   source_xp: path.resolve(xpPath),
   mode,
-  setup_mode: 'api_scaffold',
+  setup_mode: 'user_ui_import',
   user_reachable_load_pass: false,
   geometry_pass: false,
   frame_layout_pass: false,
@@ -82,6 +82,41 @@ function runTruthTable(xpFile, outputPath) {
     throw new Error(`truth_table.py failed: ${result.stderr || result.stdout}`);
   }
   return JSON.parse(fs.readFileSync(outputPath, 'utf-8'));
+}
+
+function runSkinDockWatchdog(xpFile) {
+  const args = [
+    'scripts/workbench_png_to_skin_test_playwright.mjs',
+    '--xp',
+    path.resolve(xpFile),
+    '--override-mode',
+    'preboot',
+    '--url',
+    url,
+  ];
+  if (headed) args.push('--headed');
+
+  const result = spawnSync('node', args, {
+    cwd: repoRoot,
+    encoding: 'utf-8',
+    maxBuffer: 20 * 1024 * 1024,
+  });
+  if (result.status !== 0) {
+    throw new Error(`Skin dock watchdog failed: ${result.stderr || result.stdout}`);
+  }
+
+  const output = `${result.stdout || ''}\n${result.stderr || ''}`;
+  const resultPathMatch = output.match(/RESULT_PATH=(.+)/);
+  if (!resultPathMatch) {
+    throw new Error('Skin dock watchdog did not print RESULT_PATH');
+  }
+  const resultPath = String(resultPathMatch[1] || '').trim();
+  if (!resultPath || !fs.existsSync(resultPath)) {
+    throw new Error(`Skin dock watchdog result missing: ${resultPath}`);
+  }
+
+  const parsed = JSON.parse(fs.readFileSync(resultPath, 'utf-8'));
+  return { resultPath, parsed };
 }
 
 function sameRgb(a, b) {
@@ -189,6 +224,9 @@ const ACCEPTANCE_ACTIONS = new Set([
   'ws_paint_cell',
   'ws_eyedropper_sample',
   'ws_erase_cell',
+  'ws_flood_fill',
+  'ws_draw_rect',
+  'ws_draw_line',
 ]);
 
 // ── Scroll helper for whole-sheet canvas ──
@@ -208,6 +246,27 @@ async function scrollToCell(page, targetPx, targetPy, cellSize) {
       scroll.scrollTop = Math.max(0, ty - viewH / 2);
     }
   }, { tx: targetPx, ty: targetPy, cs: cellSize });
+}
+
+// ── Drag helper for whole-sheet tools (line, rect) ──
+
+async function dragOnCanvas(page, selector, x1, y1, x2, y2, cellSize) {
+  // Scroll to bring the start cell into view, then drag from start to end.
+  // Uses page.mouse so both points must be in viewport coords.
+  // boundingBox() already accounts for parent scroll offset.
+  await scrollToCell(page, x1 * cellSize, y1 * cellSize, cellSize);
+  const canvasBox = await page.locator(selector).boundingBox();
+  if (!canvasBox) {
+    throw new Error(`dragOnCanvas: element not found: ${selector}`);
+  }
+  const vpX1 = canvasBox.x + x1 * cellSize + cellSize / 2;
+  const vpY1 = canvasBox.y + y1 * cellSize + cellSize / 2;
+  const vpX2 = canvasBox.x + x2 * cellSize + cellSize / 2;
+  const vpY2 = canvasBox.y + y2 * cellSize + cellSize / 2;
+  await page.mouse.move(vpX1, vpY1);
+  await page.mouse.down();
+  await page.mouse.move(vpX2, vpY2);
+  await page.mouse.up();
 }
 
 // ── Recipe executor ──
@@ -334,6 +393,49 @@ async function executeRecipe(page) {
         break;
       }
 
+      case 'ws_flood_fill': {
+        // Tool must already be activated via ws_tool_activate.
+        // Single click at (x, y) triggers the fill tool's flood fill.
+        const csff = action.cell_size;
+        await scrollToCell(page, action.x * csff, action.y * csff, csff);
+        const pxff = Math.floor(action.x * csff + csff / 2);
+        const pyff = Math.floor(action.y * csff + csff / 2);
+        await page.click(action.selector, { position: { x: pxff, y: pyff } });
+        break;
+      }
+
+      case 'ws_draw_rect': {
+        // Tool must already be activated via ws_tool_activate.
+        // Drags from (x, y) to (x + w - 1, y + h - 1) to draw a rectangle.
+        const csdr = action.cell_size;
+        await dragOnCanvas(
+          page,
+          action.selector,
+          action.x,
+          action.y,
+          action.x + action.w - 1,
+          action.y + action.h - 1,
+          csdr
+        );
+        break;
+      }
+
+      case 'ws_draw_line': {
+        // Tool must already be activated via ws_tool_activate.
+        // Drags from (x1, y1) to (x2, y2) to draw a line.
+        const csdl = action.cell_size;
+        await dragOnCanvas(
+          page,
+          action.selector,
+          action.x1,
+          action.y1,
+          action.x2,
+          action.y2,
+          csdl
+        );
+        break;
+      }
+
       default:
         fail('unknown_action', `Unknown recipe action: ${action.action}`);
         return false;
@@ -347,28 +449,33 @@ async function main() {
   const page = await browser.newPage({ acceptDownloads: true });
 
   try {
-    fail(
-      'ui_gap',
-      'Shipped workbench has no user-reachable XP import control; using /api/workbench/upload-xp as scaffolding',
-      { required_gate: 'existing_xp_load_user_reachability' }
-    );
+    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    await page.waitForSelector('#xpImportFile', { state: 'attached', timeout: 10000 });
+    await page.waitForSelector('#xpImportBtn', { state: 'visible', timeout: 10000 });
 
-    const xpBytes = fs.readFileSync(path.resolve(xpPath));
-    const fd = new FormData();
-    fd.append('file', new Blob([xpBytes], { type: 'application/octet-stream' }), path.basename(xpPath));
-    const uploadResp = await fetch(`${new URL(url).origin}/api/workbench/upload-xp`, {
-      method: 'POST',
-      body: fd,
-    });
-    const uploadJson = await uploadResp.json();
-    if (!uploadResp.ok || !uploadJson.job_id) {
-      fail('setup_upload', 'workbench upload-xp failed', { response: uploadJson });
-      throw new Error('upload-xp failed');
-    }
-    report.setup = uploadJson;
-
-    await page.goto(`${url}?job_id=${encodeURIComponent(uploadJson.job_id)}`, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForSelector('#sessionOut', { state: 'visible', timeout: 10000 });
+    await page.locator('#xpImportFile').setInputFiles(path.resolve(xpPath));
+    await page.click('#xpImportBtn');
+    await page.waitForFunction(() => {
+      const sessionOut = document.getElementById('sessionOut');
+      const metaOut = document.getElementById('metaOut');
+      if (!sessionOut || !metaOut) return false;
+      const sessionText = String(sessionOut.textContent || '').trim();
+      const metaText = String(metaOut.textContent || '').trim();
+      if (!sessionText || !metaText) return false;
+      try {
+        const session = JSON.parse(sessionText);
+        const meta = JSON.parse(metaText);
+        return !!session.session_id && typeof meta.frame_w_chars === 'number' && typeof meta.frame_h_chars === 'number';
+      } catch (_err) {
+        return false;
+      }
+    }, { timeout: 30000 });
+    report.user_reachable_load_pass = true;
+    report.setup = {
+      via: 'user_ui_import',
+      xp_path: path.resolve(xpPath),
+      import_selector: '#xpImportBtn',
+    };
 
     // Mode-specific element waits
     if (mode === 'acceptance') {
@@ -419,8 +526,8 @@ async function main() {
     } else {
       // In acceptance mode, verify frame layout from session metadata rather
       // than inspecting DOM tiles (the whole-sheet editor does not use .frame-cell).
-      const sessionFrameRows = actualMeta.frame_rows ?? actual.angles ?? null;
-      const sessionFrameCols = actualMeta.frame_cols ?? null;
+      const sessionFrameRows = actualMeta.frame_rows ?? actual.frame_rows ?? actual.angles ?? null;
+      const sessionFrameCols = actualMeta.frame_cols ?? actual.frame_cols ?? null;
       if (sessionFrameRows !== null && sessionFrameCols !== null) {
         const sessionFrameCount = sessionFrameRows * sessionFrameCols;
         if (sessionFrameCount !== expectedFrameCount) {
@@ -447,7 +554,17 @@ async function main() {
 
     // Export and compare
     await page.click('#btnExport');
-    await page.waitForTimeout(1000);
+    await page.waitForFunction(() => {
+      const exportOut = document.getElementById('exportOut');
+      const text = String(exportOut?.textContent || '').trim();
+      if (!text) return false;
+      try {
+        const parsed = JSON.parse(text);
+        return !!parsed.xp_path || !!parsed.stage;
+      } catch (_err) {
+        return false;
+      }
+    }, { timeout: 20000 });
     const exportText = await page.locator('#exportOut').textContent();
     const exportJson = exportText ? parseJsonText(exportText, 'exportOut') : null;
     report.export = exportJson;
@@ -497,10 +614,33 @@ async function main() {
       if (!report.cell_fidelity_pass) {
         fail('cell_fidelity', `Editable layer ${editableLayer} has ${lmc[editableLayer]} cell mismatches`);
       }
-    }
 
-    // Skin dock not yet testable from this harness
-    report.skin_dock_pass = false;
+      try {
+        const dock = runSkinDockWatchdog(exportJson.xp_path);
+        const dockResult = dock.parsed || {};
+        report.skin_dock = {
+          result_path: dock.resultPath,
+          error: dockResult.error ?? null,
+          classification: dockResult.classification ?? null,
+          runValidity: dockResult.runValidity ?? null,
+          final: dockResult.final ?? null,
+        };
+        report.skin_dock_pass =
+          dockResult.runValidity?.status === 'valid' &&
+          dockResult.runValidity?.passed === true &&
+          dockResult.error == null &&
+          dockResult.classification === 'playable';
+        if (!report.skin_dock_pass) {
+          fail(
+            'skin_dock',
+            `Skin Dock failed: status=${dockResult.runValidity?.status || 'missing'} passed=${dockResult.runValidity?.passed === true} classification=${dockResult.classification || 'missing'} error=${dockResult.error || 'null'}`
+          );
+        }
+      } catch (dockErr) {
+        report.skin_dock_pass = false;
+        fail('skin_dock', dockErr instanceof Error ? dockErr.message : String(dockErr));
+      }
+    }
 
   } catch (err) {
     fail('fatal', err instanceof Error ? err.message : String(err));

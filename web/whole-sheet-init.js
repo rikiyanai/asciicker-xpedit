@@ -14,6 +14,9 @@ import { Canvas } from './rexpaint-editor/canvas.js';
 import { LayerStack } from './rexpaint-editor/layer-stack.js';
 import { CP437Font } from './rexpaint-editor/cp437-font.js';
 import { CellTool } from './rexpaint-editor/tools/cell-tool.js';
+import { LineTool } from './rexpaint-editor/tools/line-tool.js';
+import { RectTool } from './rexpaint-editor/tools/rect-tool.js';
+import { FillTool } from './rexpaint-editor/tools/fill-tool.js';
 
 const FONT_URL = '/termpp-web-flat/fonts/cp437_12x12.png';
 const CELL_SIZE = 12;
@@ -108,6 +111,48 @@ class EraseTool {
   }
 }
 
+// ── Tool adapters (bridge startDrag/drag/endDrag to underlying tool APIs) ──
+
+class LineToolAdapter {
+  constructor() { this._tool = new LineTool(); }
+  setCanvas(c) { this._tool.setCanvas(c); }
+  setGlyph(code) { this._tool.setGlyph(code); }
+  setColors(fg, bg) { this._tool.setColors(fg, bg); }
+  setApplyModes(modes) { this._tool.setApplyModes(modes); }
+  startDrag(x, y) { this._tool.startLine(x, y); }
+  drag(x, y) { this._tool.drawLine(x, y); }
+  endDrag() { this._tool.endLine(); }
+}
+
+class RectToolAdapter {
+  constructor() { this._tool = new RectTool(); this._tool.setMode('outline'); }
+  setCanvas(c) { this._tool.setCanvas(c); }
+  setGlyph(code) { this._tool.setGlyph(code); }
+  setColors(fg, bg) { this._tool.setColors(fg, bg); }
+  setApplyModes(modes) { this._tool.setApplyModes(modes); }
+  setMode(mode) { this._tool.setMode(mode); }
+  startDrag(x, y) { this._tool.startRect(x, y); }
+  drag(x, y) { this._tool.drawRect(x, y); }
+  endDrag() { this._tool.endRect(); }
+}
+
+class FillToolAdapter {
+  constructor() { this._tool = new FillTool(); }
+  setCanvas(c) { this._tool.setCanvas(c); }
+  setGlyph(code) { this._tool.setGlyph(code); }
+  setColors(fg, bg) { this._tool.setColors(fg, bg); }
+  setApplyModes(modes) { this._tool.setApplyModes(modes); }
+  startDrag(x, y) { this._tool.fill(x, y); }
+  drag() {}
+  endDrag() {}
+}
+
+function _forEachTool(fn) {
+  for (const t of [editorState.cellTool, editorState.lineTool, editorState.rectTool, editorState.fillTool]) {
+    if (t) fn(t);
+  }
+}
+
 // ── Editor state ──
 
 let editorState = {
@@ -118,6 +163,9 @@ let editorState = {
   cellTool: null,
   eyedropperTool: null,
   eraseTool: null,
+  lineTool: null,
+  rectTool: null,
+  fillTool: null,
   activeTool: 'cell',
   gridCols: 0,
   gridRows: 0,
@@ -269,6 +317,16 @@ async function mount({ container, gridCols, gridRows, layers, layerNames, active
   const eraseTool = new EraseTool();
   editorState.eraseTool = eraseTool;
 
+  // Create Line/Rect/Fill tool adapters
+  editorState.lineTool = new LineToolAdapter();
+  editorState.rectTool = new RectToolAdapter();
+  editorState.fillTool = new FillToolAdapter();
+  for (const t of [editorState.lineTool, editorState.rectTool, editorState.fillTool]) {
+    t.setGlyph(editorState.drawGlyph);
+    t.setColors(editorState.drawFg, editorState.drawBg);
+    t.setApplyModes({ glyph: editorState.applyGlyph, foreground: editorState.applyFg, background: editorState.applyBg });
+  }
+
   // Activate default tool
   editorState.activeTool = 'cell';
   canvas.toolActivated(cellTool);
@@ -328,10 +386,7 @@ function _applyEyedropperSample(glyph, fg, bg) {
   editorState.drawFg = [...fg];
   editorState.drawBg = [...bg];
 
-  if (editorState.cellTool) {
-    editorState.cellTool.setGlyph(editorState.drawGlyph);
-    editorState.cellTool.setColors(editorState.drawFg, editorState.drawBg);
-  }
+  _forEachTool(t => { t.setGlyph(editorState.drawGlyph); t.setColors(editorState.drawFg, editorState.drawBg); });
 
   const glyphEl = document.getElementById('wsGlyphCode');
   if (glyphEl) glyphEl.value = String(editorState.drawGlyph);
@@ -371,6 +426,18 @@ function _switchTool(name) {
       editorState.canvas.toolActivated(editorState.eraseTool);
       if (canvasEl) canvasEl.style.cursor = 'not-allowed';
       break;
+    case 'line':
+      editorState.canvas.toolActivated(editorState.lineTool);
+      if (canvasEl) canvasEl.style.cursor = 'crosshair';
+      break;
+    case 'rect':
+      editorState.canvas.toolActivated(editorState.rectTool);
+      if (canvasEl) canvasEl.style.cursor = 'crosshair';
+      break;
+    case 'fill':
+      editorState.canvas.toolActivated(editorState.fillTool);
+      if (canvasEl) canvasEl.style.cursor = 'crosshair';
+      break;
     default:
       return;
   }
@@ -378,11 +445,11 @@ function _switchTool(name) {
 }
 
 function _updateToolUI() {
-  const names = { cell: 'Cell', eyedropper: 'Eyedropper', erase: 'Erase' };
+  const names = { cell: 'Cell', eyedropper: 'Eyedropper', erase: 'Erase', line: 'Line', rect: 'Rect', fill: 'Fill' };
   const toolEl = document.getElementById('wsActiveTool');
   if (toolEl) toolEl.textContent = `Tool: ${names[editorState.activeTool] || editorState.activeTool}`;
 
-  for (const id of ['wsToolCell', 'wsToolEyedropper', 'wsToolErase']) {
+  for (const id of ['wsToolCell', 'wsToolEyedropper', 'wsToolErase', 'wsToolLine', 'wsToolRect', 'wsToolFill']) {
     const btn = document.getElementById(id);
     if (!btn) continue;
     const toolName = id.replace('wsTool', '').toLowerCase();
@@ -410,6 +477,18 @@ function _onKeyDown(e) {
       _switchTool('eyedropper');
       e.preventDefault();
       break;
+    case 'l':
+      _switchTool('line');
+      e.preventDefault();
+      break;
+    case 'r':
+      _switchTool('rect');
+      e.preventDefault();
+      break;
+    case 'i':
+      _switchTool('fill');
+      e.preventDefault();
+      break;
   }
 }
 
@@ -418,7 +497,7 @@ function _onKeyDown(e) {
 function _setDrawGlyph(code) {
   code = Math.max(0, Math.min(255, code));
   editorState.drawGlyph = code;
-  if (editorState.cellTool) editorState.cellTool.setGlyph(code);
+  _forEachTool(t => t.setGlyph(code));
 
   const glyphEl = document.getElementById('wsGlyphCode');
   if (glyphEl) glyphEl.value = String(code);
@@ -598,7 +677,7 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   fgInput.title = 'Foreground color';
   fgInput.addEventListener('input', () => {
     editorState.drawFg = _hexToRgb(fgInput.value);
-    if (editorState.cellTool) editorState.cellTool.setColors(editorState.drawFg, editorState.drawBg);
+    _forEachTool(t => t.setColors(editorState.drawFg, editorState.drawBg));
     _renderGlyphPicker();
     _renderPaletteGrid();
   });
@@ -613,7 +692,7 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   bgInput.title = 'Background color';
   bgInput.addEventListener('input', () => {
     editorState.drawBg = _hexToRgb(bgInput.value);
-    if (editorState.cellTool) editorState.cellTool.setColors(editorState.drawFg, editorState.drawBg);
+    _forEachTool(t => t.setColors(editorState.drawFg, editorState.drawBg));
     _renderGlyphPicker();
     _renderPaletteGrid();
   });
@@ -668,15 +747,15 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
 
   applyCol.appendChild(_buildToggle('G', 'wsApplyGlyph', editorState.applyGlyph, (on) => {
     editorState.applyGlyph = on;
-    if (editorState.cellTool) editorState.cellTool.setApplyModes({ glyph: on });
+    _forEachTool(t => t.setApplyModes({ glyph: on }));
   }));
   applyCol.appendChild(_buildToggle('F', 'wsApplyFg', editorState.applyFg, (on) => {
     editorState.applyFg = on;
-    if (editorState.cellTool) editorState.cellTool.setApplyModes({ foreground: on });
+    _forEachTool(t => t.setApplyModes({ foreground: on }));
   }));
   applyCol.appendChild(_buildToggle('B', 'wsApplyBg', editorState.applyBg, (on) => {
     editorState.applyBg = on;
-    if (editorState.cellTool) editorState.cellTool.setApplyModes({ background: on });
+    _forEachTool(t => t.setApplyModes({ background: on }));
   }));
 
   taCols.appendChild(toolsCol);
@@ -746,9 +825,29 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   toolEraseBtn.addEventListener('click', () => _switchTool('erase'));
   drawCol.appendChild(toolEraseBtn);
 
-  drawCol.appendChild(_placeholder('Line'));
-  drawCol.appendChild(_placeholder('Rect'));
-  drawCol.appendChild(_placeholder('Fill'));
+  const toolLineBtn = document.createElement('button');
+  toolLineBtn.id = 'wsToolLine';
+  toolLineBtn.textContent = 'Line';
+  toolLineBtn.className = 'ws-tool-btn';
+  toolLineBtn.title = 'Line tool (L)';
+  toolLineBtn.addEventListener('click', () => _switchTool('line'));
+  drawCol.appendChild(toolLineBtn);
+
+  const toolRectBtn = document.createElement('button');
+  toolRectBtn.id = 'wsToolRect';
+  toolRectBtn.textContent = 'Rect';
+  toolRectBtn.className = 'ws-tool-btn';
+  toolRectBtn.title = 'Rectangle tool (R)';
+  toolRectBtn.addEventListener('click', () => _switchTool('rect'));
+  drawCol.appendChild(toolRectBtn);
+
+  const toolFillBtn = document.createElement('button');
+  toolFillBtn.id = 'wsToolFill';
+  toolFillBtn.textContent = 'Fill';
+  toolFillBtn.className = 'ws-tool-btn';
+  toolFillBtn.title = 'Flood fill tool (I)';
+  toolFillBtn.addEventListener('click', () => _switchTool('fill'));
+  drawCol.appendChild(toolFillBtn);
 
   idCols.appendChild(imageCol);
   idCols.appendChild(drawCol);
@@ -902,7 +1001,7 @@ function _setDrawColor(channel, rgb) {
     const el = document.getElementById('wsBgColor');
     if (el) el.value = _rgbToHex(rgb);
   }
-  if (editorState.cellTool) editorState.cellTool.setColors(editorState.drawFg, editorState.drawBg);
+  _forEachTool(t => t.setColors(editorState.drawFg, editorState.drawBg));
   _renderGlyphPicker();
   _renderPaletteGrid();
 }
@@ -1026,6 +1125,9 @@ function unmount() {
     cellTool: null,
     eyedropperTool: null,
     eraseTool: null,
+    lineTool: null,
+    rectTool: null,
+    fillTool: null,
     activeTool: 'cell',
     gridCols: 0,
     gridRows: 0,
@@ -1116,7 +1218,7 @@ function getState() {
 function setDrawState({ glyph, fg, bg, applyGlyph, applyFg, applyBg }) {
   if (typeof glyph === 'number') {
     editorState.drawGlyph = glyph & 0xFF;
-    if (editorState.cellTool) editorState.cellTool.setGlyph(editorState.drawGlyph);
+    _forEachTool(t => t.setGlyph(editorState.drawGlyph));
     const el = document.getElementById('wsGlyphCode');
     if (el) el.value = String(editorState.drawGlyph);
     const ch = document.getElementById('wsGlyphChar');
@@ -1124,31 +1226,31 @@ function setDrawState({ glyph, fg, bg, applyGlyph, applyFg, applyBg }) {
   }
   if (Array.isArray(fg) && fg.length === 3) {
     editorState.drawFg = fg.map(Number);
-    if (editorState.cellTool) editorState.cellTool.setColors(editorState.drawFg, editorState.drawBg);
+    _forEachTool(t => t.setColors(editorState.drawFg, editorState.drawBg));
     const el = document.getElementById('wsFgColor');
     if (el) el.value = _rgbToHex(editorState.drawFg);
   }
   if (Array.isArray(bg) && bg.length === 3) {
     editorState.drawBg = bg.map(Number);
-    if (editorState.cellTool) editorState.cellTool.setColors(editorState.drawFg, editorState.drawBg);
+    _forEachTool(t => t.setColors(editorState.drawFg, editorState.drawBg));
     const el = document.getElementById('wsBgColor');
     if (el) el.value = _rgbToHex(editorState.drawBg);
   }
   if (typeof applyGlyph === 'boolean') {
     editorState.applyGlyph = applyGlyph;
-    if (editorState.cellTool) editorState.cellTool.setApplyModes({ glyph: applyGlyph });
+    _forEachTool(t => t.setApplyModes({ glyph: applyGlyph }));
     const el = document.getElementById('wsApplyGlyph');
     if (el) el.classList.toggle('ws-toggle-on', applyGlyph);
   }
   if (typeof applyFg === 'boolean') {
     editorState.applyFg = applyFg;
-    if (editorState.cellTool) editorState.cellTool.setApplyModes({ foreground: applyFg });
+    _forEachTool(t => t.setApplyModes({ foreground: applyFg }));
     const el = document.getElementById('wsApplyFg');
     if (el) el.classList.toggle('ws-toggle-on', applyFg);
   }
   if (typeof applyBg === 'boolean') {
     editorState.applyBg = applyBg;
-    if (editorState.cellTool) editorState.cellTool.setApplyModes({ background: applyBg });
+    _forEachTool(t => t.setApplyModes({ background: applyBg }));
     const el = document.getElementById('wsApplyBg');
     if (el) el.classList.toggle('ws-toggle-on', applyBg);
   }

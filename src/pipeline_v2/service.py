@@ -925,6 +925,7 @@ def _sha256(path: Path) -> str:
 _template_registry: dict[str, Any] | None = None
 _l0_reference_cache: dict[str, list[Cell]] = {}
 _l0_reference_status: dict[str, str] = {}
+_l1_reference_cache: dict[str, list[Cell]] = {}
 
 
 def load_template_registry() -> dict[str, Any]:
@@ -1007,6 +1008,41 @@ def _assert_l0_reference_available(family: str, req_id: str) -> list[Cell]:
             422,
         )
     return cells
+
+
+def _load_reference_l1(family: str) -> list[Cell] | None:
+    """Load L1 cells from the same reference XP used for L0.
+
+    Families with non-standard cell_h (e.g. plydie with 11-row frames) have
+    a family-specific L1 height encoding that differs from the generic
+    _build_native_l1_layer() 10-row countdown.  Loading L1 from the reference
+    ensures the blank session matches the true native contract.
+    """
+    if family in _l1_reference_cache:
+        return _l1_reference_cache[family]
+    # Re-use the same reference XP that L0 comes from.
+    # The file was already validated (checksum, existence) during L0 load.
+    reg = load_template_registry()
+    l0_ref_path: str | None = None
+    if reg:
+        for ts in reg.get("template_sets", {}).values():
+            for act in ts.get("actions", {}).values():
+                if act.get("family") == family:
+                    l0_ref_path = act.get("l0_ref")
+                    break
+            if l0_ref_path:
+                break
+    if not l0_ref_path:
+        return None
+    full_path = ROOT / l0_ref_path
+    if not full_path.exists():
+        return None
+    parsed = read_xp(full_path)
+    if parsed["layers"] < 2:
+        return None
+    l1_cells = parsed["cells"][1]
+    _l1_reference_cache[family] = l1_cells
+    return l1_cells
 
 
 def _bundle_path(bundle_id: str) -> Path:
@@ -1382,15 +1418,18 @@ def _build_native_death_layers(
 ) -> list[list[Cell]]:
     """Assemble all 3 layers for a native-contract plydie/death skin XP.
 
-    Uses dynamic L0 from reference plydie-0000.xp (dense border art).
-    Reuses row-based L1 countdown.
-    Note: death cell_h=11 != NATIVE_CELL_H=10; L1 cycle period difference
-    deferred to Phase 2.
+    Uses dynamic L0 and L1 from reference plydie-0000.xp.  The death family
+    has 11-row frames with a non-standard height encoding (A,9,8,...,3,3,3,3)
+    that the generic 10-row countdown cannot reproduce.
     """
     _assert_native_dims(cols, rows, "plydie", stage, req_id)
     l0_ref = _assert_l0_reference_available("plydie", req_id)
     l0: list[Cell] = list(l0_ref)
-    l1 = _build_native_l1_layer(cols, rows)
+    l1_ref = _load_reference_l1("plydie")
+    if l1_ref is not None and len(l1_ref) == cols * rows:
+        l1: list[Cell] = list(l1_ref)
+    else:
+        l1 = _build_native_l1_layer(cols, rows)
     return [l0, l1, cells_layer2]
 
 

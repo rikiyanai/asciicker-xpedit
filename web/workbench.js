@@ -3797,6 +3797,16 @@
       state.latestXpPath = String(j.xp_path);
       $("openXpToolBtn").disabled = false;
       await refreshXpToolCommand(state.latestXpPath);
+      // In bundle mode, promote blank-authored action to "converted" on successful export.
+      // This enables the Test Bundle Skin button once all required actions are exported.
+      if (isBundleMode() && state.activeActionKey && state.actionStates[state.activeActionKey]) {
+        const actState = state.actionStates[state.activeActionKey];
+        if (actState.status === "blank") {
+          actState.status = "converted";
+          renderBundleActionTabs();
+          updateBundleUI();
+        }
+      }
       try {
         const a = document.createElement("a");
         a.href = `/api/workbench/download-xp?xp_path=${encodeURIComponent(state.latestXpPath)}`;
@@ -5957,6 +5967,10 @@
     return state.templateRegistry.template_sets?.[state.templateSetKey] || null;
   }
 
+  // Canonical action order for bundle tabs and initial selection.
+  // Flask sorts JSON keys alphabetically; this restores the intended order.
+  const BUNDLE_ACTION_ORDER = ["idle", "attack", "death"];
+
   function getEnabledActions(ts) {
     if (!ts || !ts.actions) return {};
     const ef = state.templateRegistry?.enabled_families;
@@ -5965,9 +5979,17 @@
       return {};
     }
     const efSet = new Set(ef);
-    const out = {};
+    const unordered = {};
     for (const [key, spec] of Object.entries(ts.actions)) {
-      if (efSet.has(spec.family)) out[key] = spec;
+      if (efSet.has(spec.family)) unordered[key] = spec;
+    }
+    // Re-order to canonical order; any unlisted keys appear at the end.
+    const out = {};
+    for (const key of BUNDLE_ACTION_ORDER) {
+      if (unordered[key]) out[key] = unordered[key];
+    }
+    for (const key of Object.keys(unordered)) {
+      if (!out[key]) out[key] = unordered[key];
     }
     return out;
   }

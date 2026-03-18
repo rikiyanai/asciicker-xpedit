@@ -638,3 +638,146 @@ through.
 ## File Changed
 
 - `web/rexpaint-editor/cp437-font.js` (dirty, uncommitted)
+
+---
+
+# Append-Only Session Record: Claude Bundle L3 Diagnostic Was Not Logged In-Session
+
+**Date:** 2026-03-18
+**Status:** OPEN — diagnostic evidence recorded after the fact; not acceptance proof
+
+## Source Session
+
+- Claude session id: `bb26f7f1-29c2-4339-af25-e0a32bb42a69`
+- Claude slug: `splendid-weaving-rain`
+- Relevant assistant turn timestamp: `2026-03-18T20:57:55Z`
+
+This record is appended because Claude completed a meaningful bundle/L3 diagnostic pass
+in chat but did not add it to this append-only log before asking to proceed with the
+next runtime step.
+
+## What Claude Established
+
+From the session transcript, Claude had already established all of the following:
+
+- blank bundle-create sessions matched native reference exactly on L0 and L1 for all
+  three families under test:
+  - `idle`
+  - `attack`
+  - `death` / `plydie`
+- L2 mismatches were expected for blank authoring because the generated session is
+  transparent while the reference XP contains authored content
+- L3 is not a family-invariant template layer:
+  - `player-0100` L3 had `792` content cells
+  - `player-1100` L3 had `1458` content cells
+  - `attack-0001` vs `attack-0011` had `20` L3 cell differences
+- Claude cited the architecture docs as saying L3 is blank in workbench for the blank
+  authoring flow, while native files may contain per-skin swoosh / trail content
+
+## Diagnostic Conclusion Reached By Claude
+
+Claude concluded that for blank authoring sessions:
+
+- L3 should remain transparent
+- copying L3 from one reference XP into all blank sessions would be incorrect because
+  native L3 content varies per skin
+
+This is a valid diagnostic conclusion about family invariance and blank-authoring intent.
+
+## What Was Still Not Proven
+
+At the point Claude stopped, the following had **not** been proven:
+
+- no bundle Skin Dock / runtime pass had been executed yet for this L3 question
+- no end-to-end evidence showed that transparent `glyph=0` L3 cells are tolerated by
+  the runtime in the bundle path
+- no acceptance claim was justified from this diagnostic step alone
+
+Claude explicitly ended by asking whether to proceed with the bundle fidelity test.
+That means the session had not yet crossed the runtime gate.
+
+## Correct Interpretation
+
+- Treat the L3 result as an important diagnostic narrowing step, not as acceptance
+  evidence
+- Preserve the finding that L3 is per-skin content and should not be blindly copied from
+  a single family reference into blank authoring sessions
+- Keep the runtime question open until the exported bundle is actually applied through
+  Test Skin Dock / runtime
+
+---
+
+# Entry 2026-03-18 — Bundle Authoring Fidelity Test (7 iterations)
+
+## Session Context
+
+Branch: `master` at `899ca40`.
+Server: `PYTHONPATH=src python3 -m pipeline_v2.app` on port 5071.
+Test runner: `scripts/xp_fidelity_test/run_bundle.sh --headed`
+
+## Bugs Found and Fixed
+
+### Bug 1: Bundle action tab order (product bug)
+- `getEnabledActions()` returned actions in JSON key order (Flask `sort_keys=True`
+  alphabetizes: attack, death, idle). Initial active tab was Attack, not Idle.
+- Fix: canonical action ordering `['idle','attack','death']` in `getEnabledActions()`.
+- File: `web/workbench.js`
+
+### Bug 2: Death L1 height encoding (export-contract bug)
+- Blank death session used generic `NATIVE_CELL_H=10` countdown (9,8,...,0) but
+  plydie reference uses 11-row cycle (A,9,8,7,6,5,4,3,3,3,3).
+- Fix: load L1 from reference `sprites/plydie-0000.xp` via `_load_reference_l1()`.
+- File: `src/pipeline_v2/service.py`
+- Verified: L0=0 mismatches, L1=0 mismatches for all 3 families vs reference.
+
+### Bug 3: Export used stale session (test harness bug)
+- `exportOut` contained previous action's result. The export wait matched immediately
+  on stale content. Attack exported idle's 126x80, death exported attack's 144x80.
+- Fix: clear `exportOut` before clicking `#btnExport`; wait on `sessionOut` geometry.
+- File: `scripts/xp_fidelity_test/run_bundle_fidelity_test.mjs`
+
+### Bug 4: Blank-authored actions never promoted to "converted" (product bug)
+- `testCurrentSkinInDock()` requires all required actions to have `status==="converted"`.
+  Blank-authored sessions had `status==="blank"`. Test Bundle Skin button returned early.
+- Fix: on successful export in bundle mode, promote `blank` → `converted`.
+- File: `web/workbench.js`
+
+### Bug 5: Menu advance only pulsed when worldReady=true (test harness bug)
+- The menu pulse loop only sent Enter when `mainMenu && worldReady`. But worldReady
+  is false until the game loads the world, which requires advancing past the menu first.
+- Fix: pulse when `mainMenu` is true regardless of `worldReady`.
+- File: `scripts/xp_fidelity_test/run_bundle_fidelity_test.mjs`
+
+## Final Result (attempt 7)
+
+```
+idle=true   attack=true   death=true   skin_dock=false
+```
+
+- idle: geo=true exec=true export=true cells=true
+- attack: geo=true exec=true export=true cells=true
+- death: geo=true exec=true export=true cells=true
+- skin_dock: Bundle applied (1382ms), WASM ready, overlay dismissed,
+  but stuck at mainMenu=1 worldReady=0 renderStage=2.
+  Menu advance pulses not advancing past render stage 2.
+
+## L3 Investigation Result
+
+- L3 is per-skin content (attack swoosh/trails), NOT a family invariant.
+- player-0100 L3: 792 content cells vs player-1100: 1,458 cells (differ per AHSW).
+- Architecture doc explicitly says L3 is "blank in workbench."
+- Current transparent-L3 fabrication is correct for blank authoring.
+- `glyph=0` vs `glyph=32` representation difference is cosmetic for new skins.
+
+## Skin Dock Blocker
+
+The Skin Dock failure is a runtime/bootstrap issue: the game starts in solo mode
+(`?solo=1`), WASM loads, overlay is dismissed, but the game never advances past
+`renderStage=2`. This is the same class of issue as the pos-reporting regression
+documented in the 2026-03-10 MEMORY entry. The bundle authoring/export path is
+complete and correct — the remaining blocker is runtime menu-advance timing.
+
+## Report Artifacts
+
+- `output/xp-fidelity-test/bundle-run-2026-03-18T22-19-27Z/result.json`
+- Screenshots in same directory

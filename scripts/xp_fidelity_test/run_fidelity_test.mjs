@@ -84,16 +84,76 @@ function runTruthTable(xpFile, outputPath) {
   return JSON.parse(fs.readFileSync(outputPath, 'utf-8'));
 }
 
-function runSkinDockWatchdog(xpFile) {
+function resolveSkinDockPlan(sourceXpFile, exportedXpFile) {
+  const sourceAbs = path.resolve(sourceXpFile);
+  const exportAbs = path.resolve(exportedXpFile);
+  const dir = path.dirname(sourceAbs);
+  const base = path.basename(sourceAbs).toLowerCase();
+
+  const matchCode = (prefix) => {
+    const m = base.match(new RegExp(`^${prefix}-([01]{3}[012])\\.xp$`));
+    return m ? m[1] : '';
+  };
+
+  const attackCode = matchCode('attack');
+  if (attackCode) {
+    const idle = path.join(dir, `player-${attackCode}.xp`);
+    return {
+      mode: 'bundle_xp',
+      baseXp: idle,
+      injectFamily: 'attack',
+      injectXp: exportAbs,
+      sourceFamily: 'attack',
+    };
+  }
+
+  const deathCode = matchCode('plydie');
+  if (deathCode) {
+    const idle = path.join(dir, `player-${deathCode}.xp`);
+    return {
+      mode: 'bundle_xp',
+      baseXp: idle,
+      injectFamily: 'plydie',
+      injectXp: exportAbs,
+      sourceFamily: 'plydie',
+    };
+  }
+
+  const mountAttackCode = matchCode('wolack');
+  if (mountAttackCode) {
+    const idle = path.join(dir, `wolfie-${mountAttackCode}.xp`);
+    return {
+      mode: 'bundle_xp',
+      baseXp: idle,
+      injectFamily: 'wolack',
+      injectXp: exportAbs,
+      sourceFamily: 'wolack',
+    };
+  }
+
+  return {
+    mode: 'upload_xp',
+    baseXp: exportAbs,
+    injectFamily: '',
+    injectXp: '',
+    sourceFamily: base.startsWith('player-') || base === 'player-nude.xp' ? 'player' : 'other',
+  };
+}
+
+function runSkinDockWatchdog(plan) {
   const args = [
     'scripts/workbench_png_to_skin_test_playwright.mjs',
     '--xp',
-    path.resolve(xpFile),
+    path.resolve(plan.baseXp),
     '--override-mode',
     'preboot',
     '--url',
     url,
   ];
+  if (plan.injectFamily && plan.injectXp) {
+    args.push('--inject-family', String(plan.injectFamily));
+    args.push('--inject-xp', path.resolve(plan.injectXp));
+  }
   if (headed) args.push('--headed');
 
   const result = spawnSync('node', args, {
@@ -634,7 +694,12 @@ async function main() {
       }
 
       try {
-        const dock = runSkinDockWatchdog(exportJson.xp_path);
+        const dockPlan = resolveSkinDockPlan(xpPath, exportJson.xp_path);
+        if (!fs.existsSync(dockPlan.baseXp)) {
+          throw new Error(`Skin Dock base XP missing for ${dockPlan.sourceFamily}: ${dockPlan.baseXp}`);
+        }
+        report.skin_dock_plan = dockPlan;
+        const dock = runSkinDockWatchdog(dockPlan);
         const dockResult = dock.parsed || {};
         const classificationPlayable =
           dockResult.classification === 'playable' ||

@@ -12,6 +12,8 @@ function parseArgs(argv) {
     pngPath: "",
     xpPath: "",
     attackXpPath: "",
+    injectFamily: "",
+    injectXpPath: "",
     headed: false,
     timeoutSec: 240,
     moveSec: 4,
@@ -26,6 +28,8 @@ function parseArgs(argv) {
     else if ((a === "--png" || a === "--png-path") && argv[i + 1]) out.pngPath = argv[++i];
     else if ((a === "--xp" || a === "--xp-path") && argv[i + 1]) out.xpPath = argv[++i];
     else if (a === "--attack-xp" && argv[i + 1]) out.attackXpPath = argv[++i];
+    else if (a === "--inject-family" && argv[i + 1]) out.injectFamily = String(argv[++i] || "").trim().toLowerCase();
+    else if (a === "--inject-xp" && argv[i + 1]) out.injectXpPath = argv[++i];
     else if (a === "--timeout-sec" && argv[i + 1]) out.timeoutSec = Math.max(30, Number(argv[++i]) || 240);
     else if (a === "--move-sec" && argv[i + 1]) out.moveSec = Math.max(1, Number(argv[++i]) || 4);
     else if (a === "--skip-move") out.skipMove = true;
@@ -35,6 +39,26 @@ function parseArgs(argv) {
     else if (a === "--reload-mode" && argv[i + 1]) out.reloadMode = argv[++i];
   }
   return out;
+}
+
+function familyOverrideNames(family) {
+  const fam = String(family || "").trim().toLowerCase();
+  if (!fam) return [];
+  if (fam === "attack" || fam === "wolack") {
+    const out = [];
+    for (let i = 0; i < 16; i++) {
+      if (i & 1) out.push(`${fam}-${i.toString(2).padStart(4, "0")}.xp`);
+    }
+    return out;
+  }
+  if (["player", "plydie", "wolfie", "bigbee"].includes(fam)) {
+    const out = [];
+    for (let i = 0; i < 16; i++) {
+      out.push(`${fam}-${i.toString(2).padStart(4, "0")}.xp`);
+    }
+    return out;
+  }
+  return [];
 }
 
 async function loadPlaywright() {
@@ -147,8 +171,12 @@ function extractFirstMoveDiagnostic(consoleLogs = []) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const xpPath = args.xpPath ? path.resolve(args.xpPath) : "";
-  const attackXpPath = args.attackXpPath ? path.resolve(args.attackXpPath) : "";
-  const useBundleMode = !!xpPath && !!attackXpPath;
+  const injectFamily = args.injectFamily || (args.attackXpPath ? "attack" : "");
+  const injectXpPath = args.injectXpPath
+    ? path.resolve(args.injectXpPath)
+    : (args.attackXpPath ? path.resolve(args.attackXpPath) : "");
+  const injectionOverrideNames = familyOverrideNames(injectFamily);
+  const useBundleMode = !!xpPath && !!injectXpPath && !!injectFamily;
   const useUploadXpMode = !!xpPath;
   const pngPath = useUploadXpMode ? "" : pickPngPath(args);
   if (useUploadXpMode) {
@@ -162,8 +190,11 @@ async function main() {
       `Auto-find candidates:\n${cands.length ? cands.map((c) => `- ${c}`).join("\n") : "(none found)"}`
     );
   }
-  if (attackXpPath && !(await fileExists(attackXpPath))) {
-    throw new Error(`Attack XP not found: ${attackXpPath}`);
+  if (injectXpPath && !(await fileExists(injectXpPath))) {
+    throw new Error(`Injected XP not found: ${injectXpPath}`);
+  }
+  if (injectXpPath && !injectionOverrideNames.length) {
+    throw new Error(`Unsupported inject family: ${injectFamily}`);
   }
 
   const ts = new Date().toISOString().replace(/[:.]/g, "-");
@@ -475,7 +506,9 @@ async function main() {
     url: targetUrl,
     mode: useBundleMode ? "bundle_xp" : (useUploadXpMode ? "upload_xp" : "pipeline_png"),
     pngPath, xpPath: useUploadXpMode ? xpPath : "",
-    attackXpPath: useBundleMode ? attackXpPath : "",
+    attackXpPath: useBundleMode && injectFamily === "attack" ? injectXpPath : "",
+    injectFamily: useBundleMode ? injectFamily : "",
+    injectXpPath: useBundleMode ? injectXpPath : "",
     overrideMode: args.overrideMode || "mounted",
     reloadMode: args.reloadMode || "src_swap",
   });
@@ -564,17 +597,16 @@ async function main() {
     webbuildState: String(finalDebug?.webbuildState || ""),
   });
 
-  // ── Bundle mode: inject attack XP into attack-* slots after idle injection ──
+  // ── Bundle mode: inject a family-specific XP into its runtime sprite slots after idle injection ──
   let bundleInjection = null;
   if (useBundleMode && loaded) {
-    logEvent("bundle_inject:start", { attackXpPath });
-    const attackXpBytes = await fs.readFile(attackXpPath);
-    const attackB64 = attackXpBytes.toString("base64");
-    // Attack AHSW range: weapon_gte_1 → 8 files where W bit (bit 0) is set
-    const attackOverrideNames = [];
-    for (let i = 0; i < 16; i++) {
-      if (i & 1) attackOverrideNames.push(`attack-${i.toString(2).padStart(4, "0")}.xp`);
-    }
+    logEvent("bundle_inject:start", {
+      injectFamily,
+      injectXpPath,
+      overrideCount: injectionOverrideNames.length,
+    });
+    const injectXpBytes = await fs.readFile(injectXpPath);
+    const injectB64 = injectXpBytes.toString("base64");
     const frameHandle = page.frame({ url: /\/termpp-web-flat\/index\.html/ });
     if (frameHandle) {
       bundleInjection = await frameHandle.evaluate(({ b64, names }) => {
@@ -586,7 +618,7 @@ async function main() {
           const raw = atob(b64);
           const bytes = new Uint8Array(raw.length);
           for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-          // Write to each attack sprite slot
+          // Write to each requested sprite slot.
           for (const name of names) {
             const path = `/sprites/${name}`;
             try { M.FS_unlink(path); } catch (_e) {}
@@ -614,13 +646,13 @@ async function main() {
           out.error = String(e);
         }
         return out;
-      }, { b64: attackB64, names: attackOverrideNames });
+      }, { b64: injectB64, names: injectionOverrideNames });
       logEvent("bundle_inject:done", bundleInjection);
     } else {
       bundleInjection = { injected: false, error: "frame_not_found" };
       logEvent("bundle_inject:frame_not_found");
     }
-    // Wait a moment for attack sprites to settle
+    // Wait a moment for injected sprites to settle.
     await page.waitForTimeout(1500);
   }
 
@@ -919,9 +951,11 @@ async function main() {
     error: topError,
     pngPath,
     xpPath: useUploadXpMode ? xpPath : "",
-    attackXpPath: useBundleMode ? attackXpPath : "",
+    attackXpPath: useBundleMode && injectFamily === "attack" ? injectXpPath : "",
     mode: useBundleMode ? "bundle_xp" : (useUploadXpMode ? "upload_xp" : "pipeline_png"),
     bundleInjection: bundleInjection || null,
+    injectFamily: useBundleMode ? injectFamily : "",
+    injectXpPath: useBundleMode ? injectXpPath : "",
     overrideMode: args.overrideMode || "mounted",
     reloadMode: args.reloadMode || "src_swap",
     headed: args.headed,
@@ -963,9 +997,11 @@ async function main() {
     runValidity,
     pngPath,
     xpPath: useUploadXpMode ? xpPath : "",
-    attackXpPath: useBundleMode ? attackXpPath : "",
+    attackXpPath: useBundleMode && injectFamily === "attack" ? injectXpPath : "",
     mode: useBundleMode ? "bundle_xp" : (useUploadXpMode ? "upload_xp" : "pipeline_png"),
     bundleInjection: bundleInjection || null,
+    injectFamily: useBundleMode ? injectFamily : "",
+    injectXpPath: useBundleMode ? injectXpPath : "",
     firstMoveDiagnosticPath,
     classification: firstMoveDiagnostic.classification,
     perf: result.perf,

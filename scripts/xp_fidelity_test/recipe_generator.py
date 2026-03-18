@@ -15,6 +15,17 @@ Supports two modes:
 
 Both modes derive frame geometry from the truth table metadata parsed from
 Layer 0. Neither mode flattens geometry.
+
+Acceptance mode strategy (area-based repaint):
+  - Proof region: all cells in frame 0 (x < frame_w, y < frame_h).
+  - Erase phase: ws_erase_drag row by row (one drag per row).
+  - Repaint phase (per brush-state group, priority order):
+      1. ws_draw_rect if the group's cells form a complete rectangle outline
+         (>= 2x2, all perimeter cells present, no interior cells, no gaps).
+      2. ws_draw_line for each contiguous horizontal run of length >= 2.
+      3. ws_paint_cell for isolated single-cell runs.
+  - The export comparison validates ALL cells (proof region + unchanged cells
+    in all other frames and layers).
 """
 from __future__ import annotations
 
@@ -66,8 +77,6 @@ ACCEPTANCE_SELECTORS = {
 
 # Cell size in pixels used by the whole-sheet editor (must match whole-sheet-init.js CELL_SIZE)
 WS_CELL_SIZE = 12
-# Maximum cells to erase-and-repaint in an acceptance recipe
-MAX_SAMPLE_CELLS = 20
 
 
 def rgb_to_hex(rgb: list[int]) -> str:
@@ -93,6 +102,155 @@ def _is_clear_cell(cell: dict) -> bool:
         and cell["fg"] == POST_CLEAR_CELL[1]
         and cell["bg"] == POST_CLEAR_CELL[2]
     )
+
+
+# ── Area-operation helpers ──
+
+
+def _find_horizontal_runs(coords: list[tuple[int, int]]) -> list[tuple[int, int, int]]:
+    """Find contiguous horizontal runs from (x, y) coordinates.
+
+    Returns list of (x1, x2, y) where x1..x2 is the inclusive column range.
+    """
+    by_row: dict[int, list[int]] = defaultdict(list)
+    for x, y in coords:
+        by_row[y].append(x)
+    runs: list[tuple[int, int, int]] = []
+    for row_y, xs in sorted(by_row.items()):
+        xs = sorted(xs)
+        start = xs[0]
+        prev = xs[0]
+        for x in xs[1:]:
+            if x == prev + 1:
+                prev = x
+            else:
+                runs.append((start, prev, row_y))
+                start = x
+                prev = x
+        runs.append((start, prev, row_y))
+    return runs
+
+
+def _connected_components(
+    coords_set: set[tuple[int, int]],
+) -> list[list[tuple[int, int]]]:
+    """Return 4-connected components of a set of (x, y) coords.
+
+    Each component is sorted by (y, x) so the first element is the top-left
+    seed — convenient for flood fill.
+    """
+    remaining = set(coords_set)
+    components: list[list[tuple[int, int]]] = []
+    while remaining:
+        seed = min(remaining, key=lambda c: (c[1], c[0]))
+        component: list[tuple[int, int]] = []
+        stack = [seed]
+        while stack:
+            x, y = stack.pop()
+            if (x, y) not in remaining:
+                continue
+            remaining.discard((x, y))
+            component.append((x, y))
+            for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+                if (nx, ny) in remaining:
+                    stack.append((nx, ny))
+        components.append(sorted(component, key=lambda c: (c[1], c[0])))
+    return components
+
+
+def _detect_rect_outline(
+    coords: list[tuple[int, int]],
+) -> tuple[int, int, int, int] | None:
+    """Return (x, y, w, h) if coords form a complete rectangle outline, else None.
+
+    A rectangle outline is the set of perimeter cells of an axis-aligned
+    rectangle that is at least 2 cells wide and 2 cells tall:
+      - top row:    (x_min..x_max, y_min)
+      - bottom row: (x_min..x_max, y_max)
+      - left col:   (x_min, y_min+1..y_max-1)
+      - right col:  (x_max, y_min+1..y_max-1)
+
+    The group must contain *exactly* those cells — no extras, no gaps.
+    A 1×N or M×1 rectangle degenerates to a line; use ws_draw_line for those.
+    """
+    if len(coords) < 4:
+        return None
+    coord_set = set(coords)
+    xs = [x for x, _ in coords]
+    ys = [y for _, y in coords]
+    x_min, x_max = min(xs), max(xs)
+    y_min, y_max = min(ys), max(ys)
+    w = x_max - x_min + 1
+    h = y_max - y_min + 1
+    if w < 2 or h < 2:
+        return None
+    # Build expected perimeter and compare
+    perimeter: set[tuple[int, int]] = set()
+    for x in range(x_min, x_max + 1):
+        perimeter.add((x, y_min))
+        perimeter.add((x, y_max))
+    for y in range(y_min + 1, y_max):
+        perimeter.add((x_min, y))
+        perimeter.add((x_max, y))
+    if coord_set == perimeter:
+        return (x_min, y_min, w, h)
+    return None
+
+
+def _repaint_group_actions(
+    coords: list[tuple[int, int]],
+    current_tool: str,
+) -> tuple[list[dict], str]:
+    """Return (actions, new_current_tool) to repaint one brush-state group.
+
+    Operation priority:
+      1. ws_draw_rect  — if coords form a complete rectangle outline (>= 2x2).
+      2. ws_draw_line  — for each contiguous horizontal run of length >= 2.
+      3. ws_paint_cell — for isolated single-cell positions.
+
+    The caller must emit ws_set_draw_state before calling this function.
+    Tool-activate actions are emitted only when the active tool must change.
+    """
+    actions: list[dict] = []
+
+    rect = _detect_rect_outline(coords)
+    if rect is not None:
+        x, y, w, h = rect
+        if current_tool != "rect":
+            actions.append({"action": "ws_tool_activate", "tool": "rect", "selector": "#wsToolRect"})
+            current_tool = "rect"
+        actions.append({
+            "action": "ws_draw_rect",
+            "selector": "#wholeSheetCanvas",
+            "x": x, "y": y, "w": w, "h": h,
+            "cell_size": WS_CELL_SIZE,
+        })
+        return actions, current_tool
+
+    # Fall through to run-based approach
+    for x1, x2, y in _find_horizontal_runs(coords):
+        if x2 > x1:
+            if current_tool != "line":
+                actions.append({"action": "ws_tool_activate", "tool": "line", "selector": "#wsToolLine"})
+                current_tool = "line"
+            actions.append({
+                "action": "ws_draw_line",
+                "selector": "#wholeSheetCanvas",
+                "x1": x1, "y1": y, "x2": x2, "y2": y,
+                "cell_size": WS_CELL_SIZE,
+            })
+        else:
+            if current_tool != "cell":
+                actions.append({"action": "ws_tool_activate", "tool": "cell", "selector": "#wsToolCell"})
+                current_tool = "cell"
+            actions.append({
+                "action": "ws_paint_cell",
+                "selector": "#wholeSheetCanvas",
+                "x": x1, "y": y,
+                "cell_size": WS_CELL_SIZE,
+            })
+
+    return actions, current_tool
 
 
 # ── Diagnostic mode (inspector-centric) ──
@@ -174,68 +332,26 @@ def _generate_diagnostic_recipe(truth_table: dict, meta: dict) -> dict:
     }
 
 
-# ── Acceptance mode (whole-sheet) ──
-
-
-def _pick_proof_cells(layer2_cells: list[dict], frame_w: int, frame_h: int) -> list[dict]:
-    """Pick up to MAX_SAMPLE_CELLS representative cells from frame 0.
-
-    Selects cells from the top-left frame only (x < frame_w, y < frame_h).
-    Groups cells by brush state (glyph, fg, bg) and round-robins across groups
-    (most-common first) so the sample covers diverse brush states rather than
-    clustering all picks in one group.  Each group's cells are sorted by (y, x)
-    so the first pick per group is the top-left occurrence.
-    """
-    frame0 = [
-        c for c in layer2_cells
-        if int(c["x"]) < frame_w and int(c["y"]) < frame_h and not _is_clear_cell(c)
-    ]
-    if not frame0:
-        return []
-
-    groups: dict[tuple, list[dict]] = defaultdict(list)
-    for c in frame0:
-        key = (int(c["glyph"]), tuple(c["fg"]), tuple(c["bg"]))
-        groups[key].append(c)
-
-    # Sort each group by (y, x); sort groups by size descending (most common first)
-    sorted_groups = sorted(
-        (sorted(g, key=lambda c: (int(c["y"]), int(c["x"]))) for g in groups.values()),
-        key=lambda g: -len(g),
-    )
-
-    # Round-robin: one cell per group per pass until budget is exhausted
-    sample: list[dict] = []
-    pass_idx = 0
-    while len(sample) < MAX_SAMPLE_CELLS:
-        advanced = False
-        for g in sorted_groups:
-            if pass_idx < len(g) and len(sample) < MAX_SAMPLE_CELLS:
-                sample.append(g[pass_idx])
-                advanced = True
-        if not advanced:
-            break
-        pass_idx += 1
-
-    return sample
+# ── Acceptance mode (whole-sheet, area-based) ──
 
 
 def _generate_acceptance_recipe(truth_table: dict, meta: dict) -> dict:
-    """Whole-sheet acceptance recipe using targeted edits instead of full repaint.
+    """Whole-sheet acceptance recipe using area-based operations.
 
-    Strategy: leave unchanged areas untouched.
-    - After XP import, cells are already loaded correctly from the source file.
-    - The recipe exercises editing by making targeted changes to a small proof
-      region (at most MAX_SAMPLE_CELLS non-transparent cells from frame 0).
-    - Tool presence is verified by activating all six shipped whole-sheet tools
-      in sequence before any editing begins.
-    - The export comparison then validates ALL cells — both the proof region
-      (which was edited and restored) and the untouched cells (which must match
-      exactly because import was correct).
+    After XP import, cells are already loaded correctly from the source file.
+    The recipe exercises real editing tools by erasing and repainting frame 0:
 
-    This reduces the acceptance run from O(all cells) actions to O(sample size)
-    actions while preserving the same correctness guarantee: the exported XP
-    must match the original truth table exactly.
+      Erase phase:
+        ws_erase_drag across each row of frame 0 (realistic drag-erase).
+
+      Repaint phase, per brush-state group:
+        ws_draw_rect if coords form a complete rectangle outline (>= 2x2).
+        ws_draw_line for contiguous horizontal runs of length >= 2.
+        ws_paint_cell for isolated single-cell runs.
+
+    The export comparison validates ALL cells — both the repainted proof region
+    and the untouched cells in other frames (which must match because import
+    loaded them correctly).
     """
     layer2 = next((l for l in truth_table["layers"] if int(l["index"]) == 2), None)
     if layer2 is None:
@@ -244,22 +360,21 @@ def _generate_acceptance_recipe(truth_table: dict, meta: dict) -> dict:
     frame_w = int(meta["frame_w"])
     frame_h = int(meta["frame_h"])
 
-    # Pick a representative sample of non-transparent cells from frame 0
-    proof_cells = _pick_proof_cells(layer2["cells"], frame_w, frame_h)
+    # Proof region: all cells in frame 0 (x < frame_w, y < frame_h)
+    frame0_cells = [
+        c for c in layer2["cells"]
+        if int(c["x"]) < frame_w and int(c["y"]) < frame_h
+    ]
 
     actions: list[dict] = [
         {"action": "wait_visible", "selector": "#sessionOut", "timeout_ms": 5000},
-        # Wait for the whole-sheet editor to mount
         {"action": "wait_visible", "selector": "#wholeSheetCanvas", "timeout_ms": 10000},
-        # Ensure all apply modes are on for full-cell painting
         {"action": "ws_ensure_apply", "channel": "glyph", "selector": "#wsApplyGlyph", "state": True},
-        {"action": "ws_ensure_apply", "channel": "fg", "selector": "#wsApplyFg", "state": True},
-        {"action": "ws_ensure_apply", "channel": "bg", "selector": "#wsApplyBg", "state": True},
+        {"action": "ws_ensure_apply", "channel": "fg",    "selector": "#wsApplyFg",    "state": True},
+        {"action": "ws_ensure_apply", "channel": "bg",    "selector": "#wsApplyBg",    "state": True},
     ]
 
-    # ── Tool presence verification ──
-    # Activate each shipped whole-sheet tool in sequence.  This confirms all
-    # six tool buttons are present in the UI without modifying any cells yet.
+    # Tool presence verification (all 6 tools).
     for tool_name, tool_sel in [
         ("cell",        "#wsToolCell"),
         ("eyedropper",  "#wsToolEyedropper"),
@@ -270,124 +385,65 @@ def _generate_acceptance_recipe(truth_table: dict, meta: dict) -> dict:
     ]:
         actions.append({"action": "ws_tool_activate", "tool": tool_name, "selector": tool_sel})
 
-    # ── Tool exercise: eyedropper → erase → cell round-trip on probe cell ──
-    if proof_cells:
-        probe = proof_cells[0]
-        probe_x = int(probe["x"])
-        probe_y = int(probe["y"])
-        glyph = int(probe["glyph"])
-        fg = probe["fg"]
-        bg = probe["bg"]
-
-        # Set draw state to probe cell's value (for repaint after erase)
-        actions.append({
-            "action": "ws_set_draw_state",
-            "glyph": glyph,
-            "fg": rgb_to_hex(fg),
-            "bg": rgb_to_hex(bg),
-            "glyph_selector": "#wsGlyphCode",
-            "fg_selector": "#wsFgColor",
-            "bg_selector": "#wsBgColor",
-        })
-
-        # Eyedropper: sample the probe cell; verify draw state was updated
+    # Eyedropper sample on the first cell of the proof region (verifies tool response)
+    if frame0_cells:
+        probe = frame0_cells[0]
+        probe_x, probe_y = int(probe["x"]), int(probe["y"])
+        glyph_p, fg_p, bg_p = int(probe["glyph"]), probe["fg"], probe["bg"]
         actions.append({"action": "ws_tool_activate", "tool": "eyedropper", "selector": "#wsToolEyedropper"})
         actions.append({
             "action": "ws_eyedropper_sample",
             "selector": "#wholeSheetCanvas",
-            "x": probe_x,
-            "y": probe_y,
-            "cell_size": WS_CELL_SIZE,
-            "expected_glyph": glyph,
-            "expected_fg": rgb_to_hex(fg),
-            "expected_bg": rgb_to_hex(bg),
+            "x": probe_x, "y": probe_y, "cell_size": WS_CELL_SIZE,
+            "expected_glyph": glyph_p,
+            "expected_fg": rgb_to_hex(fg_p),
+            "expected_bg": rgb_to_hex(bg_p),
         })
 
-        # Erase the probe cell
-        actions.append({"action": "ws_tool_activate", "tool": "erase", "selector": "#wsToolErase"})
+    # ── Erase phase: row-by-row drag erase across frame 0 ──
+    actions.append({"action": "ws_tool_activate", "tool": "erase", "selector": "#wsToolErase"})
+    for row in range(frame_h):
         actions.append({
-            "action": "ws_erase_cell",
+            "action": "ws_erase_drag",
             "selector": "#wholeSheetCanvas",
-            "x": probe_x,
-            "y": probe_y,
+            "x1": 0, "y1": row, "x2": frame_w - 1, "y2": row,
             "cell_size": WS_CELL_SIZE,
         })
 
-        # Verify erase: eyedropper should now report transparent state
-        actions.append({"action": "ws_tool_activate", "tool": "eyedropper", "selector": "#wsToolEyedropper"})
-        actions.append({
-            "action": "ws_eyedropper_sample",
-            "selector": "#wholeSheetCanvas",
-            "x": probe_x,
-            "y": probe_y,
-            "cell_size": WS_CELL_SIZE,
-            "expected_glyph": 0,
-            "expected_fg": rgb_to_hex([255, 255, 255]),
-            "expected_bg": rgb_to_hex([0, 0, 0]),
-        })
+    # ── Repaint phase ──
+    # Group proof cells by brush state (glyph, fg, bg)
+    by_brush: dict[tuple, list[tuple[int, int]]] = defaultdict(list)
+    for c in frame0_cells:
+        key = (int(c["glyph"]), tuple(c["fg"]), tuple(c["bg"]))
+        by_brush[key].append((int(c["x"]), int(c["y"])))
 
-        # Return to cell tool and repaint the probe cell
-        actions.append({"action": "ws_tool_activate", "tool": "cell", "selector": "#wsToolCell"})
+    sorted_groups = sorted(by_brush.items(), key=lambda x: len(x[1]))
+
+    # Track current active tool to minimise redundant ws_tool_activate calls.
+    current_tool = "erase"  # last tool from the erase phase
+
+    # --- Repaint all groups via rect/line/cell operations ---
+    for (glyph, fg, bg), coords in sorted_groups:
+        if not coords:
+            continue
         actions.append({
             "action": "ws_set_draw_state",
             "glyph": glyph,
-            "fg": rgb_to_hex(fg),
-            "bg": rgb_to_hex(bg),
+            "fg": rgb_to_hex(list(fg)),
+            "bg": rgb_to_hex(list(bg)),
             "glyph_selector": "#wsGlyphCode",
-            "fg_selector": "#wsFgColor",
-            "bg_selector": "#wsBgColor",
+            "fg_selector":    "#wsFgColor",
+            "bg_selector":    "#wsBgColor",
         })
-        actions.append({
-            "action": "ws_paint_cell",
-            "selector": "#wholeSheetCanvas",
-            "x": probe_x,
-            "y": probe_y,
-            "cell_size": WS_CELL_SIZE,
-        })
+        group_actions, current_tool = _repaint_group_actions(coords, current_tool)
+        actions.extend(group_actions)
 
-    # ── Targeted erase-and-repaint for remaining proof cells ──
-    # Erase all remaining proof cells, then repaint them grouped by brush state.
-    # Cells outside this sample are left untouched; the export comparison verifies
-    # them against the original truth table (they must be correct because import
-    # loaded them correctly).
-    if len(proof_cells) > 1:
-        actions.append({"action": "ws_tool_activate", "tool": "erase", "selector": "#wsToolErase"})
-        for cell in proof_cells[1:]:
-            actions.append({
-                "action": "ws_erase_cell",
-                "selector": "#wholeSheetCanvas",
-                "x": int(cell["x"]),
-                "y": int(cell["y"]),
-                "cell_size": WS_CELL_SIZE,
-            })
-
-        # Repaint grouped by brush state (fewest ws_set_draw_state calls)
-        by_brush: dict[tuple, list[dict]] = defaultdict(list)
-        for cell in proof_cells[1:]:
-            key = (int(cell["glyph"]), tuple(cell["fg"]), tuple(cell["bg"]))
-            by_brush[key].append(cell)
-
-        actions.append({"action": "ws_tool_activate", "tool": "cell", "selector": "#wsToolCell"})
-        for (glyph, fg, bg), cells in sorted(by_brush.items(), key=lambda x: (-len(x[1]), x[0])):
-            actions.append({
-                "action": "ws_set_draw_state",
-                "glyph": glyph,
-                "fg": rgb_to_hex(list(fg)),
-                "bg": rgb_to_hex(list(bg)),
-                "glyph_selector": "#wsGlyphCode",
-                "fg_selector": "#wsFgColor",
-                "bg_selector": "#wsBgColor",
-            })
-            for cell in cells:
-                actions.append({
-                    "action": "ws_paint_cell",
-                    "selector": "#wholeSheetCanvas",
-                    "x": int(cell["x"]),
-                    "y": int(cell["y"]),
-                    "cell_size": WS_CELL_SIZE,
-                })
-
-    paint_cells = sum(1 for a in actions if a["action"] == "ws_paint_cell")
+    # Tally action types for the stats block
+    paint_cells  = sum(1 for a in actions if a["action"] == "ws_paint_cell")
+    draw_lines   = sum(1 for a in actions if a["action"] == "ws_draw_line")
+    draw_rects   = sum(1 for a in actions if a["action"] == "ws_draw_rect")
+    flood_fills  = sum(1 for a in actions if a["action"] == "ws_flood_fill")
+    erase_drags  = sum(1 for a in actions if a["action"] == "ws_erase_drag")
 
     return {
         "ok": True,
@@ -395,28 +451,38 @@ def _generate_acceptance_recipe(truth_table: dict, meta: dict) -> dict:
         "source": truth_table["source"],
         "required_selectors": ACCEPTANCE_SELECTORS,
         "geometry": {
-            "angles": int(meta["angles"]),
-            "anims": list(meta["anims"]),
-            "projs": int(meta["projs"]),
+            "angles":     int(meta["angles"]),
+            "anims":      list(meta["anims"]),
+            "projs":      int(meta["projs"]),
             "frame_rows": int(meta.get("frame_rows", 1)),
             "frame_cols": int(meta.get("frame_cols", 1)),
-            "frame_w": frame_w,
-            "frame_h": frame_h,
+            "frame_w":    frame_w,
+            "frame_h":    frame_h,
         },
         "editable_layer": 2,
         "preserved_only_layers": [l["index"] for l in truth_table["layers"] if int(l["index"]) != 2],
         "proof_region": {
-            "cells_sampled": len(proof_cells),
+            "cells_total": len(frame0_cells),
             "from_frame": "0,0",
+            "strategy": "area_based_repaint",
         },
         "tool_exercise": {
             "tools_exercised": ["cell", "eyedropper", "erase", "line", "rect", "fill"],
+            "ws_erase_drag":  erase_drags,
+            "ws_draw_line":   draw_lines,
+            "ws_draw_rect":   draw_rects,
+            "ws_flood_fill":  flood_fills,
+            "ws_paint_cell":  paint_cells,
         },
         "actions": actions,
         "stats": {
-            "proof_cells": len(proof_cells),
+            "proof_cells": len(frame0_cells),
             "paint_cells": paint_cells,
-            "actions": len(actions),
+            "draw_lines":  draw_lines,
+            "draw_rects":  draw_rects,
+            "flood_fills": flood_fills,
+            "erase_drags": erase_drags,
+            "actions":     len(actions),
         },
     }
 
@@ -464,11 +530,24 @@ def main() -> None:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(recipe, indent=2), encoding="utf-8")
     if recipe.get("ok"):
-        print(
-            f"Recipe [{mode}]: paint_cells={recipe['stats']['paint_cells']} "
-            f"actions={recipe['stats']['actions']}",
-            file=sys.stderr,
-        )
+        stats = recipe["stats"]
+        if mode == "acceptance":
+            print(
+                f"Recipe [{mode}]: proof_cells={stats['proof_cells']}"
+                f" erase_drags={stats['erase_drags']}"
+                f" draw_lines={stats['draw_lines']}"
+                f" draw_rects={stats['draw_rects']}"
+                f" flood_fills={stats['flood_fills']}"
+                f" paint_cells={stats['paint_cells']}"
+                f" actions={stats['actions']}",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"Recipe [{mode}]: paint_cells={stats['paint_cells']}"
+                f" actions={stats['actions']}",
+                file=sys.stderr,
+            )
     else:
         print(f"ABORT: {recipe['error']}", file=sys.stderr)
         raise SystemExit(1)

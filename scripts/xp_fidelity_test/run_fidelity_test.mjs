@@ -224,6 +224,7 @@ const ACCEPTANCE_ACTIONS = new Set([
   'ws_paint_cell',
   'ws_eyedropper_sample',
   'ws_erase_cell',
+  'ws_erase_drag',
   'ws_flood_fill',
   'ws_draw_rect',
   'ws_draw_line',
@@ -390,6 +391,23 @@ async function executeRecipe(page) {
         const epx = Math.floor(action.x * cs3 + cs3 / 2);
         const epy = Math.floor(action.y * cs3 + cs3 / 2);
         await page.click(action.selector, { position: { x: epx, y: epy } });
+        break;
+      }
+
+      case 'ws_erase_drag': {
+        // Drag the erase tool from (x1, y1) to (x2, y2) in cell coordinates.
+        // The erase tool must already be activated via ws_tool_activate.
+        // Reuses dragOnCanvas — the erase tool's drag handler erases all cells
+        // along the Bresenham line between successive mousemove events.
+        await dragOnCanvas(
+          page,
+          action.selector,
+          action.x1,
+          action.y1,
+          action.x2,
+          action.y2,
+          action.cell_size
+        );
         break;
       }
 
@@ -618,6 +636,9 @@ async function main() {
       try {
         const dock = runSkinDockWatchdog(exportJson.xp_path);
         const dockResult = dock.parsed || {};
+        const classificationPlayable =
+          dockResult.classification === 'playable' ||
+          dockResult.runValidity?.gateB?.checks?.classification_playable === true;
         report.skin_dock = {
           result_path: dock.resultPath,
           error: dockResult.error ?? null,
@@ -629,11 +650,11 @@ async function main() {
           dockResult.runValidity?.status === 'valid' &&
           dockResult.runValidity?.passed === true &&
           dockResult.error == null &&
-          dockResult.classification === 'playable';
+          classificationPlayable;
         if (!report.skin_dock_pass) {
           fail(
             'skin_dock',
-            `Skin Dock failed: status=${dockResult.runValidity?.status || 'missing'} passed=${dockResult.runValidity?.passed === true} classification=${dockResult.classification || 'missing'} error=${dockResult.error || 'null'}`
+            `Skin Dock failed: status=${dockResult.runValidity?.status || 'missing'} passed=${dockResult.runValidity?.passed === true} classification=${dockResult.classification || 'missing'} classification_playable=${dockResult.runValidity?.gateB?.checks?.classification_playable === true} error=${dockResult.error || 'null'}`
           );
         }
       } catch (dockErr) {

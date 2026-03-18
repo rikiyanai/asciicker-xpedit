@@ -26,6 +26,8 @@ from .service import (
     run_pipeline,
     status,
     workbench_load_from_job,
+    workbench_load_session,
+    workbench_create_blank_session,
     workbench_save_session,
     workbench_export_xp,
     workbench_upload_xp,
@@ -340,6 +342,33 @@ def create_app() -> Flask:
             if not job_id:
                 raise ApiError("job_id is required", "missing_job_id", "workbench", req_id, 400)
             return jsonify(workbench_load_from_job(job_id, req_id)), 201
+        except ApiError as e:
+            return _err(e)
+
+    @app.post("/api/workbench/load-session")
+    def api_wb_load_session():
+        req_id = str(uuid.uuid4())
+        try:
+            payload = request.get_json(silent=True) or {}
+            session_id = str(payload.get("session_id", "")).strip()
+            if not session_id:
+                raise ApiError("session_id is required", "missing_session_id", "workbench", req_id, 400)
+            return jsonify(workbench_load_session(session_id, req_id)), 200
+        except ApiError as e:
+            return _err(e)
+
+    @app.post("/api/workbench/create-blank-session")
+    def api_wb_create_blank_session():
+        req_id = str(uuid.uuid4())
+        try:
+            payload = request.get_json(silent=True) or {}
+            template_set_key = str(payload.get("template_set_key", "")).strip()
+            action_key = str(payload.get("action_key", "")).strip()
+            if not template_set_key:
+                raise ApiError("template_set_key is required", "missing_template_set_key", "workbench", req_id, 400)
+            if not action_key:
+                raise ApiError("action_key is required", "missing_action_key", "workbench", req_id, 400)
+            return jsonify(workbench_create_blank_session(template_set_key, action_key, req_id)), 201
         except ApiError as e:
             return _err(e)
 

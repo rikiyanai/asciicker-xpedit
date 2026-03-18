@@ -3583,29 +3583,9 @@
     updateSessionDirtyBadge();
   }
 
-  async function loadFromJob() {
-    if (!state.jobId) {
-      status("Missing job_id in URL", "err");
-      return;
-    }
-    status("Loading pipeline output...", "warn");
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), 20000);
-    try {
-      const r = await fetch("/api/workbench/load-from-job", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ job_id: state.jobId }),
-        signal: ctl.signal,
-      });
-      const j = await r.json();
-      const sessionSummary = { ...j, cells: undefined, cell_count: Array.isArray(j.cells) ? j.cells.length : 0 };
-      $("sessionOut").textContent = JSON.stringify(sessionSummary, null, 2);
-      if (!r.ok) {
-        status("Load failed", "err");
-        return;
-      }
+  function hydrateLoadedSession(j) {
       state.sessionId = j.session_id;
+      state.jobId = String(j.job_id || state.jobId || "");
       state.gridCols = Number(j.grid_cols || 0);
       state.gridRows = Number(j.grid_rows || 0);
       state.angles = Number(j.angles || 1);
@@ -3691,9 +3671,69 @@
       }
       updateWebbuildUI();
       setWebbuildState("Webbuild not loaded", "");
+  }
+
+  async function loadFromJob() {
+    if (!state.jobId) {
+      status("Missing job_id in URL", "err");
+      return;
+    }
+    status("Loading pipeline output...", "warn");
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 20000);
+    try {
+      const r = await fetch("/api/workbench/load-from-job", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_id: state.jobId }),
+        signal: ctl.signal,
+      });
+      const j = await r.json();
+      const sessionSummary = { ...j, cells: undefined, cell_count: Array.isArray(j.cells) ? j.cells.length : 0 };
+      $("sessionOut").textContent = JSON.stringify(sessionSummary, null, 2);
+      if (!r.ok) {
+        status("Load failed", "err");
+        return;
+      }
+      hydrateLoadedSession(j);
     } catch (e) {
       status("Load failed: fetch/timeout", "err");
       $("sessionOut").textContent = String(e);
+    } finally {
+      clearTimeout(t);
+    }
+  }
+
+  async function loadSession(sessionId, opts = {}) {
+    const sid = String(sessionId || "").trim();
+    if (!sid) {
+      status("Missing session_id", "err");
+      return false;
+    }
+    status(opts.reason || "Loading session...", "warn");
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 20000);
+    try {
+      const r = await fetch("/api/workbench/load-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sid }),
+        signal: ctl.signal,
+      });
+      const j = await r.json();
+      const sessionSummary = { ...j, cells: undefined, cell_count: Array.isArray(j.cells) ? j.cells.length : 0 };
+      $("sessionOut").textContent = JSON.stringify(sessionSummary, null, 2);
+      if (!r.ok) {
+        status("Session load failed", "err");
+        return false;
+      }
+      state.jobId = String(j.job_id || "");
+      hydrateLoadedSession(j);
+      return true;
+    } catch (e) {
+      status("Session load failed: fetch/timeout", "err");
+      $("sessionOut").textContent = String(e);
+      return false;
     } finally {
       clearTimeout(t);
     }
@@ -5961,11 +6001,7 @@
     state.activeActionKey = actionKey;
     const actState = state.actionStates[actionKey];
     if (actState && actState.sessionId) {
-      // Swap the backing session
-      state.sessionId = actState.sessionId;
-      state.jobId = actState.jobId || "";
-      // Reload session data from server
-      await loadFromJob();
+      await loadSession(actState.sessionId, { reason: `Loading ${actionKey} authoring session...` });
     } else {
       // Empty action — clear session
       state.sessionId = null;
@@ -5980,6 +6016,27 @@
     }
     renderBundleActionTabs();
     updateBundleUI();
+  }
+
+  async function createBlankTemplateSession(templateSetKey, actionKey) {
+    const r = await fetch("/api/workbench/create-blank-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        template_set_key: templateSetKey,
+        action_key: actionKey,
+      }),
+    });
+    const j = await r.json();
+    $("sessionOut").textContent = JSON.stringify({
+      ...j,
+      cells: undefined,
+      cell_count: Array.isArray(j.cells) ? j.cells.length : 0,
+    }, null, 2);
+    if (!r.ok) {
+      throw new Error(j.error || "blank session creation failed");
+    }
+    return j;
   }
 
   function updateBundleUI() {
@@ -6024,17 +6081,24 @@
     const enabledActions = getEnabledActions(ts);
     const actionKeys = Object.keys(enabledActions);
     if (actionKeys.length <= 1) {
-      // Single-action template: classic mode, no bundle
+      // Single-action template: create a real blank authoring session.
       state.bundleId = null;
-      state.activeActionKey = "idle";
+      state.activeActionKey = actionKeys[0] || "idle";
       state.actionStates = {};
-      renderBundleActionTabs();
-      updateBundleUI();
-      status(`Template: ${ts.label} (classic single-XP mode)`, "ok");
+      status("Creating blank authoring session...", "warn");
+      try {
+        const j = await createBlankTemplateSession(key, state.activeActionKey);
+        await loadSession(j.session_id, { reason: `Loading ${ts.label} authoring session...` });
+        renderBundleActionTabs();
+        updateBundleUI();
+        status(`Authoring session ready: ${ts.label}`, "ok");
+      } catch (e) {
+        status(`Blank session creation failed: ${e}`, "err");
+      }
       return;
     }
-    // Multi-action: create bundle
-    status("Creating bundle session...", "warn");
+    // Multi-action: create bundle plus blank sessions for each enabled action.
+    status("Creating blank authoring bundle...", "warn");
     try {
       const r = await fetch("/api/workbench/bundle/create", {
         method: "POST",
@@ -6050,11 +6114,20 @@
       state.activeActionKey = actionKeys[0];
       state.actionStates = {};
       for (const ak of actionKeys) {
-        state.actionStates[ak] = { sessionId: null, jobId: null, status: "empty" };
+        const act = j.actions?.[ak] || {};
+        state.actionStates[ak] = {
+          sessionId: act.session_id || null,
+          jobId: act.job_id || "",
+          status: act.status || "empty",
+        };
+      }
+      const firstAction = state.actionStates[state.activeActionKey];
+      if (firstAction && firstAction.sessionId) {
+        await loadSession(firstAction.sessionId, { reason: `Loading ${state.activeActionKey} authoring session...` });
       }
       renderBundleActionTabs();
       updateBundleUI();
-      status(`Bundle created: ${ts.label} — upload sources per action tab`, "ok");
+      status(`Authoring bundle ready: ${ts.label}`, "ok");
     } catch (e) {
       status(`Bundle creation error: ${e}`, "err");
     }

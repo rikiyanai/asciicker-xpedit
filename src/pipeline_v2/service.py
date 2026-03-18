@@ -1026,8 +1026,19 @@ def create_bundle(template_set_key: str, req_id: str) -> dict[str, Any]:
     bundle_id = f"b-{uuid.uuid4()}"
     now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     actions: dict[str, BundleActionState] = {}
-    for act_key in ts["actions"]:
-        actions[act_key] = BundleActionState(action_key=act_key)
+    for act_key, act_spec in ts["actions"].items():
+        family = str(act_spec.get("family", "")).strip()
+        if family in ENABLED_FAMILIES:
+            blank = workbench_create_blank_session(template_set_key, act_key, req_id)
+            actions[act_key] = BundleActionState(
+                action_key=act_key,
+                session_id=str(blank["session_id"]),
+                job_id=str(blank.get("job_id") or ""),
+                source_path=None,
+                status="blank",
+            )
+        else:
+            actions[act_key] = BundleActionState(action_key=act_key)
     bundle = BundleSession(
         bundle_id=bundle_id,
         template_set_key=template_set_key,
@@ -1927,6 +1938,52 @@ def status(job_id: str, req_id: str) -> dict[str, Any]:
     return load_json(p)
 
 
+def _session_payload(sess_dict: dict[str, Any]) -> dict[str, Any]:
+    width = int(sess_dict["grid_cols"])
+    height = int(sess_dict["grid_rows"])
+    layer_count = len(sess_dict.get("layers") or [])
+    angles = int(sess_dict["angles"])
+    anims = [int(x) for x in sess_dict["anims"]]
+    projs = int(sess_dict["projs"])
+    frame_cols = sum(anims) * projs
+    frame_rows = angles
+    return {
+        "session_id": str(sess_dict["session_id"]),
+        "job_id": str(sess_dict.get("job_id") or ""),
+        "populated_cells": sum(
+            1 for c in (sess_dict.get("cells") or [])
+            if int(c.get("glyph", 0)) not in (0, 32)
+        ),
+        "layer_count": layer_count,
+        "layer_names": ["Metadata", "Layer 1", "Visual", "Layer 3"][:layer_count],
+        "grid_cols": width,
+        "grid_rows": height,
+        "cell_w": int(sess_dict["cell_w"]),
+        "cell_h": int(sess_dict["cell_h"]),
+        "angles": angles,
+        "anims": anims,
+        "source_projs": int(sess_dict.get("source_projs", projs)),
+        "projs": projs,
+        "frame_rows": frame_rows,
+        "frame_cols": frame_cols,
+        "source_boxes": list(sess_dict.get("source_boxes") or []),
+        "source_anchor_box": sess_dict.get("source_anchor_box"),
+        "source_draft_box": sess_dict.get("source_draft_box"),
+        "source_cuts_v": list(sess_dict.get("source_cuts_v") or []),
+        "source_cuts_h": list(sess_dict.get("source_cuts_h") or []),
+        "cells": list(sess_dict.get("cells") or []),
+        "layers": list(sess_dict.get("layers") or []),
+        "family": str(sess_dict.get("family", "player")),
+    }
+
+
+def workbench_load_session(session_id: str, req_id: str) -> dict[str, Any]:
+    p = _session_path(session_id)
+    if not p.exists():
+        raise ApiError("session not found", "session_not_found", "workbench", req_id, 404)
+    return _session_payload(load_json(p))
+
+
 def workbench_load_from_job(job_id: str, req_id: str) -> dict[str, Any]:
     job = status(job_id, req_id)
     xp_path = Path(job["xp_path"])
@@ -1974,33 +2031,76 @@ def workbench_load_from_job(job_id: str, req_id: str) -> dict[str, Any]:
     sess_dict["family"] = str(meta.get("family", "player"))
     save_json(_session_path(session_id), sess_dict)
 
-    frame_cols = sum(sess.anims) * sess.projs
-    frame_rows = sess.angles
+    return _session_payload(sess_dict)
 
-    return {
-        "session_id": session_id,
-        "job_id": job_id,
-        "populated_cells": populated,
-        "layer_count": layer_count,
-        "layer_names": ["Metadata", "Layer 1", "Visual", "Layer 3"][:layer_count],
-        "grid_cols": width,
-        "grid_rows": height,
-        "cell_w": sess.cell_w,
-        "cell_h": sess.cell_h,
-        "angles": sess.angles,
-        "anims": sess.anims,
-        "source_projs": int(meta.get("source_projs", 1)),
-        "projs": sess.projs,
-        "frame_rows": frame_rows,
-        "frame_cols": frame_cols,
-        "source_boxes": [],
-        "source_anchor_box": None,
-        "source_draft_box": None,
-        "source_cuts_v": [],
-        "source_cuts_h": [],
-        "cells": cells,
-        "layers": all_layers,
-    }
+
+def workbench_create_blank_session(template_set_key: str, action_key: str, req_id: str) -> dict[str, Any]:
+    reg = load_template_registry()
+    ts = reg.get("template_sets", {}).get(template_set_key)
+    if ts is None:
+        raise ApiError(
+            f"unknown template_set_key: {template_set_key}",
+            "invalid_template_set", "workbench", req_id, 422,
+        )
+    action_spec = ts.get("actions", {}).get(action_key)
+    if action_spec is None:
+        raise ApiError(
+            f"unknown action_key '{action_key}' for template set '{template_set_key}'",
+            "invalid_action_key", "workbench", req_id, 422,
+        )
+    family = str(action_spec.get("family", "")).strip()
+    if family not in ENABLED_FAMILIES:
+        raise ApiError(
+            f"Family '{family}' is not enabled in the current phase.",
+            "phase_not_enabled", "workbench", req_id, 422,
+        )
+    xp_dims = action_spec.get("xp_dims") or []
+    if not isinstance(xp_dims, list) or len(xp_dims) != 2:
+        raise ApiError("template action missing xp_dims", "invalid_template_action", "workbench", req_id, 422)
+    cols = int(xp_dims[0])
+    rows = int(xp_dims[1])
+    angles = int(action_spec.get("angles", 1))
+    anims = [int(x) for x in action_spec.get("frames", [1])]
+    projs = int(action_spec.get("projs", 1))
+    cell_w = int(action_spec.get("cell_w", 1))
+    cell_h = int(action_spec.get("cell_h", 1))
+    visual_layer: list[Cell] = [_transparent_cell() for _ in range(cols * rows)]
+    layers = _build_native_layers(
+        family=family,
+        cells_layer2=visual_layer,
+        cols=cols,
+        rows=rows,
+        stage="workbench",
+        req_id=req_id,
+    )
+    wire_layers: list[list[dict[str, Any]]] = []
+    for layer in layers:
+        wire_layers.append([
+            {"idx": idx, "glyph": int(glyph), "fg": list(fg), "bg": list(bg)}
+            for idx, (glyph, fg, bg) in enumerate(layer)
+        ])
+    cells = list(wire_layers[2] if len(wire_layers) > 2 else wire_layers[0])
+    session_id = str(uuid.uuid4())
+    sess = WorkbenchSession(
+        session_id=session_id,
+        job_id="",
+        angles=angles,
+        anims=anims,
+        projs=projs,
+        cell_w=cell_w,
+        cell_h=cell_h,
+        grid_cols=cols,
+        grid_rows=rows,
+        cells=cells,
+        layers=wire_layers,
+    )
+    sess_dict = sess.to_dict()
+    sess_dict["family"] = family
+    sess_dict["source_projs"] = int(action_spec.get("projs", projs))
+    sess_dict["template_set_key"] = template_set_key
+    sess_dict["action_key"] = action_key
+    save_json(_session_path(session_id), sess_dict)
+    return _session_payload(sess_dict)
 
 
 def bundle_action_run(bundle_id: str, action_key: str, source_path: str, req_id: str) -> dict[str, Any]:

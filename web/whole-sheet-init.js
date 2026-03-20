@@ -1149,7 +1149,7 @@ function _toggleLayerVisibility(index) {
   layer.setVisible(newVisible);
   _updateLayersPanelUI();
 
-  if (editorState.canvas) editorState.canvas.render();
+  if (editorState.canvas) { editorState.canvas._fullRenderNeeded = true; editorState.canvas.render(); }
 
   if (editorState.onLayerVisibilityChanged) {
     editorState.onLayerVisibilityChanged(index, newVisible);
@@ -1170,7 +1170,7 @@ function _addLayer() {
   editorState.layerStack.addLayer(`Layer ${newIndex}`);
   editorState.layerStack.selectLayer(newIndex);
   _updateLayersPanelUI();
-  if (editorState.canvas) editorState.canvas.render();
+  if (editorState.canvas) { editorState.canvas._fullRenderNeeded = true; editorState.canvas.render(); }
   if (editorState.onAddLayer) editorState.onAddLayer(newIndex);
 }
 
@@ -1181,7 +1181,7 @@ function _deleteActiveLayer() {
   editorState.layerStack.removeLayer(deletedIndex);
   const newActive = editorState.layerStack.activeIndex;
   _updateLayersPanelUI();
-  if (editorState.canvas) editorState.canvas.render();
+  if (editorState.canvas) { editorState.canvas._fullRenderNeeded = true; editorState.canvas.render(); }
   if (editorState.onDeleteLayer) editorState.onDeleteLayer(deletedIndex, newActive);
 }
 
@@ -1190,7 +1190,7 @@ function _moveLayerUp(index) {
   if (index <= 0) return;
   editorState.layerStack.moveLayer(index, index - 1);
   _updateLayersPanelUI();
-  if (editorState.canvas) editorState.canvas.render();
+  if (editorState.canvas) { editorState.canvas._fullRenderNeeded = true; editorState.canvas.render(); }
   if (editorState.onMoveLayer) editorState.onMoveLayer(index, index - 1);
 }
 
@@ -1199,7 +1199,7 @@ function _moveLayerDown(index) {
   if (index >= editorState.layerStack.layers.length - 1) return;
   editorState.layerStack.moveLayer(index, index + 1);
   _updateLayersPanelUI();
-  if (editorState.canvas) editorState.canvas.render();
+  if (editorState.canvas) { editorState.canvas._fullRenderNeeded = true; editorState.canvas.render(); }
   if (editorState.onMoveLayer) editorState.onMoveLayer(index, index + 1);
 }
 
@@ -1326,8 +1326,10 @@ function _onPaletteClick(e, channel) {
 function _onCanvasMouseMove(e) {
   const canvasEl = e.currentTarget;
   const rect = canvasEl.getBoundingClientRect();
-  const px = e.clientX - rect.left;
-  const py = e.clientY - rect.top;
+  const scaleX = canvasEl.width / rect.width;
+  const scaleY = canvasEl.height / rect.height;
+  const px = (e.clientX - rect.left) * scaleX;
+  const py = (e.clientY - rect.top) * scaleY;
   const cx = Math.floor(px / CELL_SIZE);
   const cy = Math.floor(py / CELL_SIZE);
 

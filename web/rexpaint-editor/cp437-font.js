@@ -118,6 +118,7 @@ export class CP437Font {
   /**
    * Draw a glyph to a canvas context with color blending
    * Uses the glyph's alpha channel to blend the foreground color.
+   * Uses a single reusable offscreen canvas to avoid per-call allocation.
    *
    * @param {CanvasRenderingContext2D} ctx - Target canvas context
    * @param {number} code - CP437 glyph code (0-255)
@@ -128,69 +129,52 @@ export class CP437Font {
    * @throws {Error} If code is invalid or glyph not available
    */
   drawGlyph(ctx, code, x, y, fg, bg) {
-    // Validate inputs
     if (code < 0 || code > 255) {
       throw new Error(`Invalid glyph code ${code}. Must be 0-255.`);
     }
 
-    // Validate color arrays and clamp values
-    if (!Array.isArray(fg) || fg.length < 3) {
-      fg = [255, 255, 255]; // Default to white
-    } else {
-      fg = fg.slice(0, 3).map(c => {
-        const val = Math.round(c);
-        return isNaN(val) ? 255 : Math.max(0, Math.min(255, val));
-      });
-    }
-
-    if (!Array.isArray(bg) || bg.length < 3) {
-      bg = [0, 0, 0]; // Default to black
-    } else {
-      bg = bg.slice(0, 3).map(c => {
-        const val = Math.round(c);
-        return isNaN(val) ? 0 : Math.max(0, Math.min(255, val));
-      });
-    }
+    const fr = Array.isArray(fg) && fg.length >= 3 ? Math.max(0, Math.min(255, Math.round(fg[0]) || 0)) : 255;
+    const fGreen = Array.isArray(fg) && fg.length >= 3 ? Math.max(0, Math.min(255, Math.round(fg[1]) || 0)) : 255;
+    const fb = Array.isArray(fg) && fg.length >= 3 ? Math.max(0, Math.min(255, Math.round(fg[2]) || 0)) : 255;
+    const br = Array.isArray(bg) && bg.length >= 3 ? Math.max(0, Math.min(255, Math.round(bg[0]) || 0)) : 0;
+    const bGreen = Array.isArray(bg) && bg.length >= 3 ? Math.max(0, Math.min(255, Math.round(bg[1]) || 0)) : 0;
+    const bb = Array.isArray(bg) && bg.length >= 3 ? Math.max(0, Math.min(255, Math.round(bg[2]) || 0)) : 0;
 
     // Draw background rectangle
-    ctx.fillStyle = `rgb(${bg[0]}, ${bg[1]}, ${bg[2]})`;
+    ctx.fillStyle = `rgb(${br},${bGreen},${bb})`;
     ctx.fillRect(x, y, this.glyphWidth, this.glyphHeight);
 
-    // Get glyph data
+    // Get glyph mask data (cached after first access)
     const glyphData = this.getGlyph(code);
     const data = glyphData.data;
 
-    // Create a blended canvas with foreground color applied
-    const blendedCanvas = document.createElement('canvas');
-    blendedCanvas.width = this.glyphWidth;
-    blendedCanvas.height = this.glyphHeight;
-    const blendCtx = blendedCanvas.getContext('2d');
+    // Lazy-init single reusable offscreen buffer
+    if (!this._blendCanvas) {
+      this._blendCanvas = document.createElement('canvas');
+      this._blendCanvas.width = this.glyphWidth;
+      this._blendCanvas.height = this.glyphHeight;
+      this._blendCtx = this._blendCanvas.getContext('2d');
+      this._blendImageData = this._blendCtx.createImageData(this.glyphWidth, this.glyphHeight);
+    }
 
-    // Create image data with blended colors
-    const blendedData = blendCtx.createImageData(this.glyphWidth, this.glyphHeight);
-    const blendedPixels = blendedData.data;
+    const blendedPixels = this._blendImageData.data;
 
     // The bundled CP437 sheet is RGB (white glyphs on black), not RGBA.
-    // Use source luminance as the glyph mask so imported sheets render shaped glyphs,
-    // not solid color blocks.
+    // Use source luminance as the glyph mask.
     for (let i = 0; i < data.length; i += 4) {
-      const luminance = Math.round((data[i] + data[i + 1] + data[i + 2]) / 3);
-
+      const luminance = (data[i] + data[i + 1] + data[i + 2]) / 3 | 0;
       if (luminance > 0) {
-        // Glyph pixel: use foreground color with mask derived from brightness
-        blendedPixels[i] = fg[0]; // Red
-        blendedPixels[i + 1] = fg[1]; // Green
-        blendedPixels[i + 2] = fg[2]; // Blue
-        blendedPixels[i + 3] = luminance; // Brightness -> alpha
+        blendedPixels[i] = fr;
+        blendedPixels[i + 1] = fGreen;
+        blendedPixels[i + 2] = fb;
+        blendedPixels[i + 3] = luminance;
       } else {
-        // Background pixel: keep transparent so the background fill shows through
         blendedPixels[i + 3] = 0;
       }
     }
 
-    // Draw the blended glyph to the context
-    blendCtx.putImageData(blendedData, 0, 0);
-    ctx.drawImage(blendedCanvas, x, y);
+    this._blendCtx.putImageData(this._blendImageData, 0, 0);
+    ctx.drawImage(this._blendCanvas, x, y);
   }
 
   /**

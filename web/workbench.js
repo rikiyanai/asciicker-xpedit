@@ -3629,6 +3629,7 @@
       updateSourceToolUI();
       updateUndoRedoButtons();
       $("btnExport").disabled = false;
+      if (state.templateSetKey) $("btnNewXp").disabled = false;
       // Use real layers from backend when available (B3: persisted layers are
       // the source of truth for uploaded XP sessions).
       if (Array.isArray(j.layers) && j.layers.length > 0) {
@@ -3775,6 +3776,27 @@
       $("sessionOut").textContent = String(e);
     } finally {
       clearTimeout(t);
+    }
+  }
+
+  async function newXp() {
+    const templateKey = state.templateSetKey;
+    if (!templateKey) {
+      status("Apply a template first", "err");
+      return;
+    }
+    const actionKey = state.activeActionKey || "idle";
+    status(`Creating new blank XP for ${actionKey}...`, "warn");
+    try {
+      const j = await createBlankTemplateSession(templateKey, actionKey);
+      if (isBundleMode() && state.actionStates[actionKey]) {
+        state.actionStates[actionKey].sessionId = j.session_id;
+        state.actionStates[actionKey].status = "blank";
+      }
+      await loadSession(j.session_id, { reason: `New blank ${actionKey} session...` });
+      status(`New XP ready for ${actionKey}`, "ok");
+    } catch (e) {
+      status(`New XP failed: ${e}`, "err");
     }
   }
 
@@ -6113,6 +6135,7 @@
         await loadSession(j.session_id, { reason: `Loading ${ts.label} authoring session...` });
         renderBundleActionTabs();
         updateBundleUI();
+        $("btnNewXp").disabled = false;
         status(`Authoring session ready: ${ts.label}`, "ok");
       } catch (e) {
         status(`Blank session creation failed: ${e}`, "err");
@@ -6149,6 +6172,7 @@
       }
       renderBundleActionTabs();
       updateBundleUI();
+      $("btnNewXp").disabled = false;
       status(`Authoring bundle ready: ${ts.label}`, "ok");
     } catch (e) {
       status(`Bundle creation error: ${e}`, "err");
@@ -6234,6 +6258,7 @@
     $("btnLoad").addEventListener("click", loadFromJob);
     $("xpImportBtn").addEventListener("click", importXp);
     $("btnExport").addEventListener("click", exportXp);
+    $("btnNewXp").addEventListener("click", newXp);
     $("openXpToolBtn").addEventListener("click", openInXpTool);
     $("webbuildOpenBtn").addEventListener("click", openWebbuild);
     $("webbuildReloadBtn").addEventListener("click", reloadWebbuild);

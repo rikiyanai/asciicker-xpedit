@@ -53,6 +53,10 @@ export class Canvas {
     this._animationFrame = 0; // For marching ants animation
     this._animationFrameId = null; // For requestAnimationFrame cancellation
 
+    // Dirty cell tracking for incremental rendering
+    this._dirtyCells = new Set();
+    this._fullRenderNeeded = true;
+
     // Initialize with default cells (transparent, white on black)
     this._initializeCells();
 
@@ -82,6 +86,7 @@ export class Canvas {
   setLayerStack(layerStack) {
     this.layerStack = layerStack;
     this.useLayerStack = true;
+    this._fullRenderNeeded = true;
     this.render();
   }
 
@@ -110,6 +115,21 @@ export class Canvas {
   }
 
   /**
+   * Convert a mouse event's CSS coordinates to canvas backing-store pixels.
+   * Accounts for CSS scaling (display size != backing store size).
+   * @private
+   */
+  _eventToBackingPixels(event) {
+    const rect = this.canvasElement.getBoundingClientRect();
+    const scaleX = this.canvasElement.width / rect.width;
+    const scaleY = this.canvasElement.height / rect.height;
+    return {
+      x: (event.clientX - rect.left) * scaleX,
+      y: (event.clientY - rect.top) * scaleY,
+    };
+  }
+
+  /**
    * Handle mousedown event
    * Includes error handling to prevent unhandled exceptions from disrupting user interaction
    * @private
@@ -118,10 +138,8 @@ export class Canvas {
     try {
       // Check for pan mode
       if (this.editorApp && this.editorApp.panMode) {
-        const rect = this.canvasElement.getBoundingClientRect();
-        const pixelX = event.clientX - rect.left;
-        const pixelY = event.clientY - rect.top;
-        this.editorApp.startPan(pixelX, pixelY);
+        const bp = this._eventToBackingPixels(event);
+        this.editorApp.startPan(bp.x, bp.y);
         return;
       }
 
@@ -129,10 +147,8 @@ export class Canvas {
         return;
       }
 
-      const rect = this.canvasElement.getBoundingClientRect();
-      const pixelX = event.clientX - rect.left;
-      const pixelY = event.clientY - rect.top;
-      const coords = this.pixelToCellCoords(pixelX, pixelY);
+      const bp = this._eventToBackingPixels(event);
+      const coords = this.pixelToCellCoords(bp.x, bp.y);
 
       // Check bounds
       if (coords.x < 0 || coords.x >= this.width || coords.y < 0 || coords.y >= this.height) {
@@ -159,15 +175,11 @@ export class Canvas {
     try {
       // Check for pan mode
       if (this.editorApp && this.editorApp.panMode) {
-        // Check if mouse button is pressed
         if (event.buttons === 0) {
           return;
         }
-
-        const rect = this.canvasElement.getBoundingClientRect();
-        const pixelX = event.clientX - rect.left;
-        const pixelY = event.clientY - rect.top;
-        this.editorApp.pan(pixelX, pixelY);
+        const bp = this._eventToBackingPixels(event);
+        this.editorApp.pan(bp.x, bp.y);
         return;
       }
 
@@ -180,10 +192,8 @@ export class Canvas {
         return;
       }
 
-      const rect = this.canvasElement.getBoundingClientRect();
-      const pixelX = event.clientX - rect.left;
-      const pixelY = event.clientY - rect.top;
-      const coords = this.pixelToCellCoords(pixelX, pixelY);
+      const bp = this._eventToBackingPixels(event);
+      const coords = this.pixelToCellCoords(bp.x, bp.y);
 
       // Check bounds
       if (coords.x < 0 || coords.x >= this.width || coords.y < 0 || coords.y >= this.height) {
@@ -268,6 +278,7 @@ export class Canvas {
     if (this.useLayerStack && this.layerStack) {
       const activeLayer = this.layerStack.getActiveLayer();
       activeLayer.setCell(x, y, glyph & 0xFF, fg, bg);
+      this._dirtyCells.add(y * this.width + x);
       return;
     }
 
@@ -278,6 +289,7 @@ export class Canvas {
       fg: [...fg],
       bg: [...bg],
     });
+    this._dirtyCells.add(y * this.width + x);
   }
 
   /**
@@ -478,9 +490,28 @@ export class Canvas {
   }
 
   /**
-   * Render all cells to the canvas
+   * Render cells to the canvas.
+   * Uses incremental rendering when only a few cells changed;
+   * falls back to full render when needed (layer switch, visibility toggle, etc).
    */
   render() {
+    const needsFull = this._fullRenderNeeded || this.showGrid ||
+      (this.selectionTool && this.selectionTool.getSelectionBounds());
+
+    if (!needsFull && this._dirtyCells.size > 0 && this._dirtyCells.size < 500) {
+      // Incremental: only redraw changed cells
+      for (const key of this._dirtyCells) {
+        const x = key % this.width;
+        const y = (key / this.width) | 0;
+        this.drawCell(x, y);
+      }
+      this._dirtyCells.clear();
+      return;
+    }
+
+    // Full render
+    this._dirtyCells.clear();
+    this._fullRenderNeeded = false;
     this.clear();
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
@@ -497,14 +528,11 @@ export class Canvas {
     // Schedule next animation frame for marching ants
     this._animationFrame++;
     if (this.selectionTool && this.selectionTool.getSelectionBounds()) {
-      // Cancel any previous pending animation frame
       if (this._animationFrameId) {
         cancelAnimationFrame(this._animationFrameId);
       }
-      // Schedule next render for marching ants animation
       this._animationFrameId = requestAnimationFrame(() => this.render());
     } else {
-      // Clear animation frame ID when selection is deselected
       if (this._animationFrameId) {
         cancelAnimationFrame(this._animationFrameId);
         this._animationFrameId = null;
@@ -513,11 +541,19 @@ export class Canvas {
   }
 
   /**
+   * Force a full render on the next render() call
+   */
+  invalidateAll() {
+    this._fullRenderNeeded = true;
+  }
+
+  /**
    * Set grid visibility state and re-render
    * @param {boolean} visible - Whether to show the grid
    */
   setGridVisible(visible) {
     this.showGrid = visible;
+    this._fullRenderNeeded = true;
     this.render();
   }
 

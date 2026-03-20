@@ -3828,6 +3828,28 @@
           renderBundleActionTabs();
           updateBundleUI();
         }
+        // Auto-advance to next incomplete action, or signal all-done.
+        const ts = getActiveTemplateSet();
+        const enabled = ts ? getEnabledActions(ts) : {};
+        const actionKeys = Object.keys(enabled);
+        const nextIncomplete = actionKeys.find(
+          (k) => k !== state.activeActionKey && state.actionStates[k] && state.actionStates[k].status !== "converted"
+        );
+        const allDone = actionKeys.every(
+          (k) => state.actionStates[k] && state.actionStates[k].status === "converted"
+        );
+        if (allDone) {
+          status(`All actions exported — click Test Bundle Skin`, "ok");
+          const quickBtn = $("webbuildQuickTestBtn");
+          if (quickBtn) {
+            quickBtn.classList.add("primary");
+            quickBtn.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          }
+        } else if (nextIncomplete) {
+          status(`${state.activeActionKey} exported — advancing to ${nextIncomplete}...`, "ok");
+          // Delay slightly so the user sees the status before the tab switches.
+          setTimeout(() => switchBundleAction(nextIncomplete), 600);
+        }
       }
       try {
         const a = document.createElement("a");
@@ -3844,7 +3866,9 @@
       state.latestXpPath = "";
       $("openXpToolBtn").disabled = true;
     }
-    status(r.ok ? "Export succeeded (download started)" : "Export failed", r.ok ? "ok" : "err");
+    if (!isBundleMode() || !r.ok) {
+      status(r.ok ? "Export succeeded (download started)" : "Export failed", r.ok ? "ok" : "err");
+    }
   }
 
   function normalizeBox(a, b) {

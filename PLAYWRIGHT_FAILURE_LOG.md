@@ -781,3 +781,84 @@ complete and correct — the remaining blocker is runtime menu-advance timing.
 
 - `output/xp-fidelity-test/bundle-run-2026-03-18T22-19-27Z/result.json`
 - Screenshots in same directory
+
+---
+
+## 2026-03-19: Whole-Sheet Editor Architecture Audit
+
+**Trigger**: User reports blank glyph picker, non-functional rect tool, slow editor,
+layer +/- buttons do nothing, grid clicks do nothing.
+
+**Full audit**: `/tmp/claude-whole-sheet-editor-audit.md`
+
+### Confirmed Bugs
+
+| # | Bug | Severity | File:Line | Evidence |
+|---|-----|----------|-----------|----------|
+| 1 | Canvas mouse coords ignore CSS scaling | CRITICAL | `canvas.js:140,358-361` | `pixelToCellCoords()` uses raw CSS pixels; canvas backing store (1512×960) ≠ CSS display size; all clicks map to wrong cells |
+| 2 | `syncFromState()` O(n) on every `renderAll()` | HIGH | `workbench.js:3589`, `whole-sheet-init.js:1449-1474` | 4 layers × 10,080 cells = 40,320 `setCell()` calls + full render on every UI interaction |
+| 3 | `drawGlyph()` created temp canvas per call | HIGH | `cp437-font.js:163-178` | 10K+ temp canvas+context allocations per render. **PATCHED** (reusable `_blendCanvas`) |
+| 4 | `render()` full repaint on every mouse event | MEDIUM | `canvas.js:148,197,223` | **PARTIALLY PATCHED** (dirty-cell tracking added but `_fullRenderNeeded` bypasses it) |
+
+### Disproven Claims
+
+| Claim | Status | Evidence |
+|-------|--------|----------|
+| Glyph picker blank | NOT CONFIRMED | Sampled all 256 positions: 132 show fg color, 123 show bg (correct for hollow glyphs), 1 shows selected. All 256 `drawImage` calls confirmed via intercept. |
+| Font not loading | NOT CONFIRMED | `hasFontLoaded: true`, `spriteSheet` 192×192, `getGlyph(65)` returns 36 non-zero pixels |
+
+### Root Cause: Bug #1 (CSS Coordinate Scaling)
+
+`Canvas._onMouseDown()` at `canvas.js:137`:
+```js
+const rect = this.canvasElement.getBoundingClientRect(); // CSS size
+const pixelX = event.clientX - rect.left;               // CSS pixels
+const coords = this.pixelToCellCoords(pixelX, pixelY);  // divides by cellSizePixels (12)
+```
+
+Canvas backing store: 126×12 = 1512px wide, 80×12 = 960px tall.
+CSS display size: determined by flex layout, typically ~600-800px wide.
+
+`Math.floor(cssPixelX / 12)` gives wrong cell index because cssPixelX is in CSS coordinates,
+not backing store coordinates. Clicks on the right half of the canvas map to cells that are
+far to the left of where the user actually clicked, and clicks beyond `width*12/cssScale`
+pixels are out of bounds (silent return at line 143-145).
+
+This explains:
+- "clicking grid does nothing" — bounds check fails or wrong cell is edited
+- "rect tool does not draw with glyph" — tool receives wrong coordinates
+- Interaction appears "super slow" — cells are being edited but in wrong locations
+
+### Changes Made This Session (uncommitted)
+
+1. `web/workbench.html:37` — Added `<button id="btnNewXp">` next to Export XP
+2. `web/workbench.js` — Added `newXp()` function, wired button, enable after template apply
+3. `web/rexpaint-editor/cp437-font.js:130-178` — Replaced per-call canvas alloc with shared `_blendCanvas`
+4. `web/rexpaint-editor/canvas.js` — Added dirty-cell tracking, `_fullRenderNeeded`, incremental render
+5. `web/whole-sheet-init.js` — Layer ops set `_fullRenderNeeded` before render
+6. `scripts/xp_fidelity_test/run_bundle_fidelity_test.mjs:34,769` — Added `--hold` flag
+
+### Verification (2026-03-19, headless Playwright, viewport 1280×2400)
+
+All tests run after CSS coordinate scaling fix applied:
+
+| Test | Result | Evidence |
+|------|--------|----------|
+| Hover readout | PASS | topLeft=`1,0`, center=`63,39` — correct cell mapping |
+| Cell draw (glyph 65 at 10,5) | PASS | Drawn cell=`[255,255,255]`, blank=`[0,0,0]`, different=true |
+| Layer +/- | PASS | 4 → 5 → 4 |
+| Rect tool outline (20,10→25,14) | PASS | 5/5 edge cells white, interior+outside black |
+
+**CORRECTION**: The coordinate scaling fix is a **no-op** in the current layout.
+The canvas renders at full backing-store size (1512×960) inside a scrollable wrapper (869×487).
+CSS size equals backing-store size (scale=1:1), so `pixelToCellCoords` was already correct.
+
+The fix is defensive (handles future CSS-scaled layouts) but does NOT explain the user's
+original symptoms. The verified passing tests above ran at scale=1:1, proving the interactions
+work but NOT proving the scaling fix was the reason.
+
+Actual confirmed fix: `cp437-font.js` drawGlyph reusable `_blendCanvas` (perf).
+Actual confirmed fix: `canvas.js` dirty-cell tracking for incremental render (perf).
+Remaining unexplained: what caused "clicking grid does nothing" and "blank glyph picker"
+in the user's browser session. Possible: stale cache, browser-specific rendering, or
+a transient state during initial page load before mount() completed.

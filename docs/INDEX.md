@@ -61,6 +61,10 @@ If a lower-priority doc conflicts with a higher-priority source or with current 
 
 ## Active High-Signal Docs
 
+- `docs/2026-03-18-CLAUDE-HANDOFF-BUNDLE-RUNTIME-STRICT.md`
+  - strict fresh-session handoff for the remaining bundle runtime blocker; includes explicit anti-drift rules after recent Claude misclassification, subagent over-trust, and incorrect glyph/layout claims
+- `docs/2026-03-18-CLAUDE-HANDOFF-BUNDLE-RUNTIME-AND-WHOLE-SHEET-VISIBILITY.md`
+  - softer context handoff retained for continuity; superseded as the primary resume doc by the strict 2026-03-18 handoff above
 - `docs/2026-03-17-CLAUDE-HANDOFF-WHOLE-SHEET-STROKE-PATH.md`
   - latest resume point for the whole-sheet stroke-end perf fix, current open risks, and next blocker ordering
 - `docs/XP_EDITOR_ACCEPTANCE_CONTRACT.md`

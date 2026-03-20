@@ -1,7 +1,7 @@
 """
 Generate a repaint recipe from a truth table.
 
-Supports two modes:
+Supports three modes:
 
   --mode diagnostic   (default) Inspector-centric frame-by-frame recipe.
                       Uses legacy inspector selectors (#cellInspectorPanel,
@@ -12,6 +12,11 @@ Supports two modes:
                       editor controls (#wholeSheetCanvas, #wsGlyphCode,
                       #wsFgColor, etc.).  Only this mode produces
                       acceptance-eligible recipes.
+
+  --mode manual_review Whole-sheet recipe for headed visual QA. Paints one
+                      obvious synthetic marker per non-empty frame on Layer 2
+                      so gameplay review can confirm each animation/frame is
+                      present. Diagnostic only; not fidelity evidence.
 
 Both modes derive frame geometry from the truth table metadata parsed from
 Layer 0. Neither mode flattens geometry.
@@ -42,6 +47,9 @@ POST_CLEAR_CELL = (0, [0, 0, 0], [255, 0, 255])
 ACTION_CAP = 400
 PROOF_CELLS_TRIVIAL = 200
 MIN_VIABLE_SUBREGION_CELLS = 100
+MANUAL_REVIEW_GLYPH = ord("T")
+MANUAL_REVIEW_FG = [0, 0, 0]
+MANUAL_REVIEW_BG = [255, 255, 0]
 
 # ── Selector sets per mode ──
 
@@ -397,6 +405,111 @@ def _select_top_left_subregion(
     return best
 
 
+def _pick_manual_review_marker(
+    frame_cells: list[tuple[int, int, dict]],
+) -> tuple[int, int] | None:
+    """Choose a stable torso-ish marker cell for one frame.
+
+    We bias the target toward the horizontal center and upper-middle of the
+    occupied bbox so the marker lands around the character's shirt/chest rather
+    than at the feet or extreme outline. The chosen point must be an existing
+    non-clear cell so the marker stays on-sprite.
+    """
+    if not frame_cells:
+        return None
+    xs = [local_x for local_x, _local_y, _cell in frame_cells]
+    ys = [local_y for _local_x, local_y, _cell in frame_cells]
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
+    target_x = (min_x + max_x) / 2.0
+    target_y = min_y + ((max_y - min_y) * 0.42)
+    best = min(
+        frame_cells,
+        key=lambda entry: (
+            abs(entry[1] - target_y) * 2.0 + abs(entry[0] - target_x),
+            abs(entry[1] - target_y),
+            abs(entry[0] - target_x),
+            entry[1],
+            entry[0],
+        ),
+    )
+    return int(best[0]), int(best[1])
+
+
+def _build_manual_review_actions(
+    layer2_cells: list[dict],
+    width: int,
+    height: int,
+    frame_w: int,
+    frame_h: int,
+    frame_rows: int,
+    frame_cols: int,
+) -> tuple[list[dict], dict, list[dict]]:
+    """Build a full-sheet manual-review recipe using one visible marker per frame."""
+    actions: list[dict] = [
+        {"action": "wait_visible", "selector": "#sessionOut", "timeout_ms": 5000},
+        {"action": "wait_visible", "selector": "#wholeSheetCanvas", "timeout_ms": 10000},
+        {"action": "ws_ensure_apply", "channel": "glyph", "selector": "#wsApplyGlyph", "state": True},
+        {"action": "ws_ensure_apply", "channel": "fg",    "selector": "#wsApplyFg",    "state": True},
+        {"action": "ws_ensure_apply", "channel": "bg",    "selector": "#wsApplyBg",    "state": True},
+        {
+            "action": "ws_set_draw_state",
+            "glyph": MANUAL_REVIEW_GLYPH,
+            "fg": rgb_to_hex(MANUAL_REVIEW_FG),
+            "bg": rgb_to_hex(MANUAL_REVIEW_BG),
+            "glyph_selector": "#wsGlyphCode",
+            "fg_selector":    "#wsFgColor",
+            "bg_selector":    "#wsBgColor",
+        },
+    ]
+    frames = _group_frame_cells(layer2_cells, frame_w, frame_h)
+    marker_cells: list[dict] = []
+    for frame_row in range(frame_rows):
+        for frame_col in range(frame_cols):
+            frame_cells = [
+                (local_x, local_y, cell)
+                for local_x, local_y, cell in frames.get((frame_row, frame_col), [])
+                if not _is_clear_cell(cell)
+            ]
+            marker = _pick_manual_review_marker(frame_cells)
+            if marker is None:
+                continue
+            local_x, local_y = marker
+            global_x = frame_col * frame_w + local_x
+            global_y = frame_row * frame_h + local_y
+            marker_cells.append({
+                "frame_row": frame_row,
+                "frame_col": frame_col,
+                "local_x": local_x,
+                "local_y": local_y,
+                "x": global_x,
+                "y": global_y,
+            })
+            actions.append({
+                "action": "ws_paint_cell",
+                "selector": "#wholeSheetCanvas",
+                "x": global_x,
+                "y": global_y,
+                "cell_size": WS_CELL_SIZE,
+            })
+
+    paint_cells = sum(1 for a in actions if a["action"] == "ws_paint_cell")
+    draw_lines = sum(1 for a in actions if a["action"] == "ws_draw_line")
+    draw_rects = sum(1 for a in actions if a["action"] == "ws_draw_rect")
+    flood_fills = sum(1 for a in actions if a["action"] == "ws_flood_fill")
+
+    return actions, {
+        "proof_cells": width * height,
+        "non_clear_proof_cells": len(marker_cells),
+        "paint_cells": paint_cells,
+        "draw_lines": draw_lines,
+        "draw_rects": draw_rects,
+        "flood_fills": flood_fills,
+        "erase_drags": 0,
+        "actions": len(actions),
+    }, marker_cells
+
+
 # ── Diagnostic mode (inspector-centric) ──
 
 
@@ -584,6 +697,66 @@ def _generate_acceptance_recipe(truth_table: dict, meta: dict) -> dict:
     }
 
 
+def _generate_manual_review_recipe(truth_table: dict, meta: dict) -> dict:
+    """Whole-sheet manual-review recipe for full-sheet visual QA."""
+    layer2 = next((l for l in truth_table["layers"] if int(l["index"]) == 2), None)
+    if layer2 is None:
+        return {"ok": False, "error": "Layer 2 not found"}
+
+    width = int(truth_table["width"])
+    height = int(truth_table["height"])
+    frame_w = int(meta["frame_w"])
+    frame_h = int(meta["frame_h"])
+    frame_rows = int(meta.get("frame_rows", 1))
+    frame_cols = int(meta.get("frame_cols", 1))
+    actions, stats, marker_cells = _build_manual_review_actions(
+        layer2["cells"],
+        width,
+        height,
+        frame_w,
+        frame_h,
+        frame_rows,
+        frame_cols,
+    )
+
+    return {
+        "ok": True,
+        "mode": "manual_review",
+        "source": truth_table["source"],
+        "required_selectors": ACCEPTANCE_SELECTORS,
+        "geometry": {
+            "angles":     int(meta["angles"]),
+            "anims":      list(meta["anims"]),
+            "projs":      int(meta["projs"]),
+            "frame_rows": frame_rows,
+            "frame_cols": frame_cols,
+            "frame_w":    frame_w,
+            "frame_h":    frame_h,
+        },
+        "editable_layer": 2,
+        "preserved_only_layers": [l["index"] for l in truth_table["layers"] if int(l["index"]) != 2],
+        "manual_review": {
+            "brush": {
+                "glyph": MANUAL_REVIEW_GLYPH,
+                "glyph_char": "T",
+                "fg": MANUAL_REVIEW_FG,
+                "bg": MANUAL_REVIEW_BG,
+            },
+            "coverage": "one_marker_per_non_empty_frame",
+            "marker_strategy": "nearest_occupied_cell_to_bbox_center_upper_mid",
+            "marker_count": len(marker_cells),
+            "markers": marker_cells,
+            "canvas_w": width,
+            "canvas_h": height,
+        },
+        "actions": actions,
+        "stats": {
+            **stats,
+            "action_cap": None,
+        },
+    }
+
+
 # ── Public entry point ──
 
 
@@ -602,17 +775,19 @@ def generate_recipe(truth_table: dict, *, mode: str = "diagnostic") -> dict:
 
     if mode == "acceptance":
         return _generate_acceptance_recipe(truth_table, meta)
+    elif mode == "manual_review":
+        return _generate_manual_review_recipe(truth_table, meta)
     elif mode == "diagnostic":
         return _generate_diagnostic_recipe(truth_table, meta)
     else:
-        return {"ok": False, "error": f"Unknown mode: {mode!r}. Use 'acceptance' or 'diagnostic'."}
+        return {"ok": False, "error": f"Unknown mode: {mode!r}. Use 'acceptance', 'manual_review', or 'diagnostic'."}
 
 
 def main() -> None:
     args = sys.argv[1:]
     if "--truth-table" not in args:
         print(
-            "Usage: python3 recipe_generator.py --truth-table <json> [--output <json>] [--mode acceptance|diagnostic]",
+            "Usage: python3 recipe_generator.py --truth-table <json> [--output <json>] [--mode acceptance|manual_review|diagnostic]",
             file=sys.stderr,
         )
         raise SystemExit(1)
@@ -628,7 +803,7 @@ def main() -> None:
         out.write_text(json.dumps(recipe, indent=2), encoding="utf-8")
     if recipe.get("ok"):
         stats = recipe["stats"]
-        if mode == "acceptance":
+        if mode in ("acceptance", "manual_review"):
             print(
                 f"Recipe [{mode}]: proof_cells={stats['proof_cells']}"
                 f" erase_drags={stats['erase_drags']}"

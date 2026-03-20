@@ -1,5 +1,5 @@
 /**
- * Bundle authoring acceptance test runner.
+ * Bundle authoring runner.
  *
  * Part of the canonical XP fidelity verifier family (scripts/xp_fidelity_test/).
  *
@@ -8,10 +8,10 @@
  *   1. Apply player_native_full template (creates blank sessions)
  *   2. For each action (idle, attack, death):
  *      - Switch to action tab
- *      - Execute acceptance recipe (whole-sheet painting)
+ *      - Execute whole-sheet recipe
  *      - Export and verify structure + L2 cell fidelity
  *   3. Test full bundle in Skin Dock
- *   4. Generate bundle-level acceptance report
+ *   4. Generate bundle-level report
  *
  * Invoked by run_bundle.sh after truth tables and recipes are generated.
  */
@@ -57,9 +57,9 @@ if (!outDir) {
   process.exit(1);
 }
 
-// ── Acceptance action whitelist ──
+// ── Whole-sheet action whitelist ──
 
-const ACCEPTANCE_ACTIONS = new Set([
+const ALLOWED_ACTIONS = new Set([
   'wait_visible', 'ws_tool_activate', 'ws_ensure_apply', 'ws_set_draw_state',
   'ws_paint_cell', 'ws_eyedropper_sample', 'ws_erase_cell', 'ws_erase_drag',
   'ws_flood_fill', 'ws_draw_rect', 'ws_draw_line',
@@ -144,12 +144,22 @@ async function dragOnCanvas(page, selector, x1, y1, x2, y2, cellSize) {
   await page.mouse.up();
 }
 
+async function clickCanvasCell(page, selector, x, y, cellSize) {
+  await scrollToCell(page, x * cellSize, y * cellSize, cellSize);
+  const canvasBox = await page.locator(selector).boundingBox();
+  if (!canvasBox) throw new Error(`clickCanvasCell: element not found: ${selector}`);
+  const vpX = canvasBox.x + x * cellSize + cellSize / 2;
+  const vpY = canvasBox.y + y * cellSize + cellSize / 2;
+  await page.mouse.move(vpX, vpY);
+  await page.mouse.click(vpX, vpY);
+}
+
 // ── Recipe executor ──
 
 async function executeRecipe(page, actionKey, recipe) {
   for (const action of recipe.actions || []) {
-    if (!ACCEPTANCE_ACTIONS.has(action.action)) {
-      fail(actionKey, 'mode_violation', `Acceptance mode refused action: ${action.action}`);
+    if (!ALLOWED_ACTIONS.has(action.action)) {
+      fail(actionKey, 'mode_violation', `Whole-sheet mode refused action: ${action.action}`);
       return false;
     }
 
@@ -180,19 +190,13 @@ async function executeRecipe(page, actionKey, recipe) {
 
       case 'ws_paint_cell': {
         const cs = action.cell_size;
-        await scrollToCell(page, action.x * cs, action.y * cs, cs);
-        const px = Math.floor(action.x * cs + cs / 2);
-        const py = Math.floor(action.y * cs + cs / 2);
-        await page.click(action.selector, { position: { x: px, y: py } });
+        await clickCanvasCell(page, action.selector, action.x, action.y, cs);
         break;
       }
 
       case 'ws_eyedropper_sample': {
         const cs2 = action.cell_size;
-        await scrollToCell(page, action.x * cs2, action.y * cs2, cs2);
-        const spx = Math.floor(action.x * cs2 + cs2 / 2);
-        const spy = Math.floor(action.y * cs2 + cs2 / 2);
-        await page.click(action.selector, { position: { x: spx, y: spy } });
+        await clickCanvasCell(page, action.selector, action.x, action.y, cs2);
         // NOTE: In blank authoring, L2 starts transparent. Pre-paint eyedropper
         // verification will sample transparent cells, not reference content.
         // Eyedropper mismatches before painting are expected and non-fatal.
@@ -202,10 +206,7 @@ async function executeRecipe(page, actionKey, recipe) {
 
       case 'ws_erase_cell': {
         const cs3 = action.cell_size;
-        await scrollToCell(page, action.x * cs3, action.y * cs3, cs3);
-        const epx = Math.floor(action.x * cs3 + cs3 / 2);
-        const epy = Math.floor(action.y * cs3 + cs3 / 2);
-        await page.click(action.selector, { position: { x: epx, y: epy } });
+        await clickCanvasCell(page, action.selector, action.x, action.y, cs3);
         break;
       }
 
@@ -215,10 +216,7 @@ async function executeRecipe(page, actionKey, recipe) {
 
       case 'ws_flood_fill': {
         const csff = action.cell_size;
-        await scrollToCell(page, action.x * csff, action.y * csff, csff);
-        const pxff = Math.floor(action.x * csff + csff / 2);
-        const pyff = Math.floor(action.y * csff + csff / 2);
-        await page.click(action.selector, { position: { x: pxff, y: pyff } });
+        await clickCanvasCell(page, action.selector, action.x, action.y, csff);
         break;
       }
 
@@ -468,10 +466,11 @@ async function main() {
       const { truthTable, recipe } = actionInputs[actionKey];
       const actionReport = report.actions[actionKey];
       const recipeMode = recipe.mode || 'diagnostic';
-      if (recipeMode !== 'acceptance') {
-        fail(actionKey, 'mode_violation', `Recipe for ${actionKey} is not acceptance mode (got ${recipeMode})`);
+      if (recipeMode !== 'acceptance' && recipeMode !== 'manual_review') {
+        fail(actionKey, 'mode_violation', `Recipe for ${actionKey} is not a supported whole-sheet mode (got ${recipeMode})`);
         continue;
       }
+      report.mode = recipeMode;
 
       console.error(`[3:${actionKey}] Switching to action tab...`);
 
@@ -551,9 +550,9 @@ async function main() {
         fail(actionKey, 'layers', `Layer count: expected ${expectedLayers}, got ${summary.session.layer_count}`);
       }
 
-      // Execute acceptance recipe
+      // Execute whole-sheet recipe
       if (actionReport.geometry_pass) {
-        console.error(`[3:${actionKey}] Executing acceptance recipe (${(recipe.actions || []).length} actions)...`);
+        console.error(`[3:${actionKey}] Executing ${recipeMode} recipe (${(recipe.actions || []).length} actions)...`);
         actionReport.execute_pass = await executeRecipe(page, actionKey, recipe);
       } else {
         console.error(`[3:${actionKey}] Skipping recipe execution (geometry failed)`);
@@ -610,23 +609,33 @@ async function main() {
           actionReport.export_pass = false;
         }
 
-        // L2 cell fidelity in proof region
+        // L2 cell fidelity in proof region (acceptance mode only).
+        // manual_review intentionally paints a synthetic test brush, so exact
+        // source-XP cell fidelity is not meaningful there.
         const proofRegion = recipe.proof_region;
-        if (proofRegion && proofRegion.w > 0 && proofRegion.h > 0) {
-          const comparison = compareProofRegion(truthTable, exportedTruth, proofRegion);
-          actionReport.proof_region_compare = {
-            ok: comparison.ok,
-            mismatch_count: comparison.mismatches.length,
-            mismatches: comparison.mismatches.slice(0, 10),
-            proof_region: proofRegion,
-          };
-          actionReport.cell_fidelity_pass = comparison.ok;
-          if (!comparison.ok) {
-            fail(actionKey, 'cell_fidelity', `L2 proof region has ${comparison.mismatches.length} cell mismatches`);
+        if (recipeMode === 'acceptance') {
+          if (proofRegion && proofRegion.w > 0 && proofRegion.h > 0) {
+            const comparison = compareProofRegion(truthTable, exportedTruth, proofRegion);
+            actionReport.proof_region_compare = {
+              ok: comparison.ok,
+              mismatch_count: comparison.mismatches.length,
+              mismatches: comparison.mismatches.slice(0, 10),
+              proof_region: proofRegion,
+            };
+            actionReport.cell_fidelity_pass = comparison.ok;
+            if (!comparison.ok) {
+              fail(actionKey, 'cell_fidelity', `L2 proof region has ${comparison.mismatches.length} cell mismatches`);
+            }
+          } else {
+            fail(actionKey, 'cell_fidelity', 'Recipe has no proof_region — cannot verify cell fidelity');
           }
         } else {
-          // No proof region in recipe — cannot verify cell fidelity
-          fail(actionKey, 'cell_fidelity', 'Recipe has no proof_region — cannot verify cell fidelity');
+          actionReport.proof_region_compare = {
+            ok: true,
+            skipped: 'manual_review_mode',
+            manual_review: recipe.manual_review || null,
+          };
+          actionReport.cell_fidelity_pass = true;
         }
 
         // All layers pass: verify exported has expected layer count and L0/L1/L3 exist
@@ -715,7 +724,21 @@ async function main() {
     if (!frameHandle) {
       fail(null, 'skin_dock', 'Flat iframe frame handle not found');
     } else {
+      // Wait for WASM to finish loading (font load + AsciickerInit + ShowLoginOverlay).
+      // This can take 30-60s in headless mode with slow font loading.
+      for (let i = 0; i < 120; i++) {
+        frameHandle = getFrameHandle() || frameHandle;
+        const wasmProbe = await captureFrameProbe(frameHandle, `wasm_wait_${i}`);
+        if (wasmProbe.error && /detach/i.test(wasmProbe.error)) {
+          await page.waitForTimeout(1000);
+          continue;
+        }
+        if (wasmProbe.wasmReady) break;
+        await page.waitForTimeout(1000);
+      }
+
       // Handle play button / overlay — re-acquire frame on detachment
+      frameHandle = getFrameHandle() || frameHandle;
       let probe = await captureFrameProbe(frameHandle, 'initial');
       if (probe.error && /detach/i.test(probe.error)) {
         await page.waitForTimeout(2000);
@@ -795,7 +818,8 @@ async function main() {
     fs.writeFileSync(resultPath, JSON.stringify(report, null, 2));
 
     const passStr = report.overall_pass ? 'PASS' : 'FAIL';
-    console.error(`\n[BUNDLE ACCEPTANCE] ${passStr}`);
+    const banner = report.mode === 'manual_review' ? 'BUNDLE MANUAL REVIEW' : 'BUNDLE ACCEPTANCE';
+    console.error(`\n[${banner}] ${passStr}`);
     console.error(`  idle=${report.idle_pass} attack=${report.attack_pass} death=${report.death_pass} skin_dock=${report.skin_dock_pass}`);
     console.error(`  failures: ${failures.length}`);
     console.error(`  report: ${resultPath}`);

@@ -466,7 +466,7 @@ async function main() {
       const { truthTable, recipe } = actionInputs[actionKey];
       const actionReport = report.actions[actionKey];
       const recipeMode = recipe.mode || 'diagnostic';
-      if (recipeMode !== 'acceptance' && recipeMode !== 'manual_review') {
+      if (recipeMode !== 'acceptance' && recipeMode !== 'full_recreation' && recipeMode !== 'manual_review') {
         fail(actionKey, 'mode_violation', `Recipe for ${actionKey} is not a supported whole-sheet mode (got ${recipeMode})`);
         continue;
       }
@@ -609,11 +609,11 @@ async function main() {
           actionReport.export_pass = false;
         }
 
-        // L2 cell fidelity in proof region (acceptance mode only).
+        // L2 cell fidelity in proof region (acceptance and full_recreation modes).
         // manual_review intentionally paints a synthetic test brush, so exact
         // source-XP cell fidelity is not meaningful there.
         const proofRegion = recipe.proof_region;
-        if (recipeMode === 'acceptance') {
+        if (recipeMode === 'acceptance' || recipeMode === 'full_recreation') {
           if (proofRegion && proofRegion.w > 0 && proofRegion.h > 0) {
             const comparison = compareProofRegion(truthTable, exportedTruth, proofRegion);
             actionReport.proof_region_compare = {
@@ -818,7 +818,8 @@ async function main() {
     fs.writeFileSync(resultPath, JSON.stringify(report, null, 2));
 
     const passStr = report.overall_pass ? 'PASS' : 'FAIL';
-    const banner = report.mode === 'manual_review' ? 'BUNDLE MANUAL REVIEW' : 'BUNDLE ACCEPTANCE';
+    const bannerMap = { manual_review: 'BUNDLE MANUAL REVIEW', full_recreation: 'BUNDLE FULL RECREATION' };
+    const banner = bannerMap[report.mode] || 'BUNDLE ACCEPTANCE';
     console.error(`\n[${banner}] ${passStr}`);
     console.error(`  idle=${report.idle_pass} attack=${report.attack_pass} death=${report.death_pass} skin_dock=${report.skin_dock_pass}`);
     console.error(`  failures: ${failures.length}`);

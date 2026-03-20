@@ -1,7 +1,7 @@
 """
 Generate a repaint recipe from a truth table.
 
-Supports three modes:
+Supports four modes:
 
   --mode diagnostic   (default) Inspector-centric frame-by-frame recipe.
                       Uses legacy inspector selectors (#cellInspectorPanel,
@@ -10,16 +10,22 @@ Supports three modes:
 
   --mode acceptance   Whole-sheet recipe using user-reachable whole-sheet
                       editor controls (#wholeSheetCanvas, #wsGlyphCode,
-                      #wsFgColor, etc.).  Only this mode produces
-                      acceptance-eligible recipes.
+                      #wsFgColor, etc.).  Only covers a proof region of
+                      frame 0, subject to the acceptance action cap.
+
+  --mode full_recreation  Whole-sheet recipe that erases and repaints ALL
+                      Layer 2 cells across the full sheet with real source
+                      content (actual glyphs and colors).  No action cap.
+                      This is the strongest fidelity proof and the required
+                      mode for final signoff.
 
   --mode manual_review Whole-sheet recipe for headed visual QA. Paints one
                       obvious synthetic marker per non-empty frame on Layer 2
                       so gameplay review can confirm each animation/frame is
                       present. Diagnostic only; not fidelity evidence.
 
-Both modes derive frame geometry from the truth table metadata parsed from
-Layer 0. Neither mode flattens geometry.
+All modes derive frame geometry from the truth table metadata parsed from
+Layer 0. No mode flattens geometry.
 
 Acceptance mode strategy (area-based repaint with action budget):
   - Start from frame 0 as the proof region.
@@ -697,6 +703,74 @@ def _generate_acceptance_recipe(truth_table: dict, meta: dict) -> dict:
     }
 
 
+def _generate_full_recreation_recipe(truth_table: dict, meta: dict) -> dict:
+    """Whole-sheet full-recreation recipe using real source content across all frames.
+
+    Unlike acceptance mode (which recreates only a proof region of frame 0),
+    this mode erases and repaints ALL Layer 2 cells across the entire sheet
+    with their actual source glyphs and colors.  No action cap.  No synthetic
+    markers.  This is the strongest possible fidelity proof and the required
+    mode for final signoff.
+    """
+    layer2 = next((l for l in truth_table["layers"] if int(l["index"]) == 2), None)
+    if layer2 is None:
+        return {"ok": False, "error": "Layer 2 not found"}
+
+    width = int(truth_table["width"])
+    height = int(truth_table["height"])
+    frame_w = int(meta["frame_w"])
+    frame_h = int(meta["frame_h"])
+    frame_rows = int(meta.get("frame_rows", 1))
+    frame_cols = int(meta.get("frame_cols", 1))
+
+    # Use ALL L2 cells across the full sheet — no sub-region, no action cap
+    actions, stats = _build_acceptance_actions(layer2["cells"], width, height)
+
+    return {
+        "ok": True,
+        "mode": "full_recreation",
+        "source": truth_table["source"],
+        "required_selectors": ACCEPTANCE_SELECTORS,
+        "geometry": {
+            "angles":     int(meta["angles"]),
+            "anims":      list(meta["anims"]),
+            "projs":      int(meta["projs"]),
+            "frame_rows": frame_rows,
+            "frame_cols": frame_cols,
+            "frame_w":    frame_w,
+            "frame_h":    frame_h,
+        },
+        "editable_layer": 2,
+        "preserved_only_layers": [l["index"] for l in truth_table["layers"] if int(l["index"]) != 2],
+        "proof_region": {
+            "strategy": "full_sheet",
+            "from_frame": "all",
+            "x": 0,
+            "y": 0,
+            "w": width,
+            "h": height,
+            "cells_total": width * height,
+            "full_frame_cells": len(layer2["cells"]),
+            "non_clear_cells": stats["non_clear_proof_cells"],
+            "coverage_pct": 100.0,
+            "action_cap": None,
+        },
+        "tool_exercise": {
+            "tools_exercised": ["cell", "eyedropper", "erase", "line", "rect", "fill"],
+            "ws_erase_drag":  stats["erase_drags"],
+            "ws_draw_line":   stats["draw_lines"],
+            "ws_draw_rect":   stats["draw_rects"],
+            "ws_flood_fill":  stats["flood_fills"],
+            "ws_paint_cell":  stats["paint_cells"],
+        },
+        "actions": actions,
+        "stats": {
+            **stats,
+            "action_cap": None,
+        },
+    }
+
+
 def _generate_manual_review_recipe(truth_table: dict, meta: dict) -> dict:
     """Whole-sheet manual-review recipe for full-sheet visual QA."""
     layer2 = next((l for l in truth_table["layers"] if int(l["index"]) == 2), None)
@@ -775,19 +849,21 @@ def generate_recipe(truth_table: dict, *, mode: str = "diagnostic") -> dict:
 
     if mode == "acceptance":
         return _generate_acceptance_recipe(truth_table, meta)
+    elif mode == "full_recreation":
+        return _generate_full_recreation_recipe(truth_table, meta)
     elif mode == "manual_review":
         return _generate_manual_review_recipe(truth_table, meta)
     elif mode == "diagnostic":
         return _generate_diagnostic_recipe(truth_table, meta)
     else:
-        return {"ok": False, "error": f"Unknown mode: {mode!r}. Use 'acceptance', 'manual_review', or 'diagnostic'."}
+        return {"ok": False, "error": f"Unknown mode: {mode!r}. Use 'acceptance', 'full_recreation', 'manual_review', or 'diagnostic'."}
 
 
 def main() -> None:
     args = sys.argv[1:]
     if "--truth-table" not in args:
         print(
-            "Usage: python3 recipe_generator.py --truth-table <json> [--output <json>] [--mode acceptance|manual_review|diagnostic]",
+            "Usage: python3 recipe_generator.py --truth-table <json> [--output <json>] [--mode acceptance|full_recreation|manual_review|diagnostic]",
             file=sys.stderr,
         )
         raise SystemExit(1)
@@ -803,7 +879,7 @@ def main() -> None:
         out.write_text(json.dumps(recipe, indent=2), encoding="utf-8")
     if recipe.get("ok"):
         stats = recipe["stats"]
-        if mode in ("acceptance", "manual_review"):
+        if mode in ("acceptance", "full_recreation", "manual_review"):
             print(
                 f"Recipe [{mode}]: proof_cells={stats['proof_cells']}"
                 f" erase_drags={stats['erase_drags']}"

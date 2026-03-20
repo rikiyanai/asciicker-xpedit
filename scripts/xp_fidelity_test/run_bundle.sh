@@ -43,12 +43,16 @@ for action_info in "idle:${IDLE_XP}" "attack:${ATTACK_XP}" "death:${DEATH_XP}"; 
 done
 
 echo "=== Running bundle fidelity test ==="
-node scripts/xp_fidelity_test/run_bundle_fidelity_test.mjs \
-  --idle-truth "${OUT_DIR}/idle-truth-table.json" \
-  --idle-recipe "${OUT_DIR}/idle-recipe.json" \
-  --attack-truth "${OUT_DIR}/attack-truth-table.json" \
-  --attack-recipe "${OUT_DIR}/attack-recipe.json" \
-  --death-truth "${OUT_DIR}/death-truth-table.json" \
-  --death-recipe "${OUT_DIR}/death-recipe.json" \
-  --out-dir "${OUT_DIR}" \
-  "${REMAINING_ARGS[@]}"
+runner_args=(
+  --idle-truth "${OUT_DIR}/idle-truth-table.json"
+  --idle-recipe "${OUT_DIR}/idle-recipe.json"
+  --attack-truth "${OUT_DIR}/attack-truth-table.json"
+  --attack-recipe "${OUT_DIR}/attack-recipe.json"
+  --death-truth "${OUT_DIR}/death-truth-table.json"
+  --death-recipe "${OUT_DIR}/death-recipe.json"
+  --out-dir "${OUT_DIR}"
+)
+if ((${#REMAINING_ARGS[@]})); then
+  runner_args+=("${REMAINING_ARGS[@]}")
+fi
+node scripts/xp_fidelity_test/run_bundle_fidelity_test.mjs "${runner_args[@]}"

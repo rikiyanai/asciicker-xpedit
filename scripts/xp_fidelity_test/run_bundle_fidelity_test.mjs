@@ -31,6 +31,7 @@ function getArg(name, fallback = null) {
 }
 
 const headed = argv.includes('--headed');
+const holdOpen = argv.includes('--hold');
 const url = getArg('--url', 'http://127.0.0.1:5071/workbench');
 const outDir = getArg('--out-dir');
 
@@ -762,6 +763,10 @@ async function main() {
     console.error(`  failures: ${failures.length}`);
     console.error(`  report: ${resultPath}`);
 
+    if (holdOpen) {
+      console.error('\n[HOLD] Browser held open. Press Enter to close...');
+      await new Promise(r => process.stdin.once('data', r));
+    }
     await browser.close();
   }
   process.exit(report.overall_pass ? 0 : 1);

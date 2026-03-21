@@ -10,10 +10,10 @@ Canonical doc hub for agents working in `/Users/r/Downloads/asciicker-pipeline-v
 
 ## Current Branch Truth
 
-- Audit date: 2026-03-20
+- Audit date: 2026-03-21
 - Audited worktree: `/Users/r/Downloads/asciicker-pipeline-v2`
 - Audited branch: `master`
-- Audited HEAD: `1c21ee7`
+- Audited HEAD: `ba0284c`
 - Current branch role: active XP-editor Phase 4 acceptance line
 - **Self-containment**: This repo must be 100% self-contained. No runtime, test, or build-time dependency on external folders (e.g. `/Users/r/Downloads/asciicker-Y9-2`, `/Users/r/Downloads/n`). Run `python3 scripts/self_containment_audit.py` at startup.
 
@@ -44,6 +44,7 @@ If a lower-priority doc conflicts with a higher-priority source or with current 
 - Milestone 1 does **not** mean full existing-XP load/edit/export parity is complete.
 - A canonical XP verifier family now exists in `scripts/xp_fidelity_test/`, including bundle workflow runners. Do not reuse the deleted blank-flow single-frame harness as evidence.
 - Do not start broader REXPaint UX/UI redesign as if full parity is already proven. The current work is Phase 4 acceptance, responsiveness, and repeatability on the bundle-native line.
+- If Milestone 1 closes, the next milestone is **Milestone 2: practical PNG ingest and manual assembly**, not "perfect automatic slicing."
 
 ## First Reads By Task
 
@@ -86,6 +87,8 @@ If a lower-priority doc conflicts with a higher-priority source or with current 
   - canonical code-backed XP data contract: binary format, layer roles, frame layout, geometry derivation, confirmed contradictions, and unknowns
 - `docs/plans/2026-03-15-xp-editor-hard-fail-plan.md`
   - active hard-fail plan replacing the deleted single-frame harness plan
+- `docs/plans/2026-03-21-milestone-2-practical-png-ingest-plan.md`
+  - next-step roadmap after Milestone 1: preserve the arbitrary-PNG structural baseline, center PNG workflows on source-panel/manual assembly, promote whole-sheet correction, and add human-verified semantic dictionaries
 - `docs/2026-03-13-CLAUDE-HANDOFF-EDITOR-DOC-ALIGNMENT.md`
   - current Claude resume point for doc alignment and editor-status truth
 - `docs/research/ascii/2026-03-13-claim-verification.md`
@@ -129,7 +132,9 @@ metadata, layer, visual, export, and Skin Dock/runtime mismatches.
 ## Bundle & Animation Research
 
 - `docs/research/ascii/2026-03-20-bundle-animation-types.md`
-  - complete map of all 5 player sprite families (player, attack, plydie, wolfie, wolack), AHSW equipment encoding, W=2 ternary gap, gameplay trigger states, and recommended bundle template expansion priorities
+  - complete map of all 5 player sprite families (player, attack, plydie, wolfie, wolack), AHSW equipment encoding, current bundle-template coverage, gameplay trigger states, and remaining expansion priorities; note the browser debug override lists still lag the server-side ternary W generation
+- `docs/research/ascii/2026-03-21-player-sprite-semantic-dictionary-seed.md`
+  - seed semantic dictionary for `player-0100.xp` L2 with verified glyph inventory, face/shirt/pants/boots region labels, palette-role mapping, and a proposed machine-readable schema for future agent-driven sprite edits
 
 ## Local / Untracked Research (not committed)
 

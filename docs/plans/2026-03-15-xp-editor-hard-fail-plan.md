@@ -256,6 +256,11 @@ Recent high-signal commits on `master`:
 
 ### What remains beyond Milestone 1
 
+- Milestone 2 practical PNG ingest and manual assembly
+  - preserve the arbitrary-PNG structural bundle baseline
+  - make source-panel bbox extraction and source-to-grid assembly practical
+  - make whole-sheet editing the primary correction surface
+  - add human-verified semantic dictionaries for canonical sprite families
 - full existing-XP load/edit/export parity
 - broader parity against the complete acceptance contract
 - any generalized REXPaint-completeness claims
@@ -305,7 +310,7 @@ Update after B1 patch:
    - save-first bundle progression
 4. review responsiveness and stroke-end autosave behavior
 5. rerun for repeatability
-6. only after Milestone 1 closes, return to the broader existing-XP parity line
+6. only after Milestone 1 closes, begin Milestone 2 practical PNG-ingest work, then return to the broader existing-XP parity line
 
 ## Non-Goals
 

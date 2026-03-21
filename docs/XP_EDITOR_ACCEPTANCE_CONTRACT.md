@@ -326,8 +326,30 @@ As of 2026-03-20:
 
 ### Bundle scope beyond Milestone 1
 
-The current `player_native_full` template covers idle/attack/death (3 of 5 player
-sprite families). Mount animations (wolfie, wolack), W=2 weapon variants, and
-`player-nude` are not yet in the bundle template. See
-`docs/research/ascii/2026-03-20-bundle-animation-types.md` for the full animation
-type map and recommended expansion priorities.
+The current `player_native_full` template covers idle/attack/death (3 of the main player
+workflow families).
+
+Current repo truth:
+
+- mounted families (`wolfie`, `wolack`) are not yet in the bundle template
+- `player-nude` is not yet in the bundle template
+- current server-side bundle payload generation does emit ternary W variants for enabled
+  families, so the remaining W=2 gap is primarily in the browser debug override lists, not
+  the server-side bundle payload path
+
+See `docs/research/ascii/2026-03-20-bundle-animation-types.md` for the current family map.
+
+## Milestone 2 Direction
+
+Milestone 2 should focus on **practical PNG ingest and manual assembly**, not on claiming
+perfect automatic sprite-sheet slicing.
+
+Milestone 2 target:
+
+- preserve the arbitrary-PNG -> structurally valid bundle XP -> runtime-safe injection
+  baseline established in Milestone 1
+- make source-panel bbox extraction and source-to-grid assembly the primary PNG workflow
+- make the whole-sheet editor the primary correction surface
+- add human-verified semantic dictionaries for canonical reference sprites
+
+Milestone 2 is not a requirement that Analyze become an authoritative sprite interpreter.

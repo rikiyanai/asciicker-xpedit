@@ -169,11 +169,13 @@ async function executeRecipe(page, actionKey, recipe) {
         break;
 
       case 'ws_tool_activate':
+        await page.locator(action.selector).scrollIntoViewIfNeeded({ timeout: 10000 });
         await page.click(action.selector);
         break;
 
       case 'ws_ensure_apply': {
         const btn = page.locator(action.selector);
+        await btn.scrollIntoViewIfNeeded({ timeout: 10000 });
         const isOn = await btn.evaluate((el) => el.classList.contains('ws-toggle-on'));
         if (isOn !== action.state) await btn.click();
         break;

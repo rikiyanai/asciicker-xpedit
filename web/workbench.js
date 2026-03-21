@@ -3802,6 +3802,12 @@
 
   async function exportXp() {
     if (!state.sessionId) return;
+    // Flush any pending debounced whole-sheet-draw save so pre-export sees
+    // the latest cell state. clearTimeout prevents a redundant follow-up save.
+    if (state._wsDrawSaveTimer) {
+      clearTimeout(state._wsDrawSaveTimer);
+      state._wsDrawSaveTimer = null;
+    }
     const saveRes = await saveSessionState("pre-export", { wait_for_idle: true, timeout_ms: 15000 });
     if (!saveRes || !saveRes.ok) {
       $("exportOut").textContent = JSON.stringify({ stage: "save_before_export_failed", save: saveRes }, null, 2);
@@ -5491,7 +5497,13 @@
         renderPreviewFrame(Math.max(0, Math.min(state.angles - 1, pRow)), 0);
         updateSessionDirtyBadge();
         updateUndoRedoButtons();
-        saveSessionState("whole-sheet-draw");
+        // Debounce autosave: batch rapid strokes into a single save after 1.5s
+        // of quiet. The dirty badge updates instantly (above). Export triggers
+        // its own save with wait_for_idle, so no data loss at export time.
+        clearTimeout(state._wsDrawSaveTimer);
+        state._wsDrawSaveTimer = setTimeout(function() {
+          saveSessionState("whole-sheet-draw");
+        }, 1500);
       },
       onActiveLayerChanged: function(index) {
         state.activeLayer = index;

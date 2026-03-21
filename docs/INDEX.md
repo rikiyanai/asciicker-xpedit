@@ -46,6 +46,13 @@ If a lower-priority doc conflicts with a higher-priority source or with current 
 - Do not start broader REXPaint UX/UI redesign as if full parity is already proven. The current work is Phase 4 acceptance, responsiveness, and repeatability on the bundle-native line.
 - If Milestone 1 closes, the next milestone is **Milestone 2: practical PNG ingest and manual assembly**, not "perfect automatic slicing."
 
+## Structural Contracts
+
+- `docs/PNG_STRUCTURAL_BASELINE_CONTRACT.md`
+  - non-regression contract for the arbitrary-PNG structural ingest baseline; protects the Milestone 1 structural checkpoint (PNG → bundle apply → valid XP → editor load/export → runtime-safe injection) during Milestone 2 work
+- `docs/XP_EDITOR_ACCEPTANCE_CONTRACT.md`
+  - canonical acceptance contract for XP-editor parity
+
 ## First Reads By Task
 
 ### Any agent startup
@@ -135,6 +142,20 @@ metadata, layer, visual, export, and Skin Dock/runtime mismatches.
   - complete map of all 5 player sprite families (player, attack, plydie, wolfie, wolack), AHSW equipment encoding, current bundle-template coverage, gameplay trigger states, and remaining expansion priorities; note the browser debug override lists still lag the server-side ternary W generation
 - `docs/research/ascii/2026-03-21-player-sprite-semantic-dictionary-seed.md`
   - seed semantic dictionary for `player-0100.xp` L2 with verified glyph inventory, face/shirt/pants/boots region labels, palette-role mapping, and a proposed machine-readable schema for future agent-driven sprite edits
+- `docs/research/ascii/semantic_maps/` — machine-readable JSON semantic dictionaries
+  - `schema.json` — JSON Schema for the semantic dictionary format
+  - `player-0100.json` — fully populated player sprite semantic dictionary (frame 0 idle + frame 1 walk)
+  - `attack-0001.json` — attack sprite semantic dictionary with weapon region (frame 0)
+  - `plydie-0000.json` — death sprite semantic dictionary (frame 0)
+
+## Milestone 2 Implementation
+
+- `docs/plans/2026-03-21-milestone-2-practical-png-ingest-plan.md`
+  - strategic plan for Milestone 2: preserve structural baseline, center on manual assembly, promote whole-sheet editor
+- `docs/plans/2026-03-21-milestone-2-implementation-checklist.md`
+  - implementation-ready checklist with EXISTS/PARTIAL/MISSING status per item, file:line references, 6-wave execution order
+- `docs/PNG_STRUCTURAL_BASELINE_CONTRACT.md`
+  - non-regression contract for the PNG structural ingest path (also linked under Structural Contracts above)
 
 ## Local / Untracked Research (not committed)
 

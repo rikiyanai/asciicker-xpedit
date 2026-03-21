@@ -215,3 +215,24 @@ If the PNG pipeline is simplified toward:
 then the semantic dictionary becomes the layer that lets agents and users talk about
 "shirt", "pants", and "mouth" after the sheet exists, without requiring perfect automatic
 PNG slicing first.
+
+## Machine-readable dictionaries (2026-03-21)
+
+Machine-readable JSON semantic dictionaries now exist at:
+
+- `docs/research/ascii/semantic_maps/schema.json` — JSON Schema definition
+- `docs/research/ascii/semantic_maps/player-0100.json` — player family (frame 0 idle + frame 1 walk)
+- `docs/research/ascii/semantic_maps/attack-0001.json` — attack family with weapon region (frame 0)
+- `docs/research/ascii/semantic_maps/plydie-0000.json` — death family (frame 0)
+
+### Correction: hair is black, not yellow
+
+The seed above incorrectly assumed `#ffff55` (bright yellow) was the hair color. User
+verification confirmed: **hair is black** (`#000000`). The `#ffff55` yellow is a **sub-cell
+rendering fill color** used as background for half-block glyphs throughout the sprite — it
+appears on arm cells, pants edges, boot gaps, and head edges alike. It is not a semantic
+body part color.
+
+The machine-readable JSON files reflect this correction:
+- `hair` role → `#000000` (black)
+- `subcell_fill` role → `#ffff55` (yellow rendering fill, not recolorable as a body part)

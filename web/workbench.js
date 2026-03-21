@@ -3249,6 +3249,27 @@
     } catch (_e) {}
   }
 
+  function focusWholeSheetFrame(row, col) {
+    const wsEditor = window.__wholeSheetEditor;
+    const panel = $("wholeSheetPanel");
+    const mounted = !!(wsEditor && typeof wsEditor.panToFrame === "function" && wsEditor.getState && wsEditor.getState().mounted);
+    const visible = !!(panel && !panel.classList.contains("hidden"));
+    if (!mounted || !visible) {
+      openInspector(row, col);
+      status(`Whole-sheet editor not ready; opened legacy inspector for row=${Math.max(0, row)} col=${Math.max(0, col)}`, "warn");
+      return false;
+    }
+    if (state.inspectorOpen) closeInspector();
+    panWholeSheetToFrame(row, col);
+    status(`Focused whole-sheet editor row=${Math.max(0, row)} col=${Math.max(0, col)}`, "ok");
+    try {
+      requestAnimationFrame(() => {
+        try { panel?.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (_e) {}
+      });
+    } catch (_e) {}
+    return true;
+  }
+
   function closeInspector() {
     commitInspectorStrokeIfNeeded();
     state.inspectorOpen = false;
@@ -5439,12 +5460,11 @@
 
   function openInspectorForSelectedFrame() {
     if (state.selectedRow === null || state.selectedCols.size <= 0) {
-      status("Select a frame tile first, then click Open XP Editor", "warn");
+      status("Select a frame tile first, then focus the whole-sheet editor", "warn");
       return false;
     }
     const col = Math.min(...state.selectedCols);
-    openInspector(Number(state.selectedRow), Number(col));
-    return true;
+    return focusWholeSheetFrame(Number(state.selectedRow), Number(col));
   }
 
   function selectedPrimaryFrameCoord() {
@@ -5492,18 +5512,27 @@
       onStrokeComplete: function() {
         // Targeted refresh: skip legacy grid rebuild, source canvas, inspector,
         // metadata, and syncWholeSheetFromState (editor canvas already correct).
-        renderFrameGrid();
-        var pRow = state.selectedRow === null ? 0 : state.selectedRow;
-        renderPreviewFrame(Math.max(0, Math.min(state.angles - 1, pRow)), 0);
+        // When _suppressRender is set (verifier recipe replay), skip the
+        // expensive frame grid + preview renders that churn hundreds of DOM
+        // canvas elements per call.  A single render fires after replay ends.
+        if (!state._suppressRender) {
+          renderFrameGrid();
+          var pRow = state.selectedRow === null ? 0 : state.selectedRow;
+          renderPreviewFrame(Math.max(0, Math.min(state.angles - 1, pRow)), 0);
+        }
         updateSessionDirtyBadge();
         updateUndoRedoButtons();
         // Debounce autosave: batch rapid strokes into a single save after 1.5s
         // of quiet. The dirty badge updates instantly (above). Export triggers
         // its own save with wait_for_idle, so no data loss at export time.
-        clearTimeout(state._wsDrawSaveTimer);
-        state._wsDrawSaveTimer = setTimeout(function() {
-          saveSessionState("whole-sheet-draw");
-        }, 1500);
+        // When _suppressAutoSave is set (verifier recipe replay), skip the
+        // debounced save entirely — the runner saves at controlled checkpoints.
+        if (!state._suppressAutoSave) {
+          clearTimeout(state._wsDrawSaveTimer);
+          state._wsDrawSaveTimer = setTimeout(function() {
+            saveSessionState("whole-sheet-draw");
+          }, 1500);
+        }
       },
       onActiveLayerChanged: function(index) {
         state.activeLayer = index;
@@ -5658,8 +5687,7 @@
       status("Select a frame tile first", "warn");
       return false;
     }
-    openInspector(coord.row, coord.col);
-    return true;
+    return focusWholeSheetFrame(coord.row, coord.col);
   }
 
   function updateGridContextMenuUI() {
@@ -5848,7 +5876,7 @@
         const row = Number(header.dataset.row);
         if (Number.isFinite(row)) {
           selectWholeRow(row);
-          openInspector(row, 0);
+          focusWholeSheetFrame(row, 0);
         }
         $("gridContextMenu").classList.add("hidden");
         return;
@@ -5858,7 +5886,7 @@
       const row = Number(cell.dataset.row);
       const col = Number(cell.dataset.col);
       selectFrame(row, col, false);
-      openInspector(row, col);
+      focusWholeSheetFrame(row, col);
       $("gridContextMenu").classList.add("hidden");
     });
     panel.addEventListener("contextmenu", (e) => {
@@ -5941,7 +5969,7 @@
         const maxCol = Math.max(0, totalGridFrameCols() - 1);
         const col = Math.max(0, Math.min(maxCol, Math.floor(gx / Math.max(1, state.frameWChars))));
         selectFrame(row, col, false);
-        openInspector(row, col);
+        focusWholeSheetFrame(row, col);
         $("gridContextMenu").classList.add("hidden");
       });
     }
@@ -7017,6 +7045,23 @@
       out.overrideMode = OVERRIDE_MODE;
       return out;
     },
+    // Verifier-only autosave suppression.  During recipe replay the runner
+    // calls suppressAutoSave(true) to prevent the debounced whole-sheet-draw
+    // save from firing on every stroke.  The runner saves explicitly at
+    // controlled checkpoints via flushSave().
+    suppressAutoSave: (on) => {
+      state._suppressAutoSave = !!on;
+      if (on && state._wsDrawSaveTimer) {
+        clearTimeout(state._wsDrawSaveTimer);
+        state._wsDrawSaveTimer = null;
+      }
+    },
+    flushSave: () => saveSessionState("verifier-checkpoint", { wait_for_idle: true, timeout_ms: 30000 }),
+    // Verifier-only render suppression.  During recipe replay the frame grid
+    // rebuild (innerHTML + 144 canvas elements) and preview render fire on
+    // every stroke completion — 4694 actions = ~676K DOM element churn.
+    // Suppressing these during replay prevents Chromium renderer OOM crashes.
+    suppressRender: (on) => { state._suppressRender = !!on; },
     // Layer-aware accessors for browser-level proof automation.
     _state: () => state,
     _setCell: (x, y, c) => setCell(x, y, c),
@@ -7043,6 +7088,10 @@
         row: state.inspectorRow,
         col: state.inspectorCol,
       };
+    },
+    focusWholeSheetFrame: (row = 0, col = 0) => {
+      const ok = focusWholeSheetFrame(Number(row) || 0, Number(col) || 0);
+      return { ok, selectedRow: state.selectedRow, selectedCols: [...(state.selectedCols || [])] };
     },
     commitDraftSource: () => {
       const before = state.extractedBoxes.length;

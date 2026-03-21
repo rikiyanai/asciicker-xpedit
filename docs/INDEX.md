@@ -126,6 +126,11 @@ metadata, layer, visual, export, and Skin Dock/runtime mismatches.
 - `docs/2026-03-10-DELIVERABLE-AUDIT-REPORT.md`
   - deliverable audit identifying XP cell format mismatch; Issue 1 (7-byte vs 10-byte) superseded by `a26be4a`
 
+## Bundle & Animation Research
+
+- `docs/research/ascii/2026-03-20-bundle-animation-types.md`
+  - complete map of all 5 player sprite families (player, attack, plydie, wolfie, wolack), AHSW equipment encoding, W=2 ternary gap, gameplay trigger states, and recommended bundle template expansion priorities
+
 ## Local / Untracked Research (not committed)
 
 The following files exist in this worktree but are not committed to `master`. They are research output and should be read with caution — the `findings/INDEX.md` summary shows 4 of 11 findings were contradicted by code inspection.

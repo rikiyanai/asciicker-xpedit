@@ -45,3 +45,4 @@ Use this file as short-lived repo memory, not as proof over code.
 - Editor/doc alignment: `docs/2026-03-13-CLAUDE-HANDOFF-EDITOR-DOC-ALIGNMENT.md`
 - Claim verification: `docs/research/ascii/2026-03-13-claim-verification.md`
 - Bundle/runtime restore history: `docs/2026-03-11-CLAUDE-HANDOFF-CURRENT-STATE.md`
+- Bundle animation types & expansion: `docs/research/ascii/2026-03-20-bundle-animation-types.md`

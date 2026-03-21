@@ -323,3 +323,11 @@ As of 2026-03-20:
 - the previous blank-flow single-frame harness was deleted because it violated this contract
 - open gaps remain around responsiveness signoff, repeatability, and workflow completeness
   for save-first bundle authoring
+
+### Bundle scope beyond Milestone 1
+
+The current `player_native_full` template covers idle/attack/death (3 of 5 player
+sprite families). Mount animations (wolfie, wolack), W=2 weapon variants, and
+`player-nude` are not yet in the bundle template. See
+`docs/research/ascii/2026-03-20-bundle-animation-types.md` for the full animation
+type map and recommended expansion priorities.

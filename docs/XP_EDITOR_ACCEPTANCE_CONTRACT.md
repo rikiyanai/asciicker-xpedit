@@ -51,6 +51,35 @@ Milestone 1 does **not** by itself mean:
 
 Do not report Milestone 1 as "full XP parity."
 
+## Explicit Milestone Requirements
+
+### Milestone 1 close requirements
+
+Milestone 1 may be reported complete only when all of the following are true:
+
+- the shipped whole-sheet authoring path covers the required native bundle actions:
+  - `idle`
+  - `attack`
+  - `death`
+- structure, layer behavior, export, and runtime load all pass for that workflow
+- the canonical verifier passes in a Milestone 1 acceptance-eligible mode, with final signoff coming from `full_recreation`
+- save/export/test behavior is usable enough to support a normal authoring loop
+- responsiveness and repeatability are good enough that the workflow is not merely a one-off proof
+
+### Milestone 2 requirements
+
+Milestone 2 starts only after Milestone 1 closes.
+
+Milestone 2 is the practical PNG-ingest/manual-assembly milestone. It requires:
+
+- preserving the arbitrary-PNG structural bundle baseline established in Milestone 1
+- shipped source-panel bbox extraction and source-to-grid assembly as the practical PNG workflow
+- whole-sheet editing as the primary correction surface
+- human-verified semantic dictionaries for canonical sprite families
+- semantic edits building on those dictionaries, not on naive global color replacement or heroic analyze guesses
+
+Milestone 2 does **not** require perfect automatic slicing.
+
 ## Two Required Workflow Families
 
 Both workflow families are required. Neither may be substituted for the other.
@@ -353,3 +382,6 @@ Milestone 2 target:
 - add human-verified semantic dictionaries for canonical reference sprites
 
 Milestone 2 is not a requirement that Analyze become an authoritative sprite interpreter.
+
+Milestone 2 must preserve Milestone 1's structural/runtime checkpoint while making the
+manual correction workflow practical through shipped controls.

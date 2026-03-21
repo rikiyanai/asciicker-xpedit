@@ -44,6 +44,26 @@ Milestone 1 does **not** mean:
 
 This distinction is mandatory in status reports.
 
+## Explicit Milestone 2 Definition (2026-03-21)
+
+Milestone 2 starts only after Milestone 1 closes.
+
+- **Milestone 2** = practical PNG ingest and manual assembly
+
+Milestone 2 specifically covers:
+
+- preserving the arbitrary-PNG structural bundle baseline from Milestone 1
+- making source-panel bbox extraction and source-to-grid assembly practical through shipped controls
+- making whole-sheet editing the primary correction surface for assembled content
+- adding human-verified semantic dictionaries for canonical sprite families
+- enabling safe semantic edits on top of those dictionaries
+
+Milestone 2 does **not** mean:
+
+- perfect automatic slicing for arbitrary sheets
+- full existing-XP load/edit/export parity
+- full REXPaint completeness
+
 ## Phase 0: Four Audits
 
 Owner outcome:
@@ -287,7 +307,7 @@ Update after B1 patch:
 ### Tier 2: Format and Protocol
 
 5. **B5: XP codec incompatibility** — Python and JS codecs use structurally incompatible container formats (whole-file gzip + no magic vs per-layer gzip + REXP magic + 20-byte header). Neither can read the other's output. This matters once the whole-sheet editor path touches JS-side file I/O.
-6. **B6: Whole-sheet editor path not integrated** — the shipped workbench still centers editing on the legacy frame inspector instead of a whole-sheet REXPaint-style editor surface. This is now the primary product blocker.
+6. **B6: Whole-sheet editor path not integrated** — historical audit-time finding. Current repo truth is narrower: the whole-sheet editor is integrated and shipped, but the legacy inspector still exists as a fallback/debug path and remains a Milestone 2 demotion target.
 
 ### Tier 3: UI and Integration
 
@@ -311,6 +331,13 @@ Update after B1 patch:
 4. review responsiveness and stroke-end autosave behavior
 5. rerun for repeatability
 6. only after Milestone 1 closes, begin Milestone 2 practical PNG-ingest work, then return to the broader existing-XP parity line
+
+When Milestone 2 begins, the first required moves are:
+
+1. freeze the structural PNG baseline with a non-regression contract and test path
+2. make whole-sheet editing primary and continue demoting the legacy inspector
+3. stabilize source-panel/manual assembly workflows
+4. only then broaden semantic editing and analyze-assist work
 
 ## Non-Goals
 

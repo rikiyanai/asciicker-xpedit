@@ -13,7 +13,7 @@ Canonical doc hub for agents working in `/Users/r/Downloads/asciicker-pipeline-v
 - Audit date: 2026-03-21
 - Audited worktree: `/Users/r/Downloads/asciicker-pipeline-v2`
 - Audited branch: `master`
-- Audited HEAD: `ba0284c`
+- Audited HEAD: `2a43c2b`
 - Current branch role: active XP-editor Phase 4 acceptance line
 - **Self-containment**: This repo must be 100% self-contained. No runtime, test, or build-time dependency on external folders (e.g. `/Users/r/Downloads/asciicker-Y9-2`, `/Users/r/Downloads/n`). Run `python3 scripts/self_containment_audit.py` at startup.
 
@@ -45,6 +45,51 @@ If a lower-priority doc conflicts with a higher-priority source or with current 
 - A canonical XP verifier family now exists in `scripts/xp_fidelity_test/`, including bundle workflow runners. Do not reuse the deleted blank-flow single-frame harness as evidence.
 - Do not start broader REXPaint UX/UI redesign as if full parity is already proven. The current work is Phase 4 acceptance, responsiveness, and repeatability on the bundle-native line.
 - If Milestone 1 closes, the next milestone is **Milestone 2: practical PNG ingest and manual assembly**, not "perfect automatic slicing."
+
+## Explicit Milestone Definitions
+
+### Milestone 1: bundle-native new-XP authoring viability
+
+Milestone 1 is complete only when all of the following are true:
+
+- shipped whole-sheet controls can create/edit the required native bundle actions:
+  - `idle`
+  - `attack`
+  - `death`
+- the bundle workflow preserves the intended structure, layers, and export/runtime contract
+- the authoring loop is usable enough for normal work:
+  - save
+  - export
+  - test/apply
+- canonical verifier evidence passes in an acceptance-eligible mode, with final signoff coming from `full_recreation`
+- manual/runtime review and repeatability are good enough to support an honest milestone-close claim
+
+Milestone 1 is **not**:
+
+- full existing-XP load/edit/export parity
+- full REXPaint feature parity
+- generalized PNG slicing correctness
+
+### Milestone 2: practical PNG ingest and manual assembly
+
+Milestone 2 begins only after Milestone 1 closes.
+
+Milestone 2 is complete only when all of the following are true:
+
+- the arbitrary-PNG structural ingest baseline is protected by a non-regression contract and test path
+- uploaded PNG workflows are practical through shipped controls:
+  - source-panel bbox extraction
+  - manual source-to-grid assembly
+  - whole-sheet correction/editing
+- auto-slicing/analyze are assistive hints, not authoritative truth
+- canonical human-verified semantic dictionaries exist for the enabled native families
+- semantic editing can safely build on those dictionaries
+
+Milestone 2 is **not**:
+
+- perfect automatic slicing for arbitrary sprite sheets
+- full existing-XP parity
+- full REXPaint parity
 
 ## Structural Contracts
 
@@ -151,9 +196,9 @@ metadata, layer, visual, export, and Skin Dock/runtime mismatches.
 ## Milestone 2 Implementation
 
 - `docs/plans/2026-03-21-milestone-2-practical-png-ingest-plan.md`
-  - strategic plan for Milestone 2: preserve structural baseline, center on manual assembly, promote whole-sheet editor
+  - strategic plan for Milestone 2: defines the milestone explicitly, preserves the structural baseline, centers on manual assembly, and promotes whole-sheet editing
 - `docs/plans/2026-03-21-milestone-2-implementation-checklist.md`
-  - implementation-ready checklist with EXISTS/PARTIAL/MISSING status per item, file:line references, 6-wave execution order
+  - implementation-ready checklist with explicit Milestone 1/Milestone 2 boundary, EXISTS/PARTIAL/MISSING status per item, file:line references, and wave ordering
 - `docs/PNG_STRUCTURAL_BASELINE_CONTRACT.md`
   - non-regression contract for the PNG structural ingest path (also linked under Structural Contracts above)
 
@@ -192,7 +237,7 @@ No distinct palette asset files (`.pal`, `palette.json`, etc.) exist in the repo
 - `CLAUDE.md` and `docs/INDEX.md` were missing before the 2026-03-13 doc-alignment pass; older handoffs may say they are absent.
 - Some tests and docs still contain obsolete 7-byte XP assumptions even though current JS XP codec code uses 10-byte REXPaint cells. Three test files (`tests/web/rexpaint-editor-xp-file-{reader,writer,integration}.test.js`) construct actual 7-byte binary XP blobs in their fixtures — this is a deferred code issue.
 - All editor test files use ESM `import` statements but the repo's `package.json` declares `"type": "commonjs"`, so direct `node tests/...` execution fails with `SyntaxError`.
-- `EditorApp` exists in `web/rexpaint-editor/*`, but the live workbench on audited `master` still edits through the legacy inspector in `web/workbench.js`.
-- The finding that the editor modal/UI is still wrong for REXPaint-parity goals remains valid; existence of `EditorApp` modules does not mean the shipped UI matches REXPaint.
+- `EditorApp` and the whole-sheet surface exist in `web/rexpaint-editor/*` and `web/whole-sheet-init.js`, and current shipped grid actions now focus the whole-sheet editor first. The legacy inspector still exists as a fallback/debug path and remains a Milestone 2 demotion target.
+- The finding that the editor modal/UI is still incomplete for REXPaint-parity goals remains valid; existence of whole-sheet integration does not mean full parity is proven.
 - XP-file fidelity is not proven end-to-end. No canonical test exists. The deleted harness was not a valid fidelity test — see `PLAYWRIGHT_FAILURE_LOG.md`.
 - Self-containment is now machine-enforced via `scripts/self_containment_audit.py` and installable git hooks in `.githooks/`. Blocking findings are external symlinks and live/build/runtime/test references to absolute paths outside this repo.

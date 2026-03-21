@@ -12,6 +12,24 @@ Milestone 2 is **not** "perfect automatic sprite-sheet slicing." It is a practic
 stable PNG ingest workflow that preserves the already-hard-won bundle/runtime baseline while
 making manual correction and assembly the primary success path.
 
+## Explicit Milestone Boundary
+
+Milestone 2 begins only after Milestone 1 closes.
+
+Milestone 1 requirement summary:
+
+- shipped whole-sheet authoring for `idle`, `attack`, `death`
+- canonical verifier signoff for the bundle-native workflow
+- usable save/export/test loop
+- responsiveness and repeatability good enough for honest milestone-close reporting
+
+Milestone 2 requirement summary:
+
+- preserve the structural/runtime-safe arbitrary-PNG baseline from Milestone 1
+- make source-panel/manual assembly practical through shipped controls
+- keep whole-sheet as the primary correction surface
+- add canonical human-verified semantic dictionaries and build semantic editing on top of them
+
 ## Non-Negotiable Starting Point
 
 Milestone 1 established an important structural checkpoint:
@@ -92,12 +110,12 @@ The current workbench already has the rough pieces:
   - frame selection
 - Whole-sheet editor mounted in the shipped workbench
 
-However, the current product still has an important UX inconsistency:
+However, the current product still has an important UX cleanup gap:
 
-- frame selection already pans the whole-sheet editor
-- but `Open XP Editor` still opens the legacy inspector path
+- shipped grid actions now focus the whole-sheet editor first
+- but the legacy inspector still exists as a fallback/debug path and remains visible in the product
 
-Milestone 2 should resolve this in favor of the whole-sheet editor.
+Milestone 2 should continue resolving this in favor of the whole-sheet editor by demoting the legacy inspector to debug-only.
 
 ## Milestone 2 Workstreams
 
@@ -231,6 +249,9 @@ Milestone 2 is complete only when all of the following are true:
 - the whole-sheet editor is the primary correction surface for assembled content
 - the canonical semantic dictionaries exist for the enabled native families
 - agent-driven region edits can be performed on canonical sprite references safely
+
+Milestone 2 completion must be reported as Milestone 2 only. It does not by itself imply
+full XP-editor parity.
 
 ## Not Required For Milestone 2
 

@@ -4,6 +4,18 @@ Date: 2026-03-21
 Status: canonical
 Purpose: Non-regression guarantee for the arbitrary-PNG structural ingest path
 
+## Milestone Placement
+
+This contract is a Milestone 2 document protecting a checkpoint established during
+Milestone 1.
+
+- Milestone 1 requirement: prove the bundle-native authoring/export/runtime line
+- Milestone 2 requirement: do not regress the arbitrary-PNG structural ingest baseline while
+  improving practical PNG workflows
+
+This contract does not replace the Milestone 1 acceptance contract, and satisfying this
+contract alone does not close Milestone 2.
+
 ## What This Contract Protects
 
 Any readable PNG must be able to pass through the structural pipeline and produce a

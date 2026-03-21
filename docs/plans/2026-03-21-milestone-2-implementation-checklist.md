@@ -7,6 +7,27 @@ Method: Direct codebase inspection (read-only audit)
 
 ---
 
+## Explicit Milestone Boundary
+
+Milestone 1 and Milestone 2 must not be conflated.
+
+Milestone 1 closes only when:
+
+- shipped whole-sheet bundle-native authoring is proven for `idle`, `attack`, `death`
+- final signoff comes from the canonical verifier `full_recreation` lane
+- save/export/test flow is usable
+- responsiveness and repeatability are acceptable
+
+Milestone 2 starts after that and covers:
+
+- preserving the arbitrary-PNG structural baseline
+- practical source-panel/manual assembly
+- whole-sheet as the primary correction surface
+- semantic dictionaries and semantic editing
+
+This checklist is for Milestone 2 only. It is not a substitute closeout list for
+Milestone 1.
+
 ## Phase M2-A: Freeze Structural PNG Baseline
 
 ### Currently exists:
@@ -286,3 +307,8 @@ through the legacy inspector"), code inspection confirms:
 
 The primary M2-C work is **demotion of the legacy inspector**, not creation of the whole-sheet
 integration. The integration already exists and is functional.
+
+## Milestone 2 Exit Reminder
+
+Completing this checklist means Milestone 2 practical PNG ingest/manual assembly is done.
+It does not imply full XP-editor parity unless the broader acceptance contract is also met.

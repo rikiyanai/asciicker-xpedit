@@ -16,6 +16,34 @@ Prove full XP-editor parity through the shipped product paths, not through subst
 
 The work must hard-fail at the first broken gate and then fix that exact gate before proceeding.
 
+## Milestone 1 Definition (2026-03-20)
+
+The overall objective above remains the long-term goal.
+
+The current working milestone is narrower:
+
+- **Milestone 1** = shipped bundle-native new-XP authoring viability
+
+Milestone 1 specifically covers:
+
+- the required native action bundle:
+  - `idle`
+  - `attack`
+  - `death`
+- whole-sheet editing through shipped controls
+- correct save/export/apply behavior for that bundle workflow
+- Skin Dock/runtime success for that workflow
+- final real-content signoff through the canonical verifier family
+- responsiveness and repeatability sufficient for normal use
+
+Milestone 1 does **not** mean:
+
+- complete existing-XP load/edit/export parity
+- full REXPaint feature completeness
+- completion of every workflow named in the overall acceptance contract
+
+This distinction is mandatory in status reports.
+
 ## Phase 0: Four Audits
 
 Owner outcome:
@@ -173,6 +201,65 @@ Exit gate:
 
 - verifier is honest, narrow when narrow, and full only when full
 
+## Progress Snapshot (2026-03-20)
+
+### Broad phase state
+
+- **Phase 0**: substantially complete
+- **Phase 1**: complete enough for current bundle-native line
+- **Phase 2**: substantially complete for the native bundle authoring path
+- **Phase 3**: substantially complete for the shipped whole-sheet bundle workflow
+- **Phase 4**: active
+- **Phase 5**: active
+- **Phase 6**: active
+- **Phase 7**: substantially built, still being refined for final signoff lanes
+
+### Commit-backed milestone progress
+
+Recent high-signal commits on `master`:
+
+1. `7e8ff60`
+   - whole-sheet editor perf improvements
+   - coordinate scaling fix
+   - `New XP` button
+2. `1bed60f`
+   - bundle runner shell safety
+   - `--hold` support
+3. `b7bb5c7`
+   - whole-sheet audit docs / failure log updates
+4. `45c5fd8`
+   - auto-advance after export
+5. `ad77e19`
+   - Skin Dock probe-truth / frame-detach resilience
+6. `72eef5a`
+   - `manual_review` mode committed as diagnostic-only tooling
+7. `1c21ee7`
+   - `full_recreation` mode committed as the real-content final signoff lane
+
+### What is established now
+
+- a canonical bundle verifier exists
+- `manual_review` exists for headed manual QA only
+- `full_recreation` exists for final real-content signoff
+- end-to-end bundle acceptance has passed on the bundle-native line
+- Milestone 1 is in Phase 4 finish-work, not Phase 1 discovery
+
+### What remains for Milestone 1
+
+1. final real-content acceptance pass completion and logging
+2. responsiveness signoff in real browser use
+3. save-first bundle workflow cleanup:
+   - explicit top-level Save
+   - `blank` / `saved` / `converted` bundle states
+   - readiness based on `saved|converted`, not export/download only
+4. repeatability across reruns
+
+### What remains beyond Milestone 1
+
+- full existing-XP load/edit/export parity
+- broader parity against the complete acceptance contract
+- any generalized REXPaint-completeness claims
+
 ## Audit-Grounded Blocker Order (2026-03-15)
 
 Four audits completed. See `docs/research/ascii/2026-03-15-four-audits-xp-editor.md`.
@@ -210,16 +297,15 @@ Update after B1 patch:
 
 ## Immediate Next Actions
 
-1. ~~Complete the four audits.~~ DONE — see audit document.
-2. ~~Write canonical XP data contract.~~ DONE — see `docs/research/ascii/2026-03-15-xp-data-contract.md`. Phase 1 exit gate met.
-3. ~~Fix B10: AGENT_PROTOCOL.md doc drift.~~ DONE.
-4. ~~Fix B1: make `workbench_upload_xp()` derive geometry from XP file using L0 metadata parser.~~ DONE.
-5. ~~Audit the whole-sheet REXPaint pivot before more frontend code.~~ DONE.
-6. ~~Fix B2: extract all layers on upload.~~ DONE.
-7. ~~Fix B3: extend session model to multi-layer.~~ DONE.
-8. ~~Fix B4: export from stored layers.~~ DONE for uploaded XP sessions.
-9. Implement the first whole-sheet editor integration slice in the shipped workbench instead of improving the legacy frame inspector path:
-   - `docs/2026-03-15-CLAUDE-HANDOFF-B6-WHOLE-SHEET-INTEGRATION.md`
+1. finish the current `full_recreation` real-content run and log its result honestly
+2. log any new verifier/harness failures in `PLAYWRIGHT_FAILURE_LOG.md`
+3. close Milestone 1 product-flow gaps:
+   - top-level Save
+   - `blank` / `saved` / `converted`
+   - save-first bundle progression
+4. review responsiveness and stroke-end autosave behavior
+5. rerun for repeatability
+6. only after Milestone 1 closes, return to the broader existing-XP parity line
 
 ## Non-Goals
 

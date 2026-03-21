@@ -10,11 +10,11 @@ Canonical doc hub for agents working in `/Users/r/Downloads/asciicker-pipeline-v
 
 ## Current Branch Truth
 
-- Audit date: 2026-03-13
+- Audit date: 2026-03-20
 - Audited worktree: `/Users/r/Downloads/asciicker-pipeline-v2`
 - Audited branch: `master`
-- Audited HEAD before doc-alignment commits: `5caeb07`
-- Branch role on this worktree: `stale/unknown` for bundle-restore truth until a task-specific audit proves otherwise
+- Audited HEAD: `1c21ee7`
+- Current branch role: active XP-editor Phase 4 acceptance line
 - **Self-containment**: This repo must be 100% self-contained. No runtime, test, or build-time dependency on external folders (e.g. `/Users/r/Downloads/asciicker-Y9-2`, `/Users/r/Downloads/n`). Run `python3 scripts/self_containment_audit.py` at startup.
 
 Do not assume `master` is the canonical restore/bundle line. For bundle/runtime issues, read the branch-history handoff below before making fix claims.
@@ -33,10 +33,17 @@ If a lower-priority doc conflicts with a higher-priority source or with current 
 
 ## Current Milestone
 
-- The current product milestone is **functional XP-file editor parity first**.
-- "Done" means: the workbench can load real multi-frame XP files through the product import path, preserve all geometry and metadata, edit cells across all layers, export with full fidelity, and load the exported XP in the Skin Dock runtime.
-- No XP fidelity test harness currently exists. The previous blank-flow single-frame harness was deleted on 2026-03-15 — see `PLAYWRIGHT_FAILURE_LOG.md` for the deletion record and the reasons.
-- Do not start REXPaint UX/UI redesign as if parity is already proven. UX/UI work is the next phase **after** capability parity is verified.
+- The overall product goal remains **full XP-file editor parity** as defined in `docs/XP_EDITOR_ACCEPTANCE_CONTRACT.md`.
+- The current working milestone is **Milestone 1: bundle-native new-XP authoring viability**.
+- Milestone 1 means:
+  - create and edit the required native bundle actions (`idle`, `attack`, `death`) through shipped whole-sheet workbench controls
+  - preserve required structure and layers
+  - export/apply correctly into Skin Dock/runtime
+  - support a usable authoring loop for save/export/test
+  - pass canonical verifier evidence plus final manual/runtime review
+- Milestone 1 does **not** mean full existing-XP load/edit/export parity is complete.
+- A canonical XP verifier family now exists in `scripts/xp_fidelity_test/`, including bundle workflow runners. Do not reuse the deleted blank-flow single-frame harness as evidence.
+- Do not start broader REXPaint UX/UI redesign as if full parity is already proven. The current work is Phase 4 acceptance, responsiveness, and repeatability on the bundle-native line.
 
 ## First Reads By Task
 
@@ -61,8 +68,10 @@ If a lower-priority doc conflicts with a higher-priority source or with current 
 
 ## Active High-Signal Docs
 
+- `docs/2026-03-20-CLAUDE-HANDOFF-PHASE-4-ACCEPTANCE-STRICT.md`
+  - primary fresh-session resume point for Phase 4; separates manual-only `T` review from real acceptance evidence and defines the remaining acceptance/responsiveness/repeatability work
 - `docs/2026-03-18-CLAUDE-HANDOFF-BUNDLE-RUNTIME-STRICT.md`
-  - strict fresh-session handoff for the remaining bundle runtime blocker; includes explicit anti-drift rules after recent Claude misclassification, subagent over-trust, and incorrect glyph/layout claims
+  - historical strict handoff for the Phase 1-3 bundle runtime blocker path; no longer the primary resume point after the Phase 4 handoff above
 - `docs/2026-03-18-CLAUDE-HANDOFF-BUNDLE-RUNTIME-AND-WHOLE-SHEET-VISIBILITY.md`
   - softer context handoff retained for continuity; superseded as the primary resume doc by the strict 2026-03-18 handoff above
 - `docs/2026-03-17-CLAUDE-HANDOFF-WHOLE-SHEET-STROKE-PATH.md`

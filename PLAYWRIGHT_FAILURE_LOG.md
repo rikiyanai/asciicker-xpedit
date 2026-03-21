@@ -862,3 +862,101 @@ Actual confirmed fix: `canvas.js` dirty-cell tracking for incremental render (pe
 Remaining unexplained: what caused "clicking grid does nothing" and "blank glyph picker"
 in the user's browser session. Possible: stale cache, browser-specific rendering, or
 a transient state during initial page load before mount() completed.
+
+---
+
+## 2026-03-20: Full-Recreation Phase 4 Runs
+
+**Context**: `full_recreation` was added as the real-content final signoff lane for
+Milestone 1. This sequence records the first three full-sheet real-content bundle runs.
+
+### Run 1: Tool button click failure
+
+- Artifact: `output/xp-fidelity-test/bundle-run-2026-03-20T21-06-36Z/result.json`
+- Mode: `full_recreation`
+- Result:
+  - `idle_pass=false`
+  - `attack_pass=false`
+  - `death_pass=false`
+  - `skin_dock_pass=false`
+  - `overall_pass=false`
+
+**Failure**:
+
+- Fatal Playwright click timeout on `#wsToolLine`
+- The tool button existed and was visible, but pointer events were intercepted by overlapping UI
+  (`sourceCanvas`, `body`, `ws-sidebar`)
+
+**Classification**:
+
+- harness/verification gap
+
+**Fix applied after this run**:
+
+- `scripts/xp_fidelity_test/run_bundle_fidelity_test.mjs`
+  - call `scrollIntoViewIfNeeded()` before tool-button and apply-toggle clicks
+
+### Run 2: Browser crash from save storm
+
+- Artifact: `output/xp-fidelity-test/bundle-run-2026-03-20T22-14-17Z/result.json`
+- Mode: `full_recreation`
+- Result:
+  - `idle_pass=false`
+  - `attack_pass=false`
+  - `death_pass=false`
+  - `skin_dock_pass=false`
+  - `overall_pass=false`
+
+**Failure**:
+
+- Fatal `locator.boundingBox: Target page, context or browser has been closed`
+- Root cause during diagnosis: whole-sheet draw path was issuing save requests on every stroke
+  completion during full-sheet repaint, producing thousands of save POSTs and crashing Chromium
+
+**Classification**:
+
+- product/performance gap
+
+**Fix applied after this run**:
+
+- `web/workbench.js`
+  - debounce `saveSessionState("whole-sheet-draw")` with 1.5s quiet window
+  - flush the pending debounced save before export
+
+### Run 3: Near-pass with small cell fidelity misses
+
+- Artifact: `output/xp-fidelity-test/bundle-run-2026-03-20T23-03-33Z/result.json`
+- Mode: `full_recreation`
+- Result:
+  - geometry: pass for idle / attack / death
+  - frame layout: pass for idle / attack / death
+  - execute: pass for idle / attack / death
+  - export: pass for idle / attack / death
+  - all layers: pass for idle / attack / death
+  - `skin_dock_pass=true`
+  - `overall_pass=false`
+
+**Remaining failures**:
+
+- `idle`: 2 Layer-2 cell mismatches
+- `attack`: 26 Layer-2 cell mismatches
+- `death`: 22 Layer-2 cell mismatches
+
+**Mismatch pattern**:
+
+- expected real content
+- actual exported cell clear / transparent
+- isolated misses rather than broad corruption
+
+**Interpretation**:
+
+- Very likely harness/input precision misses during full-sheet repaint, not a broad content/export failure
+- Still a hard fail under the acceptance contract because `cell_fidelity_pass=false`
+
+**Scope clarification**:
+
+- Runtime inspection after pickup/weapon switch may show default built-in weapon-holding sprites
+  because the current bundle-native override scope only covers the bundled action set
+  (`idle`, `attack`, `death`)
+- Weapon-holding/item variants are out of scope for this Milestone 1 bundle set and should not be
+  misclassified as a regression in the current override flow

@@ -23,6 +23,34 @@ The goal is full XP-editor parity for the shipped workbench.
 
 This is not a speed goal. This is not a partial-proof goal. This is a hard-fail fidelity goal.
 
+## Milestone 1 vs Full Goal
+
+The overall goal above remains the source of truth.
+
+However, the current working milestone is narrower:
+
+- **Milestone 1** = shipped bundle-native new-XP authoring viability for the required
+  native action bundle:
+  - `idle`
+  - `attack`
+  - `death`
+
+Milestone 1 requires:
+
+- whole-sheet editing through shipped controls
+- correct structure/layer preservation for the bundle-native workflow
+- successful Skin Dock/runtime application
+- real-content final signoff through the canonical verifier family
+- acceptable responsiveness and repeatability for this workflow
+
+Milestone 1 does **not** by itself mean:
+
+- complete existing-XP load/edit/export parity
+- full general-purpose REXPaint feature parity
+- closure of every editor capability outside the required bundle-native workflow
+
+Do not report Milestone 1 as "full XP parity."
+
 ## Two Required Workflow Families
 
 Both workflow families are required. Neither may be substituted for the other.
@@ -228,7 +256,10 @@ Acceptance evidence for XP-editor parity must come from the canonical recipe-dri
 
 1. `scripts/xp_fidelity_test/truth_table.py` — ground truth extraction
 2. `scripts/xp_fidelity_test/recipe_generator.py` — spec-constrained recipe of user-reachable actions
-3. `scripts/xp_fidelity_test/run_fidelity_test.mjs` — recipe execution and truth comparison
+3. workflow runner:
+   - `scripts/xp_fidelity_test/run_fidelity_test.mjs` for non-bundle/single-session workflows
+   - `scripts/xp_fidelity_test/run_bundle_fidelity_test.mjs` and `scripts/xp_fidelity_test/run_bundle.sh`
+     for bundle authoring workflows
 
 No other script, manual test, browser-console probe, or ad hoc harness may be cited as
 acceptance evidence.
@@ -250,35 +281,45 @@ response is to fix the verifier, not to bypass it with an ad hoc script.
 
 ### Recipe Mode Enforcement
 
-The recipe generator and test runner must support two modes:
+The recipe generator and test runners must distinguish acceptance-eligible modes from
+diagnostic-only modes.
 
 - **acceptance** (`--mode acceptance`): only user-reachable whole-sheet editor actions.
-  Inspector-only and debug-only actions are refused. Only this mode produces acceptance
-  evidence.
+  Inspector-only and debug-only actions are refused. This mode is acceptance-eligible,
+  but for Milestone 1 it is a bounded proof slice rather than the strongest final signoff.
+- **full_recreation** (`--mode full_recreation`): whole-sheet, real-content recreation of
+  all required Layer 2 cells. This is the strongest fidelity proof and the required final
+  signoff lane for Milestone 1 bundle-native acceptance.
+- **manual_review** (`--mode manual_review`): synthetic marker mode for headed visual QA.
+  Diagnostic/manual only. Never acceptance evidence.
 - **diagnostic** (`--mode diagnostic`): may include inspector or debug actions for
   implementation diagnosis. Results must be labeled diagnostic, not acceptance.
 
 Running the verifier without `--mode` defaults to diagnostic mode. Acceptance claims
-require explicit `--mode acceptance`.
+require an explicit acceptance-eligible mode (`acceptance` or `full_recreation`), and
+Milestone 1 final signoff requires `full_recreation`, not `manual_review`.
 
 ## Current Repo Truth
 
-As of 2026-03-16:
+As of 2026-03-20:
 
 ### Protocol requirements (now in effect)
 
 - ad hoc scripts are diagnostic only — never acceptance evidence
 - acceptance evidence must come from the canonical verifier path
 - verifier inability to express a workflow is a verifier bug, not bypass permission
-- recipe mode enforcement (acceptance vs diagnostic) is required before any parity claim
+- recipe mode enforcement is required before any parity claim
+- `manual_review` is synthetic/manual only
+- `full_recreation` is the final real-content signoff lane for Milestone 1
 
 ### Implementation status
 
-- the canonical verifier exists at `scripts/xp_fidelity_test/` in restored strict form
-- recipe generator supports `--mode acceptance` (whole-sheet) and `--mode diagnostic`
-  (inspector); acceptance mode emits only `ws_*` actions, zero inspector selectors
-- test runner enforces mode consistency: refuses diagnostic-only actions in acceptance mode
-- both modes generate and parse correctly against real XP files (verified 2026-03-16)
+- the canonical verifier family exists at `scripts/xp_fidelity_test/`
+- bundle workflow verification exists and is canonical for bundle-native authoring
+- recipe generator supports `--mode acceptance`, `--mode full_recreation`,
+  `--mode manual_review`, and `--mode diagnostic`
+- `manual_review` is diagnostic only and must never be cited as fidelity evidence
+- `full_recreation` exists specifically to avoid conflating sparse proof slices with final signoff
 - the previous blank-flow single-frame harness was deleted because it violated this contract
-- verifier does NOT yet cover: Skin Dock runtime test, new-file authoring workflow,
-  multi-layer editing recipe, user-reachable XP import UI — these are open verifier gaps
+- open gaps remain around responsiveness signoff, repeatability, and workflow completeness
+  for save-first bundle authoring

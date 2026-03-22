@@ -13,7 +13,7 @@ Canonical doc hub for agents working in `/Users/r/Downloads/asciicker-pipeline-v
 - Audit date: 2026-03-21
 - Audited worktree: `/Users/r/Downloads/asciicker-pipeline-v2`
 - Audited branch: `master`
-- Audited HEAD: `7e0758c`
+- Audited HEAD: `818d6af`
 - Current branch role: active XP-editor Phase 4 acceptance line
 - **Self-containment**: This repo must be 100% self-contained. No runtime, test, or build-time dependency on external folders (e.g. `/Users/r/Downloads/asciicker-Y9-2`, `/Users/r/Downloads/n`). Run `python3 scripts/self_containment_audit.py` at startup.
 
@@ -122,6 +122,7 @@ Canonical deployment doc: `docs/MVP_DEPLOYMENT.md`
 Related docs:
 - `docs/HOST_DEPLOYMENT_CHECKLIST.md` — step-by-step host provisioning and config
 - `docs/LAUNCH_READINESS_CHECKLIST.md` — all launch gates with current status
+- `docs/BASE_PATH_SUPPORT_CHECKLIST.md` — exact work required before safe subpath hosting such as `/asciicker-XPEdit`
 - `docs/RESKIN_PREP.md` — safe font/CSS reskin surface
 - `deploy/README.md` — deployment config quick start
 
@@ -132,6 +133,7 @@ Summary:
 - preferred MVP launch shape is subdomain or reverse-proxied root path
 - GitHub Actions CI exists (`.github/workflows/ci.yml`); manual deploy-package workflow exists; live CD not yet wired
 - The runtime payload must remain committed inside this repo. Do not reintroduce any dependency on external runtime folders.
+- For the first manual MVP launch, verifier scripts are offline QA tools, not required production-host dependencies.
 
 ## UI Reskin Constraint
 

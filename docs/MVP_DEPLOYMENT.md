@@ -55,6 +55,9 @@ The frontend uses root-relative paths for assets and API calls (e.g., `/api/work
 - **Reverse-proxied root path** (e.g., nginx proxying `/` to the Flask app) — also works without changes
 - Subpath hosting requires future work: base-path env var, frontend path prefix injection, Flask URL prefix
 
+See `docs/BASE_PATH_SUPPORT_CHECKLIST.md` for the exact work required before a path like
+`rikiworld.com/asciicker-XPEdit` becomes safe.
+
 ### What GitHub Pages cannot do
 
 GitHub Pages serves static files only. This MVP requires:
@@ -99,6 +102,20 @@ Live CD can be added later once:
 1. A hosting target is chosen
 2. Pre-existing test failures are resolved or triaged
 3. The deployment shape (subdomain vs. reverse proxy) is decided
+
+## Manual MVP note
+
+For the first MVP launch:
+
+- the deployed host does **not** need the verifier scripts to function
+- the host only needs the shipped Milestone 1 user-facing workflow working end-to-end
+- verifier scripts remain offline QA / development tools, not production runtime dependencies
+
+That means a manual MVP launch can proceed once:
+
+- Milestone 1 functions are working in full
+- manual runtime review is complete
+- the server-backed deployment checklist is satisfied
 
 ## Runtime payload
 

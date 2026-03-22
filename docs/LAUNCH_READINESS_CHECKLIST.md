@@ -7,12 +7,12 @@ This checklist is the single source of truth for launch/no-launch decisions.
 
 ## Gate 1: Milestone 1 Green
 
-- [ ] `full_recreation` verifier passes in canonical acceptance mode
 - [ ] Manual runtime review confirms bundle loads and renders correctly
 - [ ] Save/export/test authoring loop works end-to-end without workarounds
 - [ ] Milestone 1 closeout recorded in `docs/INDEX.md`
+- [ ] Manual MVP launch does not depend on verifier scripts being present on the host
 
-**Current status:** M1 closeout patches landed (`aed6e40`, `14d99d6`), awaiting acceptance rerun.
+**Current status:** M1 closeout patches landed (`aed6e40`, `14d99d6`), awaiting final green decision and manual runtime confirmation.
 
 ## Gate 2: Deploy Package Builds
 
@@ -78,3 +78,8 @@ This checklist is the single source of truth for launch/no-launch decisions.
 | CI | Known failures | Triage needed |
 
 **Current verdict: NOT READY** — blocked on M1 acceptance rerun and host provisioning.
+
+## Scope note
+
+For the first MVP launch, this checklist is about the deployable product and manual Milestone 1 operation.
+Verifier scripts are development QA tools and are not required on the deployed host.

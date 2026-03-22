@@ -15,6 +15,7 @@ Pre-deploy checklist for provisioning and configuring the actual host. Fill in v
 | OS | ________________ | Ubuntu 22.04+ recommended for systemd |
 | Python version | 3.11+ | Required by pyproject.toml |
 | Process manager | systemd / supervisor / docker | Template in `deploy/systemd/` |
+| Hosting shape | subdomain / reverse-proxied root / subpath | Subpath requires extra work; see `docs/BASE_PATH_SUPPORT_CHECKLIST.md` |
 
 ## Host Setup Steps
 
@@ -103,6 +104,13 @@ curl https://xpedit.example.com/healthz
 curl -s -o /dev/null -w "%{http_code}" https://xpedit.example.com/workbench
 # Should return: 200
 ```
+
+For manual MVP operation, no verifier scripts are required on the host. The required host checks are:
+
+- workbench loads
+- save/export/test flows work
+- runtime preflight is healthy
+- manual Milestone 1 workflow succeeds
 
 ### 8. Rollback command
 

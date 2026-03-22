@@ -136,37 +136,44 @@ async function centerCanvasRegion(page, leftPx, topPx, rightPx, bottomPx) {
 }
 
 async function dragOnCanvas(page, selector, x1, y1, x2, y2, cellSize) {
-  const startX = x1 * cellSize + cellSize / 2;
-  const startY = y1 * cellSize + cellSize / 2;
-  const endX = x2 * cellSize + cellSize / 2;
-  const endY = y2 * cellSize + cellSize / 2;
+  // Center the drag region in the safe zone, then use raw mouse events
+  // with boundingBox() coordinates.  locator.hover({force}) scrolls the
+  // element into view internally which overrides our centering.
+  const startPx = x1 * cellSize + cellSize / 2;
+  const startPy = y1 * cellSize + cellSize / 2;
+  const endPx = x2 * cellSize + cellSize / 2;
+  const endPy = y2 * cellSize + cellSize / 2;
   await centerCanvasRegion(
     page,
-    Math.min(startX, endX),
-    Math.min(startY, endY),
-    Math.max(startX, endX),
-    Math.max(startY, endY),
+    Math.min(startPx, endPx),
+    Math.min(startPy, endPy),
+    Math.max(startPx, endPx),
+    Math.max(startPy, endPy),
   );
-  const locator = page.locator(selector);
-  // force: true bypasses Playwright's actionability/interception check.
-  // centerCanvasRegion already ensures the target is in the safe zone;
-  // the interception check fails because getBoundingClientRect() on the
-  // scrolled canvas can map to viewport coords under the sidebar.
-  await locator.hover({ position: { x: startX, y: startY }, force: true, timeout: 10000 });
+  const canvasBox = await page.locator(selector).boundingBox();
+  if (!canvasBox) throw new Error(`dragOnCanvas: element not found: ${selector}`);
+  const vpX1 = canvasBox.x + startPx;
+  const vpY1 = canvasBox.y + startPy;
+  const vpX2 = canvasBox.x + endPx;
+  const vpY2 = canvasBox.y + endPy;
+  await page.mouse.move(vpX1, vpY1);
   await page.mouse.down();
-  await locator.hover({ position: { x: endX, y: endY }, force: true, timeout: 10000 });
+  await page.mouse.move(vpX2, vpY2);
   await page.mouse.up();
 }
 
 async function clickCanvasCell(page, selector, x, y, cellSize) {
+  // Center the cell in the safe zone, then use raw mouse.click with
+  // boundingBox() coordinates — same approach as Run 6 (0/1/4 mismatches)
+  // but with safe-zone centering to keep cells away from sidebar overlap.
   const posX = x * cellSize + cellSize / 2;
   const posY = y * cellSize + cellSize / 2;
   await centerCanvasRegion(page, posX, posY, posX, posY);
-  await page.locator(selector).click({
-    position: { x: posX, y: posY },
-    force: true,
-    timeout: 10000,
-  });
+  const canvasBox = await page.locator(selector).boundingBox();
+  if (!canvasBox) throw new Error(`clickCanvasCell: element not found: ${selector}`);
+  const vpX = canvasBox.x + posX;
+  const vpY = canvasBox.y + posY;
+  await page.mouse.click(vpX, vpY);
 }
 
 // ── Recipe executor ──

@@ -6262,6 +6262,7 @@
   function updateBundleUI() {
     const bundleStatus = $("bundleStatus");
     const templateStatus = $("templateStatus");
+    const templateGuide = $("templateGuide");
     const uploadLabel = $("uploadPanelLabel");
     const quickBtn = $("webbuildQuickTestBtn");
     if (isBundleMode()) {
@@ -6275,11 +6276,18 @@
         bundleStatus.classList.remove("hidden");
       }
       if (templateStatus) templateStatus.textContent = "Bundle mode";
+      if (templateGuide) {
+        const active = state.activeActionKey || "idle";
+        templateGuide.innerHTML = `Bundle workflow: <strong>1.</strong> Apply the template once. <strong>2.</strong> Work action-by-action on <strong>${active}</strong>. <strong>3.</strong> Use <strong>Save</strong> to keep progress and mark the action ready without downloading, or <strong>Export XP</strong> if you also want the file. <strong>4.</strong> When every enabled action is ready, click <strong>Test Bundle Skin</strong>.`;
+      }
       if (uploadLabel) uploadLabel.textContent = `Upload for ${state.activeActionKey}`;
       if (quickBtn) quickBtn.textContent = "Test Bundle Skin";
     } else {
       if (bundleStatus) bundleStatus.classList.add("hidden");
       if (templateStatus) templateStatus.textContent = "Classic (single XP)";
+      if (templateGuide) {
+        templateGuide.innerHTML = `Classic workflow: <strong>Apply Template</strong> to create a blank session, or <strong>Upload PNG</strong>/<strong>Import XP</strong> to populate one. Use <strong>Focus Whole-Sheet</strong> or double-click a frame tile to edit on the primary editor surface.`;
+      }
       if (uploadLabel) uploadLabel.textContent = "Workbench Direct";
       if (quickBtn) quickBtn.textContent = "Test This Skin";
     }

@@ -9,6 +9,10 @@
 </head>
 <body>
 <div class="wrap">
+  <div class="panel alpha-banner">
+    <div class="alpha-banner-title">PRE-ALPHA, PLEASE REPORT ANY BUGS</div>
+    <div class="small alpha-banner-copy">Workbench and the embedded Whole-Sheet XP Editor are still under active development. Expect rough edges. If something feels confusing, slow, or broken, treat that as a bug.</div>
+  </div>
   <h1>Workbench <span id="sessionDirtyBadge" class="small" style="margin-left:8px; font-weight:normal;">Session: idle</span></h1>
   <div id="runtimePreflightBanner" class="panel runtime-preflight-banner hidden">
     <div class="runtime-preflight-title">Runtime preflight failed for Skin Test Dock</div>
@@ -29,6 +33,9 @@
       <!-- Populated dynamically by JS -->
     </div>
     <div id="bundleStatus" class="small hidden"></div>
+    <div id="templateGuide" class="small template-guide">
+      Choose a template, then click <strong>Apply Template</strong>. Use <strong>Player Skin (Full Bundle)</strong> for the 3-action workflow: fill each action tab, <strong>Save</strong> or <strong>Export XP</strong>, then click <strong>Test Bundle Skin</strong> when all required actions are ready.
+    </div>
   </div>
 
   <div class="panel">
@@ -144,6 +151,8 @@
 
   <div class="panel hidden" id="wholeSheetPanel">
     <h3>Whole-Sheet XP Editor <span id="wholeSheetStatus" class="small" style="font-weight:normal;">not loaded</span></h3>
+    <div class="alpha-inline-banner">PRE-ALPHA, PLEASE REPORT ANY BUGS</div>
+    <div class="small whole-sheet-guide">This is the primary editor surface. In bundle mode: edit the active action here, then use <strong>Save</strong> to mark it ready without downloading, or <strong>Export XP</strong> if you also want an `.xp` artifact.</div>
     <div id="wholeSheetMount"></div>
   </div>
 

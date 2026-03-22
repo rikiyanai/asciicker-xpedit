@@ -35,6 +35,45 @@ body {
   background: linear-gradient(180deg, rgba(122, 90, 31, 0.28), rgba(21, 25, 34, 0.95));
 }
 
+.alpha-banner {
+  border-color: #7f2020;
+  background: linear-gradient(180deg, rgba(127, 32, 32, 0.34), rgba(44, 11, 11, 0.95));
+  box-shadow: 0 0 0 1px rgba(241, 90, 90, 0.12) inset;
+}
+
+.alpha-banner-title {
+  color: #ff8f8f;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.alpha-banner-copy {
+  color: #ffd2d2;
+}
+
+.alpha-inline-banner {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 5px 8px;
+  border: 1px solid #7f2020;
+  border-radius: 6px;
+  background: rgba(127, 32, 32, 0.18);
+  color: #ff8f8f;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.template-guide,
+.whole-sheet-guide {
+  margin-top: 10px;
+  line-height: 1.45;
+}
+
 .runtime-preflight-title {
   color: #ffd98a;
   font-weight: 700;

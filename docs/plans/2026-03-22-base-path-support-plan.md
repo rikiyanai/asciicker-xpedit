@@ -1,7 +1,5 @@
 # Base-Path Support Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Make the Flask-served workbench function correctly when mounted under a URL prefix (e.g., `https://rikiworld.com/asciicker-XPEdit`) instead of at the domain root.
 
 **Architecture:** A single canonical env var (`PIPELINE_BASE_PATH`) controls path prefixing. The server injects the base path into HTML via a global JS variable. All frontend fetches and asset URLs flow through a tiny helper that prepends the base path. Flask routes are mounted under a Blueprint with `url_prefix`. The runtime iframe src is prefixed server-side; internal iframe fetches (WASM, maps) remain relative and require no changes.
@@ -107,6 +105,23 @@ All `/api/*` routes (upload, analyze, run, status, workbench CRUD, bundle, strea
 This means:
 - When `BASE_PATH=""`: routes are `GET /workbench`, `GET /api/workbench/*`, etc. (identical to today)
 - When `BASE_PATH="/asciicker-XPEdit"`: routes are `GET /asciicker-XPEdit/workbench`, `GET /asciicker-XPEdit/api/workbench/*`, etc.
+
+**Root-route ownership under subpath hosting:**
+
+Blueprint `url_prefix=BASE_PATH` solves the prefixed app surface. It does NOT
+define what bare `GET /` should do. Under subpath hosting, bare `/` is outside
+the app's prefix — another site or app owns the domain root. The implementation
+must choose one of:
+
+1. **Bare `/` is out of scope** — the reverse proxy handles it (another site,
+   a landing page, a 404). The Flask app does not register any route outside
+   the blueprint. This is the expected case for `rikiworld.com/asciicker-XPEdit`.
+2. **Flask keeps a root redirect** — a separate non-blueprint route at `GET /`
+   redirects to `{BASE_PATH}/workbench`. Only appropriate when the Flask app
+   owns the entire domain (in which case, subdomain hosting is simpler).
+
+When `BASE_PATH=""`, the current `GET /` → redirect `/workbench` behavior
+lives inside the blueprint at prefix `""` and works unchanged.
 
 ### HTML injection changes (`_serve_web_html`)
 

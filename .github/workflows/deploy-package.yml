@@ -1,0 +1,84 @@
+name: Deploy Package (Manual)
+
+# Manual trigger only — no automatic deployment.
+# This workflow builds and packages the app for deployment.
+# It does NOT deploy to any host.
+on:
+  workflow_dispatch:
+    inputs:
+      target_ref:
+        description: "Git ref to package (branch, tag, or SHA)"
+        required: false
+        default: "master"
+
+jobs:
+  build-and-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.target_ref }}
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package with deploy deps
+        run: pip install -e ".[deploy]"
+
+      - name: Compile-check server modules
+        run: |
+          python3 -m py_compile src/pipeline_v2/app.py
+          python3 -m py_compile src/pipeline_v2/service.py
+          python3 -m py_compile src/pipeline_v2/config.py
+          python3 -m py_compile src/pipeline_v2/models.py
+          python3 -m py_compile wsgi.py
+
+      - name: Run pytest (excluding e2e)
+        run: python3 -m pytest --ignore=tests/e2e -q
+
+      - name: Verify runtime payload exists
+        run: |
+          test -d runtime/termpp-skin-lab-static/termpp-web-flat || {
+            echo "ERROR: runtime payload missing"
+            exit 1
+          }
+          test -f runtime/termpp-skin-lab-static/termpp-web-flat/index.html || {
+            echo "ERROR: runtime index.html missing"
+            exit 1
+          }
+
+      - name: Health check (dry run)
+        run: |
+          PIPELINE_HOST=127.0.0.1 PIPELINE_PORT=5099 \
+            timeout 5 python3 -c "
+          import sys; sys.path.insert(0, 'src')
+          from pipeline_v2.app import create_app
+          app = create_app()
+          with app.test_client() as c:
+              r = c.get('/healthz')
+              assert r.status_code == 200, f'healthz returned {r.status_code}'
+              print('healthz: OK')
+          " || { echo "Health check failed"; exit 1; }
+
+      - name: Package artifact
+        run: |
+          REF="${{ github.event.inputs.target_ref }}"
+          SHA="$(git rev-parse --short HEAD)"
+          tar czf "asciicker-xpedit-${SHA}.tar.gz" \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='SMALLTESTPNGs' \
+            --exclude='.ccb' \
+            --exclude='output' \
+            --exclude='data' \
+            .
+          echo "Package: asciicker-xpedit-${SHA}.tar.gz"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-package
+          path: "asciicker-xpedit-*.tar.gz"
+          retention-days: 7

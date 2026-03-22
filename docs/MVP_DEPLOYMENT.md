@@ -75,9 +75,27 @@ GitHub Actions CI exists (`.github/workflows/ci.yml`) and runs on push to `maste
 
 **Note:** The first CI run is expected to fail on pre-existing Python test failures in `test_analyze_run_compat` and `test_contracts`. This is intentional — CI exists to expose current truth, not to pretend the repo is green. These test failures predate the CI workflow and are unrelated to deployment readiness.
 
-## CD is not configured
+## Deployment configs
 
-Continuous deployment is not set up. The CI workflow is CI-only. CD can be added later once:
+Template configs for reverse proxy and process management are in `deploy/`:
+
+| File | Purpose |
+|------|---------|
+| `deploy/.env.example` | Template env config (copy to `.env`) |
+| `deploy/Caddyfile` | Caddy reverse proxy |
+| `deploy/nginx.conf` | Nginx reverse proxy |
+| `deploy/systemd/asciicker-xpedit.service` | Systemd service unit |
+| `scripts/deploy/launch_prod.sh` | Env-driven launch script |
+| `deploy/README.md` | Setup instructions |
+
+See `deploy/README.md` for quick start.
+
+## CD scaffold
+
+A manual-trigger GitHub Actions workflow exists (`.github/workflows/deploy-package.yml`).
+It builds, tests, packages, and uploads an artifact — but does **not** deploy to any host.
+
+Live CD can be added later once:
 1. A hosting target is chosen
 2. Pre-existing test failures are resolved or triaged
 3. The deployment shape (subdomain vs. reverse proxy) is decided

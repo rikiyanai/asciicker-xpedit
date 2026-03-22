@@ -3,6 +3,14 @@
 Date: 2026-03-21
 Status: complete
 Method: read-only code inspection of `web/workbench.js`, `web/workbench.html`, `web/whole-sheet-init.js`, and `web/rexpaint-editor/` modules
+Corrective pass: 2026-03-21 (verifier design handoff audit)
+
+> **Caveat (2026-03-21 corrective pass):** This doc was flagged for two issues:
+> (1) Feature table item #1 (Inspect tool) is classified as "Missing" but gap section G5
+> below is marked "Resolved" because WS Info panel provides live cell-under-cursor readout.
+> This is an internal contradiction — item #1 should be reclassified as "Replaced" (partial).
+> (2) Summary counts say "12 missing" but should be 11 given the G5 reclassification.
+> Both are corrected below.
 
 ---
 
@@ -12,7 +20,7 @@ The legacy frame-by-frame inspector (`cellInspectorPanel`) comprises approximate
 
 The whole-sheet editor (`web/whole-sheet-init.js`, 1590 lines) provides a whole-grid canvas with cell/line/rect/fill/eyedropper/erase tools, glyph picker, palette, layer management, and keyboard shortcuts. It is already mounted and functional in the shipped workbench.
 
-**Classification totals:** 11 replaced (3 WS-only), 18 debug fallback, 12 missing (feature gaps). Of the 12 missing features, 9 are gated on SelectTool import.
+**Classification totals:** 12 replaced (3 WS-only, 1 partial — inspect/readout via WS Info panel), 18 debug fallback, 11 missing (feature gaps). Of the 11 missing features, 9 are gated on SelectTool import.
 
 ---
 
@@ -22,7 +30,7 @@ The whole-sheet editor (`web/whole-sheet-init.js`, 1590 lines) provides a whole-
 
 | # | Inspector Feature | Location | WS Status | Class |
 |---|---|---|---|---|
-| 1 | Inspect tool (read cell properties) | `applyInspectorToolAt()` JS:3408-3414 | No inspect/read mode in WS | **Missing** |
+| 1 | Inspect tool (read cell properties) | `applyInspectorToolAt()` JS:3408-3414 | WS Info panel (`whole-sheet-init.js:880-924`) + `_onCanvasMouseMove()` (lines 1326-1361) provide live glyph/fg/bg under cursor. No dedicated click-to-inspect mode, but passive readout covers the primary use case. | **Replaced** (partial — see G5 reclassification) |
 | 2 | Half-cell Paint tool | `decodeCellHalves()`/`encodeCellHalves()` JS:1912-1949, 3425-3439 | WS Cell tool writes full XP cells, not half-cell colors | **Missing** |
 | 3 | Erase tool | `applyInspectorToolAt()` JS:3428-3431 | WS EraseTool `whole-sheet-init.js:71-112` | **Replaced** |
 | 4 | Eyedropper tool | `sampleInspectorGlyphAndPaintFromHit()` JS:3442-3462 | WS EyedropperTool `whole-sheet-init.js:43-69` | **Replaced** |

@@ -3,6 +3,27 @@
 Date: 2026-03-21
 Status: draft
 Depends on: `docs/plans/2026-03-21-semantic-edit-api-design.md`, semantic maps at `docs/research/ascii/semantic_maps/`
+Corrective pass: 2026-03-21 (verifier design handoff audit)
+
+> **Caveat (2026-03-21 corrective pass):** This matrix was flagged for missing important
+> cross-family behavior coverage. Confirmed gaps:
+>
+> 1. **Hair/outline `#000000` collision across families**: T2.5 tests this on player only.
+>    No test verifies that the same collision behaves identically (or differently) on attack
+>    and plydie families. Since outline is excluded from v1 targeting but hair is not, and both
+>    share `#000000`, the collision is a known v1 limitation that should be tested per-family.
+>
+> 2. **Excluded-role behavior tests**: No test explicitly verifies that `outline` (`#000000`),
+>    `subcell_fill` (`#ffff55`), and `skin_detail` (`#aa0000`) are NOT targeted by any recolor
+>    operation. A negative-assertion test for each excluded role would close this gap.
+>
+> 3. **Sequential recolors across different families**: T5.5 tests sequential shirt-then-pants
+>    on the same session. No test loads two different family sessions (e.g., player then attack)
+>    and verifies that recolors on one do not affect the other. This is likely a non-issue
+>    (sessions are isolated), but an explicit test would confirm the isolation contract.
+>
+> These gaps do not invalidate the existing 39 tests but should be addressed before
+> the matrix is promoted from draft to canonical.
 
 ---
 

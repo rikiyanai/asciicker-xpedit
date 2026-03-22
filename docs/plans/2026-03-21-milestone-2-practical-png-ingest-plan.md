@@ -244,6 +244,24 @@ The practical success path is:
 7. Add agent/API semantic edit operations on top of those dictionaries.
 8. Only then revisit analyze/slicing improvements.
 
+## Verifier Architecture Reference
+
+Milestone 2 verifier architecture is now defined in:
+
+- `docs/plans/2026-03-21-milestone-2-png-verifier-design.md`
+
+That design should be treated as the architecture reference for:
+
+- state model
+- action DSL
+- state/action/response invariants
+- recipe generation
+- verifier slices
+- acceptance vs diagnostic boundaries
+
+Implementation work under Milestone 2 should align to that design instead of inventing new
+ad hoc verifier flows.
+
 ## Family Expansion Policy
 
 Do not immediately broaden Milestone 2 by adding more sprite families unless needed for the

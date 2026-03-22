@@ -3,18 +3,28 @@
 Date: 2026-03-21
 Audit by: Claude agent (read-only)
 Branch: master @ 2a43c2b
+Corrective pass: 2026-03-21 (verifier design handoff audit)
+
+> **Caveat (2026-03-21 corrective pass):** This doc was flagged for two issues:
+> (1) The summary section mixes non-fixture PNGs (Playwright screenshots, runtime artifacts)
+> into the total count without distinguishing them from usable fixtures, making the "~1,570"
+> number misleading in a fixture inventory context. Only ~56 PNGs are candidate fixtures.
+> (2) The summary omits that `data/previews/` and `data/uploads/` are gitignored via `data/`
+> in `.gitignore`. The detailed table (Section 5) correctly notes this, but the summary does not.
+> Both issues are corrected below.
 
 ---
 
 ## Summary
 
-- **Total PNGs in repo**: ~1,570
+- **Candidate fixture PNGs**: ~56 (SMALLTESTPNGs + tests/fixtures + fixtures)
+- **Total PNGs in repo** (including non-fixture): ~1,570
   - SMALLTESTPNGs/: 53 files (source sprite sheets, screenshots, test patterns, AI-generated)
   - tests/fixtures/: 2 files (1 known_good, 1 known_bad)
   - fixtures/: 1 PNG file (+ 2 XP files)
-  - data/previews/: ~65 files (session preview renders — runtime artifacts)
-  - data/uploads/: ~90 files (uploaded PNG copies — runtime artifacts)
-  - output/: ~1,290 files (Playwright screenshots — test artifacts)
+  - data/previews/: ~65 files (session preview renders — runtime artifacts, **gitignored via `data/`**)
+  - data/uploads/: ~90 files (uploaded PNG copies — runtime artifacts, **gitignored via `data/`**)
+  - output/: ~1,290 files (Playwright screenshots — test artifacts, gitignored via `output/`)
   - runtime/: ~58 files (CP437 font atlases, app icon — engine assets)
   - node_modules/: 1 file (playwright icon — ignored)
 

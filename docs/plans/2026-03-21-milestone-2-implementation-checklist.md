@@ -28,6 +28,23 @@ Milestone 2 starts after that and covers:
 This checklist is for Milestone 2 only. It is not a substitute closeout list for
 Milestone 1.
 
+## Verifier Design Dependency
+
+The Milestone 2 verifier architecture is now defined in:
+
+- `docs/plans/2026-03-21-milestone-2-png-verifier-design.md`
+
+Use that document as the architecture reference when implementing:
+
+- PNG structural baseline tests
+- source-panel contract checks
+- source-to-grid contract checks
+- whole-sheet correction contract checks
+- end-to-end PNG manual-assembly acceptance
+
+This checklist tracks product and implementation work. It does not replace the verifier
+design doc.
+
 ## Phase M2-A: Freeze Structural PNG Baseline
 
 ### Currently exists:

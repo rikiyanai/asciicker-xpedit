@@ -4,6 +4,13 @@ Date: 2026-03-21
 Status: implementation-ready draft
 Method: Direct code audit of `web/workbench.js` (7382 lines), `web/workbench.html`, `web/styles.css`, `config/template_registry.json`
 Based on: `docs/plans/2026-03-21-milestone-2-practical-png-ingest-plan.md`, `docs/plans/2026-03-21-milestone-2-implementation-checklist.md`, `docs/WORKBENCH_SOURCE_PANEL_UX_CHECKLIST.md`
+Corrective pass: 2026-03-21 (verifier design handoff audit)
+
+> **Caveat (2026-03-21 corrective pass):** This doc was flagged for "false undo-gap claims
+> for findSprites() and cut-line move paths." Code inspection confirms the doc is **correct**:
+> `pushHistory()` exists at JS:4622 (findSprites) and JS:4363 (cut-line move). These are
+> accurately marked as "covered" in Section 5e. The one confirmed gap remains: set-anchor
+> at JS:6465-6469 has no `pushHistory()` call.
 
 ---
 

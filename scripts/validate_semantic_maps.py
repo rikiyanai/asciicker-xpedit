@@ -11,6 +11,14 @@ that referenced XP files exist, palette role references resolve, region
 names are well-formed, and ambiguity entries are well-formed.
 
 Exit 0 on success, non-zero on any validation failure.
+
+Limitations (2026-03-21 corrective pass — verifier design handoff audit):
+- Does NOT verify that semantic_cells match actual XP cell data on disk.
+- Does NOT verify that region bboxes geometrically contain their claimed cells.
+- Does NOT verify that palette_role colors actually appear in the reference XP.
+- Does NOT cross-validate between maps (e.g., shared roles have consistent colors).
+- This script is a structural integrity checker, not a correctness proof.
+  Do not cite a passing result as evidence that semantic maps are accurate.
 """
 
 import json

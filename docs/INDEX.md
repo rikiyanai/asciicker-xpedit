@@ -13,7 +13,7 @@ Canonical doc hub for agents working in `/Users/r/Downloads/asciicker-pipeline-v
 - Audit date: 2026-03-21
 - Audited worktree: `/Users/r/Downloads/asciicker-pipeline-v2`
 - Audited branch: `master`
-- Audited HEAD: `c58307a`
+- Audited HEAD: `d5eb6d5`
 - Current branch role: active XP-editor Phase 4 acceptance line
 - **Self-containment**: This repo must be 100% self-contained. No runtime, test, or build-time dependency on external folders (e.g. `/Users/r/Downloads/asciicker-Y9-2`, `/Users/r/Downloads/n`). Run `python3 scripts/self_containment_audit.py` at startup.
 
@@ -230,11 +230,19 @@ metadata, layer, visual, export, and Skin Dock/runtime mismatches.
 - `docs/plans/2026-03-21-milestone-2-implementation-checklist.md`
   - implementation-ready checklist with explicit Milestone 1/Milestone 2 boundary, EXISTS/PARTIAL/MISSING status per item, file:line references, and wave ordering
 - `docs/plans/2026-03-21-milestone-2-png-verifier-design.md`
-  - target design doc for the Milestone 2 verifier architecture: state/action/response maps, PNG recipe generation, verifier slices, and acceptance boundaries
+  - canonical design doc for the Milestone 2 verifier architecture: state/action/response maps, PNG recipe generation, verifier slices, and acceptance boundaries
 - `docs/PNG_STRUCTURAL_BASELINE_CONTRACT.md`
   - non-regression contract for the PNG structural ingest path (also linked under Structural Contracts above)
 - `docs/2026-03-21-CLAUDE-HANDOFF-M2-PNG-VERIFIER-DESIGN.md`
-  - fresh-session handoff for writing the Milestone 2 PNG verifier design doc, starting from a complete map of user-reachable actions
+  - historical handoff used to produce the completed M2 verifier design; keep for lineage, but start from the design doc above
+- `docs/plans/2026-03-21-legacy-inspector-retirement-checklist.md`
+  - corrected retirement/demotion checklist for moving the legacy inspector to debug-only during Milestone 2
+- `docs/plans/2026-03-21-m2-png-fixture-inventory.md`
+  - corrected fixture inventory and gap analysis for the PNG structural baseline verifier
+- `docs/plans/2026-03-21-m2-source-panel-implementation-spec.md`
+  - implementation-facing source-panel spec aligned to current code, including corrective-pass notes
+- `docs/plans/2026-03-21-semantic-edit-test-matrix.md`
+  - semantic-edit API test matrix; still draft, but now corrected and useful as implementation support
 
 ## Local / Untracked Research (not committed)
 

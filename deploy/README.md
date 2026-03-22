@@ -38,7 +38,12 @@ Choose one:
 - **Caddy** (recommended for simplicity): `caddy run --config deploy/Caddyfile`
 - **Nginx**: symlink `deploy/nginx.conf` into `/etc/nginx/sites-enabled/`
 
-Both configs assume the app runs on `127.0.0.1:5071`. The domain `xpedit.example.com` is a placeholder — replace with your actual domain.
+Both configs show two modes:
+
+- **Mode A (root/subdomain):** The app owns the entire domain. Set `PIPELINE_BASE_PATH=` (empty).
+- **Mode B (subpath):** The app lives under a prefix like `/xpedit`. Set `PIPELINE_BASE_PATH=/xpedit` in `.env`.
+
+The domain names are placeholders — replace with your actual domain.
 
 ## Systemd
 

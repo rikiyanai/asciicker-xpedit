@@ -53,7 +53,7 @@
   const WEBBUILD_READY_TIMEOUT_MS = 180000;
   const DEFAULT_FLATMAP_NAME = "game_map_y8_original_game_map.a3d";
   const WEBBUILD_BASE_SRC = (() => {
-    const u = new URL("/termpp-web-flat/index.html?solo=1&player=player", window.location.origin);
+    const u = new URL(bp("/termpp-web-flat/index.html?solo=1&player=player"), window.location.origin);
     if (SERVER_BOOT_NONCE) u.searchParams.set("_srv", SERVER_BOOT_NONCE);
     const flatmapParam = String(params.get("flatmap") || "").trim();
     u.searchParams.set("flatmap", flatmapParam || DEFAULT_FLATMAP_NAME);
@@ -627,7 +627,7 @@
   }
 
   function webbuildFrameSrc(forceFresh = false) {
-    const raw = String(state.webbuild.src || "/termpp-web-flat/index.html?solo=1&player=player");
+    const raw = String(state.webbuild.src || bp("/termpp-web-flat/index.html?solo=1&player=player"));
     if (!forceFresh) return raw;
     try {
       const u = new URL(raw, window.location.origin);

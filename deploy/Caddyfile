@@ -5,6 +5,11 @@
 #
 # Assumes the Flask app is running on 127.0.0.1:5071 via gunicorn.
 # Replace xpedit.example.com with your actual domain.
+#
+# Two hosting modes are shown below. Enable ONE.
+
+# ── Mode A: Subdomain / root hosting (PIPELINE_BASE_PATH="") ──
+# The app owns the entire domain.
 
 xpedit.example.com {
 	reverse_proxy 127.0.0.1:5071
@@ -16,3 +21,21 @@ xpedit.example.com {
 	@runtime path /termpp-web/* /termpp-web-flat/*
 	header @runtime Cache-Control "public, max-age=3600"
 }
+
+# ── Mode B: Subpath hosting (PIPELINE_BASE_PATH="/xpedit") ──
+# The app lives under a prefix on a shared domain.
+# Set PIPELINE_BASE_PATH=/xpedit in .env before starting the app.
+#
+# rikiworld.com {
+# 	handle_path /xpedit/* {
+# 		reverse_proxy 127.0.0.1:5071
+# 	}
+#
+# 	# Other site content at /
+# 	handle {
+# 		root * /var/www/rikiworld
+# 		file_server
+# 	}
+#
+# 	encode gzip zstd
+# }

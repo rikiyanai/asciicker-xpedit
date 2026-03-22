@@ -217,3 +217,150 @@ class TestHtmlInjectionPrefixed:
         r = self.client.get("/xpedit/wizard")
         html = r.data.decode()
         assert 'href="/xpedit/workbench"' in html
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: Prefix-aware workflow smoke tests
+# ---------------------------------------------------------------------------
+
+
+class TestPrefixedWorkflowSmoke:
+    """End-to-end smoke: key workflows work under /xpedit prefix."""
+
+    @pytest.fixture(autouse=True)
+    def _app_with_prefix(self, monkeypatch, clean_data_dir):
+        monkeypatch.setenv("PIPELINE_BASE_PATH", "/xpedit")
+        import pipeline_v2.config as cfg_mod
+        import pipeline_v2.app as app_mod
+        importlib.reload(cfg_mod)
+        importlib.reload(app_mod)
+        app = app_mod.create_app()
+        app.config["TESTING"] = True
+        self.client = app.test_client()
+        yield
+        monkeypatch.delenv("PIPELINE_BASE_PATH", raising=False)
+        importlib.reload(cfg_mod)
+        importlib.reload(app_mod)
+
+    # ── Page loading ──
+
+    def test_workbench_loads_200(self):
+        r = self.client.get("/xpedit/workbench")
+        assert r.status_code == 200
+
+    def test_wizard_loads_200(self):
+        r = self.client.get("/xpedit/wizard")
+        assert r.status_code == 200
+
+    def test_workbench_no_bare_root_asset_refs(self):
+        """No href="/styles or src="/workbench without prefix in served HTML."""
+        r = self.client.get("/xpedit/workbench")
+        html = r.data.decode()
+        # All root-relative asset refs should start with /xpedit/
+        for tag in ['href="/styles.css', 'src="/workbench.js', 'src="/whole-sheet-init.js',
+                     'href="/rexpaint-editor/styles.css']:
+            assert tag not in html, f"Bare root-relative ref found: {tag}"
+
+    def test_wizard_no_bare_root_asset_refs(self):
+        r = self.client.get("/xpedit/wizard")
+        html = r.data.decode()
+        for tag in ['href="/styles.css', 'src="/wizard.js']:
+            assert tag not in html, f"Bare root-relative ref found: {tag}"
+
+    # ── Wizard → Workbench navigation ──
+
+    def test_wizard_links_to_prefixed_workbench(self):
+        r = self.client.get("/xpedit/wizard")
+        html = r.data.decode()
+        assert 'href="/xpedit/workbench"' in html
+
+    # ── Template apply (bundle create) ──
+
+    def test_template_registry_under_prefix(self):
+        r = self.client.get("/xpedit/api/workbench/templates")
+        assert r.status_code == 200
+        j = r.get_json()
+        assert "template_sets" in j
+
+    def test_bundle_create_under_prefix(self):
+        r = self.client.post(
+            "/xpedit/api/workbench/bundle/create",
+            json={"template_set_key": "player_native_full"},
+            content_type="application/json",
+        )
+        assert r.status_code == 201
+        j = r.get_json()
+        assert "bundle_id" in j
+        return j["bundle_id"]
+
+    # ── Save / export round-trip ──
+
+    def test_create_blank_session_under_prefix(self):
+        r = self.client.post(
+            "/xpedit/api/workbench/create-blank-session",
+            json={"template_set_key": "player_native_idle_only", "action_key": "idle"},
+            content_type="application/json",
+        )
+        assert r.status_code == 201
+        j = r.get_json()
+        assert "session_id" in j
+
+    def test_save_and_export_under_prefix(self):
+        # Create session
+        r = self.client.post(
+            "/xpedit/api/workbench/create-blank-session",
+            json={"template_set_key": "player_native_idle_only", "action_key": "idle"},
+            content_type="application/json",
+        )
+        sid = r.get_json()["session_id"]
+
+        # Save
+        r = self.client.post(
+            "/xpedit/api/workbench/save-session",
+            json={"session_id": sid},
+            content_type="application/json",
+        )
+        assert r.status_code == 200
+
+        # Export
+        r = self.client.post(
+            "/xpedit/api/workbench/export-xp",
+            json={"session_id": sid},
+            content_type="application/json",
+        )
+        assert r.status_code == 200
+        j = r.get_json()
+        assert "xp_path" in j
+
+    # ── Runtime preflight under prefix ──
+
+    def test_runtime_preflight_under_prefix(self):
+        r = self.client.get("/xpedit/api/workbench/runtime-preflight")
+        assert r.status_code == 200
+        j = r.get_json()
+        assert "ok" in j
+
+    # ── Static assets served under prefix ──
+
+    def test_styles_css_served_under_prefix(self):
+        r = self.client.get("/xpedit/styles.css")
+        assert r.status_code == 200
+
+    def test_workbench_js_served_under_prefix(self):
+        r = self.client.get("/xpedit/workbench.js")
+        assert r.status_code == 200
+
+    def test_wizard_js_served_under_prefix(self):
+        r = self.client.get("/xpedit/wizard.js")
+        assert r.status_code == 200
+
+    # ── Bare-root routes are 404 ──
+
+    def test_bare_workbench_404(self):
+        assert self.client.get("/workbench").status_code == 404
+
+    def test_bare_api_templates_404(self):
+        assert self.client.get("/api/workbench/templates").status_code == 404
+
+    def test_bare_styles_404(self):
+        assert self.client.get("/styles.css").status_code == 404

@@ -586,13 +586,30 @@ Subpath support is complete only when **all** of the following pass with `PIPELI
 
 ### Phase 6: Script re-validation
 
-**Scope:** Run scripts with prefixed URLs. Fix any path construction issues.
+**Scope:** Grep all scripts for leading-slash URL constructors. Fix every instance where a root-absolute path discards the base path prefix.
 
-**Files likely touched:**
-- `scripts/ui_tests/subagents/workbench_agents.mjs` — fix `new URL('/workbench', baseUrl)` if needed
-- `scripts/ui_tests/core/server_control.mjs` — verify origin extraction logic
+**Files touched:**
+- `scripts/ui_tests/subagents/workbench_agents.mjs` — 11 instances of `new URL('/workbench', baseUrl)` (lines 75, 97, 248, 377, 495, 570, 703, 843, 1319, plus coverage agent)
+- `scripts/ui_tests/subagents/workbench_coverage_agent.mjs` — 1 instance (line 594)
+- `scripts/ui_tests/runner/cli.mjs` — `defaultBaseUrl()` (line 24) extracts `.origin`, discarding path; line 305 `new URL('/workbench', ...)` constructor
+- `scripts/ui_tests/core/server_control.mjs` — `normalizeWorkbenchUrl()` (line 10) sets `u.pathname = '/workbench'`, discarding any prefix
 
-**Risks:** Low. Scripts already accept URL parameters.
+**The bug pattern:**
+```javascript
+// If baseUrl = "http://host:5071/asciicker-XPEdit"
+new URL('/workbench', baseUrl)
+// → "http://host:5071/workbench"  ← WRONG, prefix discarded
+// Should be: "http://host:5071/asciicker-XPEdit/workbench"
+```
+
+**How to find all instances:**
+```bash
+grep -rn "new URL('/" scripts/
+grep -rn 'new URL("/' scripts/
+grep -rn '\.pathname\s*=' scripts/
+```
+
+**Risks:** Low. Scripts already accept URL parameters. The fix is mechanical.
 
 **Verification:** Run the re-validation checklist from Section 6.
 
@@ -615,39 +632,589 @@ This plan explicitly does **not** include:
 - **Dynamic base path detection** — the base path is a fixed config value, not auto-detected from request headers
 - **WebSocket support** — not currently used; if added later, WebSocket paths would need the same prefix treatment
 - **CDN / asset pipeline** — no hashing, no bundling, no separate asset domain
-- **Runtime rebuild** — if the Emscripten runtime HTML has absolute paths, fixing it requires a C++ rebuild which is out of scope for this plan. The plan will document the finding and block subpath support on that fix.
+- **Runtime rebuild** — NOT needed. Audit confirmed all runtime paths are relative (see Appendix A).
 
 ---
 
-## Appendix A: Audit items to resolve before Phase 4
+## Appendix A: Runtime Iframe Audit — RESOLVED (2026-03-22)
 
-These must be checked during implementation, not deferred:
+All three audit items from the original plan have been resolved. **No blockers found.**
 
-1. **Read `runtime/termpp-skin-lab-static/termpp-web-flat/index.html`** — confirm all `<script src>`, `<link href>`, and Emscripten loader references are relative, not absolute.
-2. **Read `runtime/termpp-skin-lab-static/termpp-web-flat/index.js`** (the Emscripten-generated loader) — check for `locateFile` or hardcoded absolute paths for `.wasm` and `.data`.
-3. **Read `runtime/termpp-skin-lab-static/termpp-web/index.html`** — same check for the non-flat runtime (lower priority, used less).
+### A1. `runtime/termpp-skin-lab-static/termpp-web-flat/index.html`
+
+Minified HTML. Extracted references:
+
+| Tag | Value | Type | Verdict |
+|-----|-------|------|---------|
+| `<link href=asciicker.json rel=manifest>` | `asciicker.json` | Relative | **Safe** |
+| `<script src="flat_map_bootstrap.js">` | `flat_map_bootstrap.js` | Relative | **Safe** |
+
+No absolute `<script src="/...">` or `<link href="/...">` tags found.
+
+### A2. `runtime/termpp-skin-lab-static/termpp-web-flat/index.js` (Emscripten loader)
+
+Minified JS (single line). Key patterns extracted:
+
+| Pattern | Value | Verdict |
+|---------|-------|---------|
+| `REMOTE_PACKAGE_BASE` | `"index.data"` | Relative — **Safe** |
+| `findWasmBinary()` | `locateFile("index.wasm")` | Relative — **Safe** |
+| `locateFile(path)` | `return scriptDirectory + path` | Uses `scriptDirectory` |
+| `scriptDirectory` | `new URL(".", _scriptName).href` | Computed from script's own URL — **Safe** |
+
+**How it works:** Emscripten computes `scriptDirectory` from the script's own URL using `new URL(".", _scriptName).href`. When the script is loaded at `{BASE_PATH}/termpp-web-flat/index.js`, `scriptDirectory` becomes `{BASE_PATH}/termpp-web-flat/`. Then `locateFile("index.wasm")` resolves to `{BASE_PATH}/termpp-web-flat/index.wasm`. All relative. **No changes needed.**
+
+### A3. `runtime/termpp-skin-lab-static/termpp-web/index.html` (non-flat)
+
+Extracted references:
+
+| Tag | Value | Type | Verdict |
+|-----|-------|------|---------|
+| `<link href=asciicker.json rel=manifest>` | `asciicker.json` | Relative | **Safe** |
+
+No script src tags (script is inline or loaded differently). Lower priority — non-flat runtime is rarely used.
+
+### Summary
+
+**Runtime iframe is NOT a blocker for subpath support.** All paths are relative. Phase 4 reduces to a verification-only step — no code changes needed in the runtime bundle.
 
 ## Appendix B: Complete grep commands for verification
 
 After implementation, run these to confirm no root-relative paths remain:
 
 ```bash
-# API fetches without bp()
+# Frontend: API fetches without bp()
 grep -n 'fetch("/api' web/workbench.js web/wizard.js web/whole-sheet-init.js
+grep -n "fetch('/api" web/workbench.js web/wizard.js web/whole-sheet-init.js
 
-# Asset URLs without bp()
+# Frontend: Asset URLs without bp()
 grep -n "'/termpp-web" web/workbench.js web/wizard.js web/whole-sheet-init.js
 grep -n '"/termpp-web' web/workbench.js web/wizard.js web/whole-sheet-init.js
 
-# href/src without bp() (in JS)
-grep -n "\.src = '/" web/workbench.js web/wizard.js web/whole-sheet-init.js
-grep -n '\.src = "/' web/workbench.js web/wizard.js web/whole-sheet-init.js
-grep -n '\.href = "/' web/workbench.js web/wizard.js web/whole-sheet-init.js
-grep -n "\.href = '/" web/workbench.js web/wizard.js web/whole-sheet-init.js
+# Frontend: href/src assignments without bp()
+grep -n '\.src = [`'"'"'"]/' web/workbench.js web/wizard.js web/whole-sheet-init.js
+grep -n '\.href = [`'"'"'"]/' web/workbench.js web/wizard.js web/whole-sheet-init.js
 
-# URL construction without bp()
+# Frontend: URL construction without bp()
 grep -n 'new URL("/' web/workbench.js web/wizard.js web/whole-sheet-init.js
 grep -n "new URL('/" web/workbench.js web/wizard.js web/whole-sheet-init.js
+
+# Scripts: leading-slash URL constructors
+grep -rn "new URL('/" scripts/
+grep -rn 'new URL("/' scripts/
+grep -rn '\.pathname\s*=' scripts/
+
+# Backend: hardcoded root-relative paths
+grep -n 'redirect("/' src/pipeline_v2/app.py
+grep -n "redirect('/" src/pipeline_v2/app.py
 ```
 
-All should return zero matches (or only matches inside the `bp()` function definition itself).
+All frontend greps should return zero matches after Phase 3.
+Script greps should return zero leading-slash constructors after Phase 6 (except inside helper functions that already account for the prefix).
+
+## Appendix C: Precise Implementation Tasks
+
+This appendix provides exact code changes for each phase. An implementing session should execute these task by task. Each task is one atomic commit-ready unit.
+
+---
+
+### Phase 1 Tasks: Config and server plumbing
+
+#### Task 1.1: Add `BASE_PATH` to `config.py`
+
+**File:** `src/pipeline_v2/config.py`
+
+**Add after line 1** (after `from __future__ import annotations`):
+```python
+import os
+```
+
+**Add after line 18** (after `ENABLED_FAMILIES`):
+```python
+
+def _normalize_base_path(raw: str) -> str:
+    s = raw.strip().strip("/")
+    if not s:
+        return ""
+    return "/" + s
+
+BASE_PATH: str = _normalize_base_path(os.environ.get("PIPELINE_BASE_PATH", ""))
+```
+
+**Verify:** `python3 -c "from pipeline_v2.config import BASE_PATH; print(repr(BASE_PATH))"` prints `''`.
+
+#### Task 1.2: Refactor `create_app()` to use Blueprint
+
+**File:** `src/pipeline_v2/app.py`
+
+**Add import at line 8:**
+```python
+from flask import Flask, Blueprint, Response, jsonify, redirect, request, send_from_directory, send_file
+```
+
+**Add import from config (line 10):**
+```python
+from .config import ensure_dirs, ROOT, EXPORT_DIR, ENABLED_FAMILIES, BASE_PATH
+```
+
+**Refactor `create_app()`** — line 178:
+
+Replace:
+```python
+def create_app() -> Flask:
+    ensure_dirs()
+    app = Flask(__name__)
+
+    @app.route("/healthz")
+```
+
+With:
+```python
+def create_app() -> Flask:
+    ensure_dirs()
+    app = Flask(__name__)
+    bp = Blueprint("main", __name__)
+
+    @bp.route("/healthz")
+```
+
+Then change every `@app.route`, `@app.get`, `@app.post` to `@bp.route`, `@bp.get`, `@bp.post` respectively (36 route decorators total).
+
+**Keep `@app.errorhandler(500)` on `app`** — it stays as `@app.errorhandler`, NOT on the blueprint.
+
+**Fix the redirect** (line 188):
+```python
+    @bp.route("/")
+    def index_page():
+        return redirect(BASE_PATH + "/workbench", code=302)
+```
+
+**Register the blueprint before `return app`:**
+```python
+    app.register_blueprint(bp, url_prefix=BASE_PATH)
+
+    @app.errorhandler(500)
+    def api_500(_e):
+        ...
+
+    return app
+```
+
+**Critical ordering:** The catch-all `@bp.route("/<path:filename>")` must be defined AFTER all other routes on the blueprint. Flask matches routes in registration order within a blueprint. Current code already has it in the right position (line 203), so just keep that order.
+
+**Verify:**
+```bash
+PIPELINE_BASE_PATH="" PYTHONPATH=src python3 -m pipeline_v2.app &
+curl http://127.0.0.1:5071/healthz         # → "ok"
+curl -sI http://127.0.0.1:5071/            # → 302 → /workbench
+curl -s http://127.0.0.1:5071/workbench | head -5  # → HTML
+kill %1
+
+PIPELINE_BASE_PATH="/test" PYTHONPATH=src python3 -m pipeline_v2.app &
+curl http://127.0.0.1:5071/test/healthz    # → "ok"
+curl -sI http://127.0.0.1:5071/test/       # → 302 → /test/workbench
+curl http://127.0.0.1:5071/healthz         # → 404 (routes NOT at root)
+kill %1
+```
+
+**Commit:** `feat: add PIPELINE_BASE_PATH config and Blueprint routing`
+
+#### Task 1.3: Add env var to deploy template
+
+**File:** `deploy/.env.example`
+
+**Add after line 7** (after `PIPELINE_DEBUG=false`):
+```
+# URL prefix for subpath hosting (empty = root-hosted, default)
+# Example: /asciicker-XPEdit
+PIPELINE_BASE_PATH=
+```
+
+---
+
+### Phase 2 Tasks: HTML injection prefixing
+
+#### Task 2.1: Inject `window.__WB_BASE_PATH` and prefix asset paths
+
+**File:** `src/pipeline_v2/app.py`
+
+**Replace the `_serve_web_html` function** (lines 79-89):
+
+```python
+def _serve_web_html(file_name: str):
+    p = (WEB_DIR / file_name).resolve()
+    html = p.read_text(encoding="utf-8")
+    # Prefix asset paths with BASE_PATH
+    html = html.replace('href="/styles.css"', f'href="{_v(BASE_PATH + "/styles.css")}"')
+    html = html.replace('href="/rexpaint-editor/styles.css"', f'href="{_v(BASE_PATH + "/rexpaint-editor/styles.css")}"')
+    html = html.replace('src="/wizard.js"', f'src="{_v(BASE_PATH + "/wizard.js")}"')
+    html = html.replace('src="/workbench.js"', f'src="{_v(BASE_PATH + "/workbench.js")}"')
+    html = html.replace('src="./termpp_skin_lab.js"', f'src="{_v(BASE_PATH + "/termpp_skin_lab.js")}"')
+    # Prefix inline links
+    html = html.replace('href="/workbench"', f'href="{BASE_PATH}/workbench"')
+    # whole-sheet-init.js — type=module src
+    html = html.replace('src="/whole-sheet-init.js"', f'src="{_v(BASE_PATH + "/whole-sheet-init.js")}"')
+    # Inject base path and boot nonce globals
+    globals_script = (
+        f'<script>'
+        f'window.__WB_BASE_PATH = "{BASE_PATH}";'
+        f'window.__WB_SERVER_BOOT_NONCE = "{SERVER_BOOT_NONCE}";'
+        f'</script>'
+    )
+    if "</head>" in html:
+        html = html.replace("</head>", f"  {globals_script}\n</head>", 1)
+    return _no_cache(Response(html, mimetype="text/html"))
+```
+
+**Note on replacement safety:**
+- `href="/styles.css"` (workbench.html:7, wizard.html:7) — unique match, won't collide with `/rexpaint-editor/styles.css` because that match string is `href="/rexpaint-editor/styles.css"`.
+- `src="/whole-sheet-init.js"` (workbench.html:426) — only appears once.
+- `href="/workbench"` (wizard.html:13) — catches the `<a>` link.
+
+**Verify:**
+```bash
+PIPELINE_BASE_PATH="/test" PYTHONPATH=src python3 -m pipeline_v2.app &
+curl -s http://127.0.0.1:5071/test/workbench | grep -o 'window.__WB_BASE_PATH = "[^"]*"'
+# → window.__WB_BASE_PATH = "/test"
+curl -s http://127.0.0.1:5071/test/workbench | grep -o 'href="[^"]*styles[^"]*"'
+# → href="/test/styles.css?v=..."
+# → href="/test/rexpaint-editor/styles.css?v=..."
+curl -s http://127.0.0.1:5071/test/wizard | grep -o 'href="[^"]*workbench[^"]*"'
+# → href="/test/workbench"
+kill %1
+```
+
+**Commit:** `feat: base-path-aware HTML asset injection`
+
+---
+
+### Phase 3 Tasks: Frontend `bp()` helper and fetch prefixing
+
+#### Task 3.1: Add `bp()` helper to `workbench.js`
+
+**File:** `web/workbench.js`
+
+**Add after line 7** (after `const SERVER_BOOT_NONCE = ...`):
+```javascript
+  const BASE_PATH = String(window.__WB_BASE_PATH || "");
+  function bp(path) { return BASE_PATH + path; }
+```
+
+#### Task 3.2: Prefix all API fetch calls in `workbench.js`
+
+**File:** `web/workbench.js`
+
+Every `fetch("/api/...` becomes `fetch(bp("/api/...`. The complete list (23 sites):
+
+| Line | Current | Replace with |
+|------|---------|-------------|
+| 539 | `fetch("/api/workbench/runtime-preflight"` | `fetch(bp("/api/workbench/runtime-preflight")` |
+| 1194 | `? "/api/workbench/web-skin-bundle-payload"` | `? bp("/api/workbench/web-skin-bundle-payload")` |
+| 1195 | `: "/api/workbench/web-skin-payload"` | `: bp("/api/workbench/web-skin-payload")` |
+| 1449 | `` fetch(`/api/workbench/termpp-stream/status/... `` | `` fetch(bp(`/api/workbench/termpp-stream/status/...`)) `` |
+| 1500 | `fetch("/api/workbench/termpp-stream/start"` | `fetch(bp("/api/workbench/termpp-stream/start")` |
+| 1523 | `fetch("/api/workbench/termpp-stream/start"` | `fetch(bp("/api/workbench/termpp-stream/start")` |
+| 1545 | `fetch("/api/workbench/termpp-stream/stop"` | `fetch(bp("/api/workbench/termpp-stream/stop")` |
+| 1569 | `fetch("/api/workbench/termpp-skin-command"` | `fetch(bp("/api/workbench/termpp-skin-command")` |
+| 1594 | `fetch("/api/workbench/open-termpp-skin"` | `fetch(bp("/api/workbench/open-termpp-skin")` |
+| 1634 | `fetch("/api/workbench/run-verification"` | `fetch(bp("/api/workbench/run-verification")` |
+| 1666 | `fetch("/api/workbench/xp-tool-command"` | `fetch(bp("/api/workbench/xp-tool-command")` |
+| 1688 | `fetch("/api/workbench/open-in-xp-tool"` | `fetch(bp("/api/workbench/open-in-xp-tool")` |
+| 3562 | `fetch("/api/workbench/save-session"` | `fetch(bp("/api/workbench/save-session")` |
+| 3708 | `fetch("/api/workbench/load-from-job"` | `fetch(bp("/api/workbench/load-from-job")` |
+| 3740 | `fetch("/api/workbench/load-session"` | `fetch(bp("/api/workbench/load-session")` |
+| 3782 | `fetch("/api/workbench/upload-xp"` | `fetch(bp("/api/workbench/upload-xp")` |
+| 3842 | `fetch("/api/workbench/export-xp"` | `fetch(bp("/api/workbench/export-xp")` |
+| 5984 | `fetch("/api/upload"` | `fetch(bp("/api/upload")` |
+| 5999 | `fetch("/api/analyze"` | `fetch(bp("/api/analyze")` |
+| 6030 | `fetch("/api/workbench/templates")` | `fetch(bp("/api/workbench/templates"))` |
+| 6116 | `fetch("/api/workbench/bundle/action-status"` | `fetch(bp("/api/workbench/bundle/action-status")` |
+| 6242 | `fetch("/api/workbench/create-blank-session"` | `fetch(bp("/api/workbench/create-blank-session")` |
+| 6332 | `fetch("/api/workbench/bundle/create"` | `fetch(bp("/api/workbench/bundle/create")` |
+| 6371 | `fetch("/api/workbench/action-grid/apply"` | `fetch(bp("/api/workbench/action-grid/apply")` |
+| 6418 | `fetch("/api/run"` | `fetch(bp("/api/run")` |
+
+#### Task 3.3: Prefix template-literal URLs in `workbench.js`
+
+| Line | Current | Replace with |
+|------|---------|-------------|
+| 1443 | `` img.src = `/api/workbench/termpp-stream/frame/${...}?t=${...}` `` | `` img.src = bp(`/api/workbench/termpp-stream/frame/${...}?t=${...}`) `` |
+| 1449 | `` fetch(`/api/workbench/termpp-stream/status/${...}`) `` | `` fetch(bp(`/api/workbench/termpp-stream/status/${...}`)) `` |
+| 3870 | `` a.href = `/api/workbench/download-xp?xp_path=${...}` `` | `` a.href = bp(`/api/workbench/download-xp?xp_path=${...}`) `` |
+
+#### Task 3.4: Prefix iframe source URL in `workbench.js`
+
+**Line 53:**
+```javascript
+// Before:
+const u = new URL("/termpp-web-flat/index.html?solo=1&player=player", window.location.origin);
+// After:
+const u = new URL(bp("/termpp-web-flat/index.html") + "?solo=1&player=player", window.location.origin);
+```
+
+**Line 627:**
+```javascript
+// Before:
+const raw = String(state.webbuild.src || "/termpp-web-flat/index.html?solo=1&player=player");
+// After:
+const raw = String(state.webbuild.src || bp("/termpp-web-flat/index.html?solo=1&player=player"));
+```
+
+#### Task 3.5: Add `bp()` to `wizard.js` and prefix its URLs
+
+**File:** `web/wizard.js`
+
+**Add after line 3** (after `const $ = ...`):
+```javascript
+  const BASE_PATH = String(window.__WB_BASE_PATH || "");
+  function bp(path) { return BASE_PATH + path; }
+```
+
+**Prefix fetches:**
+
+| Line | Current | Replace with |
+|------|---------|-------------|
+| 22 | `fetch("/api/upload"` | `fetch(bp("/api/upload")` |
+| 32 | `fetch("/api/analyze"` | `fetch(bp("/api/analyze")` |
+| 66 | `fetch("/api/run"` | `fetch(bp("/api/run")` |
+
+**Prefix navigation (line 91):**
+```javascript
+// Before:
+const u = new URL("/workbench", window.location.origin);
+// After:
+const u = new URL(bp("/workbench"), window.location.origin);
+```
+
+#### Task 3.6: Add `bp()` to `whole-sheet-init.js` and prefix font URL
+
+**File:** `web/whole-sheet-init.js`
+
+**Add after line 19** (after the FillTool import):
+```javascript
+const _WS_BASE_PATH = String(window.__WB_BASE_PATH || "");
+function bp(path) { return _WS_BASE_PATH + path; }
+```
+
+**Line 21:**
+```javascript
+// Before:
+const FONT_URL = '/termpp-web-flat/fonts/cp437_12x12.png';
+// After:
+const FONT_URL = bp('/termpp-web-flat/fonts/cp437_12x12.png');
+```
+
+#### Task 3.7: Verify with grep
+
+```bash
+grep -n 'fetch("/api' web/workbench.js web/wizard.js
+# Expected: 0 matches (all wrapped in bp())
+
+grep -n 'fetch(`/api' web/workbench.js
+# Expected: 0 matches
+
+grep -n "'/termpp-web" web/whole-sheet-init.js
+# Expected: 0 matches (font URL now uses bp())
+
+grep -n 'new URL("/termpp' web/workbench.js
+# Expected: 0 matches
+
+grep -n 'new URL("/workbench' web/wizard.js
+# Expected: 0 matches
+```
+
+**Commit:** `feat: frontend base-path prefixing via bp() helper`
+
+---
+
+### Phase 4 Tasks: Runtime iframe verification (no code changes)
+
+#### Task 4.1: Verify runtime under prefix
+
+**Already resolved by Appendix A audit.** All runtime paths are relative. This phase is verification-only.
+
+```bash
+PIPELINE_BASE_PATH="/test" PYTHONPATH=src python3 -m pipeline_v2.app &
+# Open browser to http://127.0.0.1:5071/test/workbench
+# Click "Test This Skin" (or any flow that loads the iframe)
+# Open DevTools → Network → verify:
+#   /test/termpp-web-flat/index.html → 200
+#   /test/termpp-web-flat/index.js → 200
+#   /test/termpp-web-flat/index.wasm → 200
+#   /test/termpp-web-flat/index.data → 200
+#   /test/termpp-web-flat/flat_map_bootstrap.js → 200
+#   /test/termpp-web-flat/flatmaps/*.a3d → 200
+#   /test/termpp-web-flat/fonts/cp437_12x12.png → 200
+kill %1
+```
+
+**No commit needed unless fixes are discovered.**
+
+---
+
+### Phase 5 Tasks: Deploy templates
+
+#### Task 5.1: Add subpath Caddy example
+
+**File:** Create `deploy/Caddyfile.subpath` or add commented section to existing `deploy/Caddyfile`:
+
+```caddyfile
+# Subpath hosting: rikiworld.com/asciicker-XPEdit
+# Flask must be started with PIPELINE_BASE_PATH=/asciicker-XPEdit
+# Caddy `handle` (not handle_path) preserves the prefix in the upstream request.
+rikiworld.com {
+    handle /asciicker-XPEdit/* {
+        reverse_proxy 127.0.0.1:5071
+    }
+    encode gzip zstd
+}
+```
+
+#### Task 5.2: Add subpath Nginx example
+
+**File:** Create `deploy/nginx-subpath.conf` or add commented section to existing `deploy/nginx.conf`:
+
+```nginx
+# Subpath hosting: rikiworld.com/asciicker-XPEdit
+# Flask must be started with PIPELINE_BASE_PATH=/asciicker-XPEdit
+# proxy_pass with matching path preserves the prefix.
+server {
+    listen 80;
+    server_name rikiworld.com;
+
+    location /asciicker-XPEdit/ {
+        proxy_pass http://127.0.0.1:5071/asciicker-XPEdit/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+**Commit:** `docs: add subpath reverse proxy config templates`
+
+---
+
+### Phase 6 Tasks: Script URL fixes
+
+#### Task 6.1: Grep for all leading-slash URL constructors
+
+```bash
+grep -rn "new URL('/" scripts/
+grep -rn 'new URL("/' scripts/
+grep -rn '\.pathname\s*=' scripts/
+```
+
+#### Task 6.2: Fix `server_control.mjs` normalizeWorkbenchUrl
+
+**File:** `scripts/ui_tests/core/server_control.mjs` (lines 5-16)
+
+**Current bug:** Line 10 — `u.pathname = '/workbench'` discards any base path prefix in the URL.
+
+```javascript
+// Before (line 5-16):
+function normalizeWorkbenchUrl(baseUrl) {
+  const raw = String(baseUrl || process.env.WORKBENCH_URL || 'http://127.0.0.1:5071/workbench');
+  try {
+    const u = new URL(raw);
+    if (!u.pathname || u.pathname === '/') {
+      u.pathname = '/workbench';        // ← discards prefix
+    }
+    return u.toString();
+  } catch {
+    return raw;
+  }
+}
+
+// After:
+function normalizeWorkbenchUrl(baseUrl) {
+  const raw = String(baseUrl || process.env.WORKBENCH_URL || 'http://127.0.0.1:5071/workbench');
+  try {
+    const u = new URL(raw);
+    if (!u.pathname || u.pathname === '/') {
+      u.pathname = '/workbench';
+    } else if (!u.pathname.endsWith('/workbench')) {
+      // Preserve base path prefix: /prefix → /prefix/workbench
+      u.pathname = u.pathname.replace(/\/$/, '') + '/workbench';
+    }
+    return u.toString();
+  } catch {
+    return raw;
+  }
+}
+```
+
+#### Task 6.3: Fix `cli.mjs` defaultBaseUrl
+
+**File:** `scripts/ui_tests/runner/cli.mjs` (lines 21-28)
+
+**Current bug:** `new URL(raw).origin` discards the path prefix.
+
+```javascript
+// Before:
+function defaultBaseUrl() {
+  const raw = String(process.env.WORKBENCH_URL || 'http://127.0.0.1:5071/workbench');
+  try {
+    return new URL(raw).origin;
+  } catch {
+    return 'http://127.0.0.1:5071';
+  }
+}
+
+// After:
+function defaultBaseUrl() {
+  const raw = String(process.env.WORKBENCH_URL || 'http://127.0.0.1:5071/workbench');
+  try {
+    const u = new URL(raw);
+    // Preserve path prefix: http://host/prefix/workbench → http://host/prefix
+    let base = u.origin;
+    if (u.pathname && u.pathname !== '/' && u.pathname !== '/workbench') {
+      const stripped = u.pathname.replace(/\/workbench\/?$/, '');
+      if (stripped) base += stripped;
+    }
+    return base;
+  } catch {
+    return 'http://127.0.0.1:5071';
+  }
+}
+```
+
+#### Task 6.4: Fix `workbench_agents.mjs` URL constructors
+
+**File:** `scripts/ui_tests/subagents/workbench_agents.mjs`
+
+**11 instances** of `new URL('/workbench', baseUrl)` at lines 75, 97, 248, 377, 495, 570, 703, 843, 1319.
+
+**The bug:** `new URL('/workbench', 'http://host/prefix')` → `http://host/workbench` (prefix discarded).
+
+**Fix approach — add a helper at the top of the file:**
+```javascript
+function workbenchUrl(baseUrl) {
+  try {
+    const u = new URL(baseUrl);
+    const base = u.pathname.replace(/\/$/, '');
+    u.pathname = base + '/workbench';
+    return u.toString();
+  } catch {
+    return baseUrl + '/workbench';
+  }
+}
+```
+
+Then replace all `new URL('/workbench', baseUrl).toString()` with `workbenchUrl(baseUrl)`.
+
+**Same pattern in `workbench_coverage_agent.mjs` line 594.**
+
+#### Task 6.5: Fix `cli.mjs` line 305
+
+```javascript
+// Before:
+serverHandle = await ensureFlaskWorkbenchServer({ baseUrl: new URL('/workbench', opts.baseUrl).toString(), ... });
+// After:
+serverHandle = await ensureFlaskWorkbenchServer({ baseUrl: workbenchUrl(opts.baseUrl), ... });
+```
+
+(Import `workbenchUrl` from agents or duplicate the helper.)
+
+**Commit:** `fix: script URL construction for subpath hosting`

@@ -179,6 +179,10 @@ def create_app() -> Flask:
     ensure_dirs()
     app = Flask(__name__)
 
+    @app.route("/healthz")
+    def healthz():
+        return "ok", 200
+
     @app.route("/")
     def index_page():
         return redirect("/workbench", code=302)

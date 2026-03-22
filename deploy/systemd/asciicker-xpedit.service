@@ -1,0 +1,23 @@
+[Unit]
+Description=Asciicker XP Editor (Flask/Gunicorn)
+After=network.target
+
+[Service]
+Type=notify
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/asciicker-pipeline-v2
+EnvironmentFile=/opt/asciicker-pipeline-v2/.env
+ExecStart=/opt/asciicker-pipeline-v2/venv/bin/gunicorn wsgi:app \
+    --bind ${PIPELINE_HOST}:${PIPELINE_PORT} \
+    --workers ${GUNICORN_WORKERS:-3} \
+    --timeout 120 \
+    --access-logfile - \
+    --error-logfile -
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

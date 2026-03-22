@@ -81,7 +81,7 @@ Every route currently assumes root mounting. The complete inventory:
 | `GET /termpp-web-flat` | `termpp_web_flat_index_alias` | Must be `{BASE_PATH}/termpp-web-flat` |
 | `GET /termpp-web-flat/<path>` | `termpp_web_flat_assets` | Must be `{BASE_PATH}/termpp-web-flat/<path>` |
 
-#### API routes (24)
+#### API routes (28)
 
 All `/api/*` routes (upload, analyze, run, status, workbench CRUD, bundle, stream, verification, skin payload, download, templates, runtime-preflight, export-bundle, action-grid/apply, bundle/action-status, bundle/create) must be under `{BASE_PATH}/api/*`.
 
@@ -649,7 +649,7 @@ Add a note in the subpath proxy template with a commented-out favicon handler.
 **Scope:** Grep all scripts for leading-slash URL constructors. Fix every instance where a root-absolute path discards the base path prefix.
 
 **Files touched:**
-- `scripts/ui_tests/subagents/workbench_agents.mjs` — 11 instances of `new URL('/workbench', baseUrl)` (lines 75, 97, 248, 377, 495, 570, 703, 843, 1319, plus coverage agent)
+- `scripts/ui_tests/subagents/workbench_agents.mjs` — 9 instances of `new URL('/workbench', baseUrl)` (lines 75, 97, 248, 377, 495, 570, 703, 843, 1319)
 - `scripts/ui_tests/subagents/workbench_coverage_agent.mjs` — 1 instance (line 594)
 - `scripts/ui_tests/runner/cli.mjs` — `defaultBaseUrl()` (line 24) extracts `.origin`, discarding path; line 305 `new URL('/workbench', ...)` constructor
 - `scripts/ui_tests/core/server_control.mjs` — `normalizeWorkbenchUrl()` (line 10) sets `u.pathname = '/workbench'`, discarding any prefix
@@ -838,7 +838,7 @@ def create_app() -> Flask:
     @bp.route("/healthz")
 ```
 
-Then change every `@app.route`, `@app.get`, `@app.post` to `@bp.route`, `@bp.get`, `@bp.post` respectively (37 route decorators total).
+Then change every `@app.route`, `@app.get`, `@app.post` to `@bp.route`, `@bp.get`, `@bp.post` respectively (38 route decorators total).
 
 **Keep `@app.errorhandler(500)` on `app`** — it stays as `@app.errorhandler`, NOT on the blueprint.
 

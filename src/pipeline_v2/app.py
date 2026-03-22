@@ -611,6 +611,15 @@ def create_app() -> Flask:
     return app
 
 
-if __name__ == "__main__":
+def _main():
+    import os
+
+    host = os.environ.get("PIPELINE_HOST", "127.0.0.1")
+    port = int(os.environ.get("PIPELINE_PORT", "5071"))
+    debug = os.environ.get("PIPELINE_DEBUG", "").lower() in ("1", "true", "yes")
     app = create_app()
-    app.run(host="127.0.0.1", port=5071, debug=False)
+    app.run(host=host, port=port, debug=debug)
+
+
+if __name__ == "__main__":
+    _main()

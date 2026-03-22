@@ -5,6 +5,9 @@
   const $ = (id) => document.getElementById(id);
   const params = new URLSearchParams(window.location.search);
   const SERVER_BOOT_NONCE = String(window.__WB_SERVER_BOOT_NONCE || "").trim();
+  const BASE_PATH = String(window.__WB_BASE_PATH || "");
+  /** Prepend base path to a root-relative URL. bp("/api/foo") → "/xpedit/api/foo" */
+  function bp(path) { return BASE_PATH + path; }
   const DEFAULT_LAYER_NAMES = ["Metadata", "Layer 1", "Visual", "Layer 3"];
   const VERIFY_CMD_TEMPLATE_STORAGE_KEY = "wb_verify_command_template_v1";
   const TERM_STREAM_REGION_STORAGE_KEY = "wb_termpp_stream_region_v1";
@@ -536,7 +539,7 @@
 
   async function fetchRuntimePreflight() {
     try {
-      const r = await fetch("/api/workbench/runtime-preflight", { cache: "no-store" });
+      const r = await fetch(bp("/api/workbench/runtime-preflight"), { cache: "no-store" });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || `runtime preflight HTTP ${r.status}`);
       state.webbuild.runtimePreflight = {
@@ -1191,8 +1194,8 @@
         const tPayload = Date.now();
         const useBundlePayload = isBundleMode();
         const payloadUrl = useBundlePayload
-          ? "/api/workbench/web-skin-bundle-payload"
-          : "/api/workbench/web-skin-payload";
+          ? bp("/api/workbench/web-skin-bundle-payload")
+          : bp("/api/workbench/web-skin-payload");
         const payloadBody = useBundlePayload
           ? { bundle_id: state.bundleId }
           : { session_id: state.sessionId };
@@ -1440,13 +1443,13 @@
     const img = $("termppStreamImg");
     if (!img) return;
     img.style.display = "block";
-    img.src = `/api/workbench/termpp-stream/frame/${encodeURIComponent(state.termppStream.id)}?t=${Date.now()}`;
+    img.src = bp(`/api/workbench/termpp-stream/frame/${encodeURIComponent(state.termppStream.id)}?t=${Date.now()}`);
   }
 
   async function pollTermppStreamStatus() {
     if (!state.termppStream.id) return;
     try {
-      const r = await fetch(`/api/workbench/termpp-stream/status/${encodeURIComponent(state.termppStream.id)}`);
+      const r = await fetch(bp(`/api/workbench/termpp-stream/status/${encodeURIComponent(state.termppStream.id)}`));
       const j = await r.json();
       if (!r.ok) {
         $("termppStreamInfo").textContent = `stream status error: ${j.error || "request failed"}`;
@@ -1497,7 +1500,7 @@
     persistTermppStreamRegion();
     const region = termppStreamRegionPayload();
     try {
-      const r = await fetch("/api/workbench/termpp-stream/start", {
+      const r = await fetch(bp("/api/workbench/termpp-stream/start"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ session_id: state.sessionId, dry_run: true, ...region }),
@@ -1520,7 +1523,7 @@
     const region = termppStreamRegionPayload();
     try {
       status("Starting TERM++ embed stream...", "warn");
-      const r = await fetch("/api/workbench/termpp-stream/start", {
+      const r = await fetch(bp("/api/workbench/termpp-stream/start"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ session_id: state.sessionId, dry_run: false, ...region }),
@@ -1542,7 +1545,7 @@
   async function stopTermppEmbedStream() {
     if (!state.termppStream.id) return;
     try {
-      const r = await fetch("/api/workbench/termpp-stream/stop", {
+      const r = await fetch(bp("/api/workbench/termpp-stream/stop"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ stream_id: state.termppStream.id }),
@@ -1566,7 +1569,7 @@
     try {
       await saveSessionState("pre-termpp-skin-preview");
       status("Preparing TERM++ skin launch preview...", "warn");
-      const r = await fetch("/api/workbench/termpp-skin-command", {
+      const r = await fetch(bp("/api/workbench/termpp-skin-command"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1591,7 +1594,7 @@
     try {
       await saveSessionState("pre-termpp-skin-launch");
       status("Launching TERM++ SKIN runtime...", "warn");
-      const r = await fetch("/api/workbench/open-termpp-skin", {
+      const r = await fetch(bp("/api/workbench/open-termpp-skin"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1631,7 +1634,7 @@
         timeout_sec: timeoutSec,
         dry_run: !!dryRun,
       };
-      const r = await fetch("/api/workbench/run-verification", {
+      const r = await fetch(bp("/api/workbench/run-verification"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -1663,7 +1666,7 @@
   async function refreshXpToolCommand(xpPath) {
     if (!xpPath) return;
     try {
-      const r = await fetch("/api/workbench/xp-tool-command", {
+      const r = await fetch(bp("/api/workbench/xp-tool-command"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ xp_path: xpPath }),
@@ -1685,7 +1688,7 @@
       return;
     }
     try {
-      const r = await fetch("/api/workbench/open-in-xp-tool", {
+      const r = await fetch(bp("/api/workbench/open-in-xp-tool"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ xp_path: state.latestXpPath }),
@@ -3559,7 +3562,7 @@
         source_draft_box: state.drawCurrent,
         source_cuts_v: state.sourceCutsV,
       };
-      const r = await fetch("/api/workbench/save-session", {
+      const r = await fetch(bp("/api/workbench/save-session"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -3705,7 +3708,7 @@
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), 20000);
     try {
-      const r = await fetch("/api/workbench/load-from-job", {
+      const r = await fetch(bp("/api/workbench/load-from-job"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ job_id: state.jobId }),
@@ -3737,7 +3740,7 @@
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), 20000);
     try {
-      const r = await fetch("/api/workbench/load-session", {
+      const r = await fetch(bp("/api/workbench/load-session"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ session_id: sid }),
@@ -3779,7 +3782,7 @@
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), 30000);
     try {
-      const r = await fetch("/api/workbench/upload-xp", {
+      const r = await fetch(bp("/api/workbench/upload-xp"), {
         method: "POST",
         body: fd,
         signal: ctl.signal,
@@ -3839,7 +3842,7 @@
       status("Export blocked: session save failed/timed out", "err");
       return;
     }
-    const r = await fetch("/api/workbench/export-xp", {
+    const r = await fetch(bp("/api/workbench/export-xp"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ session_id: state.sessionId }),
@@ -3867,7 +3870,7 @@
       }
       try {
         const a = document.createElement("a");
-        a.href = `/api/workbench/download-xp?xp_path=${encodeURIComponent(state.latestXpPath)}`;
+        a.href = bp(`/api/workbench/download-xp?xp_path=${encodeURIComponent(state.latestXpPath)}`);
         a.download = "";
         a.style.display = "none";
         document.body.appendChild(a);
@@ -5981,7 +5984,7 @@
 
     const fd = new FormData();
     fd.append("file", f);
-    const r = await fetch("/api/upload", { method: "POST", body: fd });
+    const r = await fetch(bp("/api/upload"), { method: "POST", body: fd });
     const j = await r.json();
     $("wbRunOut").textContent = JSON.stringify(j, null, 2);
     if (!r.ok) {
@@ -5996,7 +5999,7 @@
 
   async function wbAnalyze() {
     if (!state.sourcePath) return;
-    const r = await fetch("/api/analyze", {
+    const r = await fetch(bp("/api/analyze"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ source_path: state.sourcePath }),
@@ -6027,7 +6030,7 @@
   async function fetchTemplateRegistry() {
     if (state.templateRegistry) return state.templateRegistry;
     try {
-      const r = await fetch("/api/workbench/templates");
+      const r = await fetch(bp("/api/workbench/templates"));
       if (r.ok) {
         state.templateRegistry = await r.json();
       }
@@ -6113,7 +6116,7 @@
 
   async function persistBundleActionStatus(actionKey, statusValue) {
     if (!isBundleMode() || !state.bundleId) return { ok: false, skipped: "not_bundle_mode" };
-    const r = await fetch("/api/workbench/bundle/action-status", {
+    const r = await fetch(bp("/api/workbench/bundle/action-status"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -6239,7 +6242,7 @@
   }
 
   async function createBlankTemplateSession(templateSetKey, actionKey) {
-    const r = await fetch("/api/workbench/create-blank-session", {
+    const r = await fetch(bp("/api/workbench/create-blank-session"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -6329,7 +6332,7 @@
     // Multi-action: create bundle plus blank sessions for each enabled action.
     status("Creating blank authoring bundle...", "warn");
     try {
-      const r = await fetch("/api/workbench/bundle/create", {
+      const r = await fetch(bp("/api/workbench/bundle/create"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ template_set_key: key }),
@@ -6368,7 +6371,7 @@
     const actionKey = state.activeActionKey;
     status(`Running ${actionKey} conversion...`, "warn");
     try {
-      const r = await fetch("/api/workbench/action-grid/apply", {
+      const r = await fetch(bp("/api/workbench/action-grid/apply"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -6415,7 +6418,7 @@
       source_projs: parseInt($("wbSourceProjs").value || "1", 10),
       render_resolution: parseInt($("wbRenderRes").value || "12", 10),
     };
-    const r = await fetch("/api/run", {
+    const r = await fetch(bp("/api/run"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

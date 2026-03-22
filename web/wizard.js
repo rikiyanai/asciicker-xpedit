@@ -2,6 +2,8 @@
   "use strict";
 
   const $ = (id) => document.getElementById(id);
+  const BASE_PATH = String(window.__WB_BASE_PATH || "");
+  function bp(path) { return BASE_PATH + path; }
   let sourcePath = null;
   let runResult = null;
 
@@ -19,7 +21,7 @@
     }
     const fd = new FormData();
     fd.append("file", f);
-    const r = await fetch("/api/upload", { method: "POST", body: fd });
+    const r = await fetch(bp("/api/upload"), { method: "POST", body: fd });
     const j = await r.json();
     $("uploadOut").textContent = JSON.stringify(j, null, 2);
     if (!r.ok) return;
@@ -29,7 +31,7 @@
   });
 
   $("btnAnalyze").addEventListener("click", async () => {
-    const r = await fetch("/api/analyze", {
+    const r = await fetch(bp("/api/analyze"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ source_path: sourcePath })
@@ -63,7 +65,7 @@
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), 90000);
     try {
-      const r = await fetch("/api/run", {
+      const r = await fetch(bp("/api/run"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -88,7 +90,7 @@
 
   $("btnOpenWorkbench").addEventListener("click", () => {
     if (!runResult) return;
-    const u = new URL("/workbench", window.location.origin);
+    const u = new URL(bp("/workbench"), window.location.origin);
     u.searchParams.set("job_id", runResult.job_id);
     window.location.href = u.toString();
   });

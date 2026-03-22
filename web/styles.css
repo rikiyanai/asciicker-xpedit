@@ -68,6 +68,52 @@ body {
   text-transform: uppercase;
 }
 
+.bug-report-copy,
+.bug-report-preview {
+  margin: 8px 0 12px;
+  line-height: 1.45;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(7, 10, 16, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  z-index: 1200;
+}
+
+.overlay-card {
+  width: min(680px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  background: #121722;
+  border: 1px solid #2a3448;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+textarea {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+  border-radius: 8px;
+  border: 1px solid #334158;
+  background: #0c1119;
+  color: var(--fg);
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+button.danger {
+  border-color: #7f2020;
+  background: linear-gradient(180deg, rgba(127, 32, 32, 0.34), rgba(44, 11, 11, 0.95));
+  color: #ffd2d2;
+}
+
 .template-guide,
 .whole-sheet-guide {
   margin-top: 10px;

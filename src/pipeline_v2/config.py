@@ -12,6 +12,7 @@ PREVIEWS_DIR = DATA_DIR / "previews"
 GATES_DIR = DATA_DIR / "gates"
 TRACES_DIR = DATA_DIR / "traces"
 BUNDLES_DIR = DATA_DIR / "bundles"
+BUG_REPORTS_DIR = DATA_DIR / "bug_reports"
 CONFIG_DIR = ROOT / "config"
 SPRITES_DIR = ROOT / "sprites"
 
@@ -29,5 +30,6 @@ def ensure_dirs() -> None:
         GATES_DIR,
         TRACES_DIR,
         BUNDLES_DIR,
+        BUG_REPORTS_DIR,
     ]:
         path.mkdir(parents=True, exist_ok=True)

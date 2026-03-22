@@ -185,6 +185,9 @@
       installed: false,
       statusObserver: null,
     },
+    bugReport: {
+      recentErrors: [],
+    },
   };
 
   function status(text, cls) {
@@ -211,6 +214,18 @@
       sessionId: state.sessionId ? String(state.sessionId) : "",
       jobId: state.jobId ? String(state.jobId) : "",
     };
+  }
+
+  function rememberBugError(kind, detail) {
+    const entry = {
+      t_ms: Date.now(),
+      kind: String(kind || ""),
+      detail: detail || {},
+    };
+    state.bugReport.recentErrors.push(entry);
+    if (state.bugReport.recentErrors.length > 20) {
+      state.bugReport.recentErrors.splice(0, state.bugReport.recentErrors.length - 20);
+    }
   }
 
   function uiRecorderEventTargetInfo(target) {
@@ -301,15 +316,19 @@
       });
     }, true);
     window.addEventListener("error", (ev) => {
-      recordUiEvent("error", {
+      const detail = {
         message: String(ev.message || ""),
         filename: String(ev.filename || ""),
         lineno: Number(ev.lineno || 0),
         colno: Number(ev.colno || 0),
-      });
+      };
+      rememberBugError("error", detail);
+      recordUiEvent("error", detail);
     });
     window.addEventListener("unhandledrejection", (ev) => {
-      recordUiEvent("unhandledrejection", { reason: String(ev.reason || "") });
+      const detail = { reason: String(ev.reason || "") };
+      rememberBugError("unhandledrejection", detail);
+      recordUiEvent("unhandledrejection", detail);
     });
     const observer = new MutationObserver(() => {
       const snap = uiRecorderSnapshot();
@@ -366,6 +385,120 @@
     a.remove();
     setTimeout(() => URL.revokeObjectURL(href), 1000);
     return data;
+  }
+
+  function getBugReportMetadata() {
+    return {
+      url: window.location.href,
+      userAgent: navigator.userAgent,
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      sessionId: state.sessionId ? String(state.sessionId) : "",
+      jobId: state.jobId ? String(state.jobId) : "",
+      bundleId: state.bundleId ? String(state.bundleId) : "",
+      templateSetKey: String(state.templateSetKey || ""),
+      activeActionKey: String(state.activeActionKey || ""),
+      sourcePath: String(state.sourcePath || ""),
+      latestXpPath: String(state.latestXpPath || ""),
+      bundleStatus: String($("bundleStatus")?.textContent || ""),
+      wbStatus: String($("wbStatus")?.textContent || ""),
+      webbuildState: String($("webbuildState")?.textContent || ""),
+      wholeSheetStatus: String($("wholeSheetStatus")?.textContent || ""),
+      uploadPanelLabel: String($("uploadPanelLabel")?.textContent || ""),
+      grid: {
+        cols: Number(state.gridCols || 0),
+        rows: Number(state.gridRows || 0),
+        frameWChars: Number(state.frameWChars || 0),
+        frameHChars: Number(state.frameHChars || 0),
+        angles: Number(state.angles || 0),
+        anims: Array.isArray(state.anims) ? [...state.anims] : [],
+      },
+      layers: {
+        activeLayer: Number(state.activeLayer || 0),
+        layerNames: Array.isArray(state.layerNames) ? [...state.layerNames] : [],
+        visibleLayers: Array.from(state.visibleLayers || []),
+      },
+      runtime: {
+        frameSrc: String($("webbuildFrame")?.getAttribute("src") || ""),
+        ready: !!state.webbuild.ready,
+        loaded: !!state.webbuild.loaded,
+        actionInFlight: !!state.webbuild.actionInFlight,
+        actionLabel: String(state.webbuild.actionLabel || ""),
+        runtimePreflight: JSON.parse(JSON.stringify(state.webbuild.runtimePreflight || {})),
+      },
+      recentErrors: state.bugReport.recentErrors.map((rec) => JSON.parse(JSON.stringify(rec))),
+    };
+  }
+
+  function updateBugReportPreview() {
+    const el = $("bugReportPreview");
+    if (!el) return;
+    const includeSession = !!$("bugIncludeSession")?.checked;
+    const includeRecorder = !!$("bugIncludeRecorder")?.checked;
+    const recCount = state.uiRecorder.events.length;
+    const bits = [
+      "URL",
+      "browser/viewport",
+      includeSession ? "session+bundle+runtime state" : "no session metadata",
+      includeRecorder ? `UI recorder (${recCount} events)` : "no UI recorder",
+      `${state.bugReport.recentErrors.length} recent JS error(s)`,
+    ];
+    el.textContent = `Report will include ${bits.join(", ")}.`;
+  }
+
+  function openBugReportModal() {
+    $("bugReportModal")?.classList.remove("hidden");
+    $("bugReportStatus").textContent = "";
+    updateBugReportPreview();
+    $("bugDescription")?.focus();
+  }
+
+  function closeBugReportModal() {
+    $("bugReportModal")?.classList.add("hidden");
+  }
+
+  async function submitBugReport() {
+    const description = String($("bugDescription")?.value || "").trim();
+    if (!description) {
+      $("bugReportStatus").className = "small err";
+      $("bugReportStatus").textContent = "Describe the bug before sending.";
+      return;
+    }
+    const includeSession = !!$("bugIncludeSession")?.checked;
+    const includeRecorder = !!$("bugIncludeRecorder")?.checked;
+    const payload = {
+      category: String($("bugCategory")?.value || "other"),
+      severity: String($("bugSeverity")?.value || "major"),
+      description,
+      metadata: includeSession ? getBugReportMetadata() : {
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+      },
+      uiRecorder: includeRecorder ? getUiRecorderData() : null,
+    };
+    const statusEl = $("bugReportStatus");
+    statusEl.className = "small warn";
+    statusEl.textContent = "Saving bug report...";
+    const btn = $("bugReportSubmitBtn");
+    if (btn) btn.disabled = true;
+    try {
+      const r = await fetch("/api/workbench/report-bug", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(String(j.error || "bug report failed"));
+      statusEl.className = "small ok";
+      statusEl.textContent = `Saved bug report ${j.report_id}`;
+      $("bugDescription").value = "";
+      setTimeout(closeBugReportModal, 600);
+    } catch (err) {
+      statusEl.className = "small err";
+      statusEl.textContent = `Bug report failed: ${String(err.message || err)}`;
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   }
 
   function updateSessionDirtyBadge() {
@@ -6439,6 +6572,7 @@
     movePanelsToBottom();
     renderInspectorPaletteSwatches();
     updateSessionDirtyBadge();
+    updateBugReportPreview();
     $("btnLoad").addEventListener("click", loadFromJob);
     $("xpImportBtn").addEventListener("click", importXp);
     $("btnSave").addEventListener("click", () => saveCurrentActionProgress({ reason: "top-level-save", auto_advance: true }));
@@ -6491,6 +6625,15 @@
     $("uiRecorderStopBtn")?.addEventListener("click", stopUiRecorder);
     $("uiRecorderClearBtn")?.addEventListener("click", clearUiRecorder);
     $("uiRecorderDownloadBtn")?.addEventListener("click", downloadUiRecorder);
+    $("reportBugBtn")?.addEventListener("click", openBugReportModal);
+    $("reportBugWholeSheetBtn")?.addEventListener("click", openBugReportModal);
+    $("bugReportCloseBtn")?.addEventListener("click", closeBugReportModal);
+    $("bugReportSubmitBtn")?.addEventListener("click", submitBugReport);
+    $("bugIncludeSession")?.addEventListener("change", updateBugReportPreview);
+    $("bugIncludeRecorder")?.addEventListener("change", updateBugReportPreview);
+    $("bugReportModal")?.addEventListener("click", (ev) => {
+      if (ev.target === $("bugReportModal")) closeBugReportModal();
+    });
     $("undoBtn").addEventListener("click", undo);
     $("redoBtn").addEventListener("click", redo);
 

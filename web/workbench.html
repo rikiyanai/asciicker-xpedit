@@ -10,8 +10,13 @@
 <body>
 <div class="wrap">
   <div class="panel alpha-banner">
-    <div class="alpha-banner-title">PRE-ALPHA, PLEASE REPORT ANY BUGS</div>
-    <div class="small alpha-banner-copy">Workbench and the embedded Whole-Sheet XP Editor are still under active development. Expect rough edges. If something feels confusing, slow, or broken, treat that as a bug.</div>
+    <div class="row" style="justify-content:space-between; align-items:flex-start; gap:12px;">
+      <div>
+        <div class="alpha-banner-title">PRE-ALPHA, PLEASE REPORT ANY BUGS</div>
+        <div class="small alpha-banner-copy">Workbench and the embedded Whole-Sheet XP Editor are still under active development. Expect rough edges. If something feels confusing, slow, or broken, treat that as a bug.</div>
+      </div>
+      <button id="reportBugBtn" class="danger">Report Bug</button>
+    </div>
   </div>
   <h1>Workbench <span id="sessionDirtyBadge" class="small" style="margin-left:8px; font-weight:normal;">Session: idle</span></h1>
   <div id="runtimePreflightBanner" class="panel runtime-preflight-banner hidden">
@@ -151,9 +156,50 @@
 
   <div class="panel hidden" id="wholeSheetPanel">
     <h3>Whole-Sheet XP Editor <span id="wholeSheetStatus" class="small" style="font-weight:normal;">not loaded</span></h3>
-    <div class="alpha-inline-banner">PRE-ALPHA, PLEASE REPORT ANY BUGS</div>
+    <div class="row" style="justify-content:space-between; align-items:center; gap:12px;">
+      <div class="alpha-inline-banner">PRE-ALPHA, PLEASE REPORT ANY BUGS</div>
+      <button id="reportBugWholeSheetBtn">Report Bug</button>
+    </div>
     <div class="small whole-sheet-guide">This is the primary editor surface. In bundle mode: edit the active action here, then use <strong>Save</strong> to mark it ready without downloading, or <strong>Export XP</strong> if you also want an `.xp` artifact.</div>
     <div id="wholeSheetMount"></div>
+  </div>
+
+  <div id="bugReportModal" class="overlay hidden">
+    <div class="overlay-card">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <h3 style="margin:0;">Report Bug</h3>
+        <button id="bugReportCloseBtn">Close</button>
+      </div>
+      <div class="small bug-report-copy">This saves a structured bug report locally with useful workbench metadata. GitHub/email wiring can be added later, but this already gives us something actionable.</div>
+      <div class="row">
+        <div><label for="bugCategory">Category</label><select id="bugCategory">
+          <option value="bundle_workflow">Bundle workflow</option>
+          <option value="whole_sheet_editor">Whole-sheet editor</option>
+          <option value="skin_dock_runtime">Skin Dock / runtime</option>
+          <option value="png_import_slicing">PNG import / slicing</option>
+          <option value="layout_rendering">Layout / rendering</option>
+          <option value="other">Other</option>
+        </select></div>
+        <div><label for="bugSeverity">Severity</label><select id="bugSeverity">
+          <option value="blocks_me">Blocks me</option>
+          <option value="major">Major bug</option>
+          <option value="minor">Minor bug</option>
+        </select></div>
+      </div>
+      <div>
+        <label for="bugDescription">What went wrong?</label>
+        <textarea id="bugDescription" rows="6" placeholder="Describe what you expected, what happened instead, and what you were doing right before it broke."></textarea>
+      </div>
+      <div class="row small" style="gap:16px; flex-wrap:wrap;">
+        <label class="inline"><input id="bugIncludeSession" type="checkbox" checked> Include session / bundle / runtime state</label>
+        <label class="inline"><input id="bugIncludeRecorder" type="checkbox" checked> Include UI recorder data if available</label>
+      </div>
+      <div id="bugReportPreview" class="small bug-report-preview">Report will include URL, session state, bundle status, runtime status, browser info, and optional recorder data.</div>
+      <div class="row" style="justify-content:flex-end;">
+        <button id="bugReportSubmitBtn" class="primary">Send Report</button>
+      </div>
+      <div id="bugReportStatus" class="small"></div>
+    </div>
   </div>
 
   <details id="legacyGridDetails" class="legacy-grid-debug">

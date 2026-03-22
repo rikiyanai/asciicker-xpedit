@@ -119,12 +119,18 @@ Milestone 2 is **not**:
 
 Canonical deployment doc: `docs/MVP_DEPLOYMENT.md`
 
+Related docs:
+- `docs/HOST_DEPLOYMENT_CHECKLIST.md` — step-by-step host provisioning and config
+- `docs/LAUNCH_READINESS_CHECKLIST.md` — all launch gates with current status
+- `docs/RESKIN_PREP.md` — safe font/CSS reskin surface
+- `deploy/README.md` — deployment config quick start
+
 Summary:
 - MVP is server-backed Flask, not static GitHub Pages
 - committed runtime payload under `runtime/termpp-skin-lab-static` is part of the deployable product
 - current frontend is not safe for `/XPEdit` subpath hosting without explicit base-path/proxy work
 - preferred MVP launch shape is subdomain or reverse-proxied root path
-- GitHub Actions CI exists (`.github/workflows/ci.yml`); CD can be added later
+- GitHub Actions CI exists (`.github/workflows/ci.yml`); manual deploy-package workflow exists; live CD not yet wired
 - The runtime payload must remain committed inside this repo. Do not reintroduce any dependency on external runtime folders.
 
 ## UI Reskin Constraint

@@ -4,5 +4,7 @@ __pycache__/
 .pytest_cache/
 output/
 data/
+.ccb/
+SMALLTESTPNGs/
 .DS_Store
 .worktrees/

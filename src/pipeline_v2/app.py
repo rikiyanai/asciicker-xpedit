@@ -46,6 +46,7 @@ from .service import (
     load_bundle,
     _is_bundle_session,
     bundle_action_run,
+    workbench_update_bundle_action_status,
     workbench_export_bundle,
     workbench_web_skin_bundle_payload,
 )
@@ -252,6 +253,24 @@ def create_app() -> Flask:
             if not source_path:
                 raise ApiError("source_path is required", "missing_source_path", "workbench", req_id, 400)
             return jsonify(bundle_action_run(bundle_id, action_key, source_path, req_id)), 200
+        except ApiError as e:
+            return _err(e)
+
+    @app.post("/api/workbench/bundle/action-status")
+    def api_wb_bundle_action_status():
+        req_id = str(uuid.uuid4())
+        try:
+            payload = request.get_json(silent=True) or {}
+            bundle_id = str(payload.get("bundle_id", "")).strip()
+            action_key = str(payload.get("action_key", "")).strip()
+            status_value = str(payload.get("status", "")).strip()
+            if not bundle_id:
+                raise ApiError("bundle_id is required", "missing_bundle_id", "workbench", req_id, 400)
+            if not action_key:
+                raise ApiError("action_key is required", "missing_action_key", "workbench", req_id, 400)
+            if not status_value:
+                raise ApiError("status is required", "missing_status", "workbench", req_id, 400)
+            return jsonify(workbench_update_bundle_action_status(bundle_id, action_key, status_value, req_id)), 200
         except ApiError as e:
             return _err(e)
 

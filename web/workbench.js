@@ -1132,8 +1132,8 @@
         const ts = getActiveTemplateSet();
         if (ts) {
           for (const [key, spec] of Object.entries(getEnabledActions(ts))) {
-            if (spec.required && (!state.actionStates[key] || state.actionStates[key].status !== "converted")) {
-              status(`Required action "${key}" not converted yet`, "warn");
+            if (spec.required && (!state.actionStates[key] || !isBundleActionReadyStatus(state.actionStates[key].status))) {
+              status(`Required action "${key}" not ready yet`, "warn");
               return;
             }
           }
@@ -1281,12 +1281,12 @@
   async function testCurrentSkinInDock() {
     if (!(await ensureRuntimePreflight({ refresh: true }))) return;
     if (isBundleMode()) {
-      // Bundle mode: need at least the required enabled actions converted
+      // Bundle mode: need at least the required enabled actions ready
       const ts = getActiveTemplateSet();
       if (ts) {
         for (const [key, spec] of Object.entries(getEnabledActions(ts))) {
-          if (spec.required && (!state.actionStates[key] || state.actionStates[key].status !== "converted")) {
-            status(`Required action "${key}" not converted yet`, "warn");
+          if (spec.required && (!state.actionStates[key] || !isBundleActionReadyStatus(state.actionStates[key].status))) {
+            status(`Required action "${key}" not ready yet`, "warn");
             return;
           }
         }
@@ -3649,6 +3649,7 @@
       updateWebbuildUI();
       updateSourceToolUI();
       updateUndoRedoButtons();
+      $("btnSave").disabled = false;
       $("btnExport").disabled = false;
       if (state.templateSetKey) $("btnNewXp").disabled = false;
       // Use real layers from backend when available (B3: persisted layers are
@@ -3806,6 +3807,14 @@
       status("Apply a template first", "err");
       return;
     }
+    if (state.sessionDirty && state.sessionId) {
+      const saveRes = await saveSessionState("pre-new-xp", { wait_for_idle: true, timeout_ms: 15000 });
+      if (!saveRes || !saveRes.ok) {
+        $("exportOut").textContent = JSON.stringify({ stage: "save_before_new_xp_failed", save: saveRes }, null, 2);
+        status("New XP blocked: session save failed/timed out", "err");
+        return;
+      }
+    }
     const actionKey = state.activeActionKey || "idle";
     status(`Creating new blank XP for ${actionKey}...`, "warn");
     try {
@@ -3823,12 +3832,7 @@
 
   async function exportXp() {
     if (!state.sessionId) return;
-    // Flush any pending debounced whole-sheet-draw save so pre-export sees
-    // the latest cell state. clearTimeout prevents a redundant follow-up save.
-    if (state._wsDrawSaveTimer) {
-      clearTimeout(state._wsDrawSaveTimer);
-      state._wsDrawSaveTimer = null;
-    }
+    await flushPendingWholeSheetDrawSaveTimer();
     const saveRes = await saveSessionState("pre-export", { wait_for_idle: true, timeout_ms: 15000 });
     if (!saveRes || !saveRes.ok) {
       $("exportOut").textContent = JSON.stringify({ stage: "save_before_export_failed", save: saveRes }, null, 2);
@@ -3846,36 +3850,19 @@
       state.latestXpPath = String(j.xp_path);
       $("openXpToolBtn").disabled = false;
       await refreshXpToolCommand(state.latestXpPath);
-      // In bundle mode, promote blank-authored action to "converted" on successful export.
-      // This enables the Test Bundle Skin button once all required actions are exported.
       if (isBundleMode() && state.activeActionKey && state.actionStates[state.activeActionKey]) {
-        const actState = state.actionStates[state.activeActionKey];
-        if (actState.status === "blank") {
-          actState.status = "converted";
-          renderBundleActionTabs();
-          updateBundleUI();
-        }
-        // Auto-advance to next incomplete action, or signal all-done.
-        const ts = getActiveTemplateSet();
-        const enabled = ts ? getEnabledActions(ts) : {};
-        const actionKeys = Object.keys(enabled);
-        const nextIncomplete = actionKeys.find(
-          (k) => k !== state.activeActionKey && state.actionStates[k] && state.actionStates[k].status !== "converted"
-        );
-        const allDone = actionKeys.every(
-          (k) => state.actionStates[k] && state.actionStates[k].status === "converted"
-        );
-        if (allDone) {
-          status(`All actions exported — click Test Bundle Skin`, "ok");
-          const quickBtn = $("webbuildQuickTestBtn");
-          if (quickBtn) {
-            quickBtn.classList.add("primary");
-            quickBtn.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        const persist = await persistBundleActionStatus(state.activeActionKey, "converted");
+        if (!persist.ok) {
+          status("XP exported, but bundle status did not persist", "warn");
+        } else {
+          const nextIncomplete = getNextIncompleteBundleActionKey();
+          if (areAllEnabledBundleActionsReady()) {
+            status("All required actions ready — click Test Bundle Skin", "ok");
+            highlightBundleTestButton();
+          } else if (nextIncomplete) {
+            status(`${state.activeActionKey} exported — advancing to ${nextIncomplete}...`, "ok");
+            setTimeout(() => switchBundleAction(nextIncomplete), 600);
           }
-        } else if (nextIncomplete) {
-          status(`${state.activeActionKey} exported — advancing to ${nextIncomplete}...`, "ok");
-          // Delay slightly so the user sees the status before the tab switches.
-          setTimeout(() => switchBundleAction(nextIncomplete), 600);
         }
       }
       try {
@@ -5593,7 +5580,7 @@
         renderLayerControls();
         saveSessionState("whole-sheet-move-layer");
       },
-      onSave: function() { saveSessionState("whole-sheet-save"); },
+      onSave: function() { saveCurrentActionProgress({ reason: "whole-sheet-save", auto_advance: false }); },
       onExport: function() { exportXp(); },
       onUndo: function() { undo(); },
       onRedo: function() { redo(); },
@@ -6080,6 +6067,122 @@
     return out;
   }
 
+  function isBundleActionReadyStatus(statusValue) {
+    const s = String(statusValue || "");
+    return s === "saved" || s === "converted";
+  }
+
+  function getBundleActionStatusSymbol(statusValue) {
+    const s = String(statusValue || "");
+    if (s === "converted") return "✓";
+    if (s === "saved") return "◐";
+    return "○";
+  }
+
+  function getNextIncompleteBundleActionKey() {
+    const ts = getActiveTemplateSet();
+    const enabled = ts ? getEnabledActions(ts) : {};
+    return Object.keys(enabled).find(
+      (k) => k !== state.activeActionKey && state.actionStates[k] && !isBundleActionReadyStatus(state.actionStates[k].status)
+    ) || null;
+  }
+
+  function areAllEnabledBundleActionsReady() {
+    const ts = getActiveTemplateSet();
+    const enabled = ts ? getEnabledActions(ts) : {};
+    return Object.keys(enabled).every(
+      (k) => state.actionStates[k] && isBundleActionReadyStatus(state.actionStates[k].status)
+    );
+  }
+
+  function highlightBundleTestButton() {
+    const quickBtn = $("webbuildQuickTestBtn");
+    if (!quickBtn) return;
+    quickBtn.classList.add("primary");
+    quickBtn.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function visualLayerHasMeaningfulContent() {
+    const cells = (state.layers && state.layers[2]) ? state.layers[2] : state.cells;
+    if (!Array.isArray(cells)) return false;
+    return cells.some((cell) => {
+      const glyph = Number(cell?.glyph ?? 0);
+      return glyph !== 0 && glyph !== 32;
+    });
+  }
+
+  async function persistBundleActionStatus(actionKey, statusValue) {
+    if (!isBundleMode() || !state.bundleId) return { ok: false, skipped: "not_bundle_mode" };
+    const r = await fetch("/api/workbench/bundle/action-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bundle_id: state.bundleId,
+        action_key: actionKey,
+        status: statusValue,
+      }),
+    });
+    const j = await r.json();
+    if (!r.ok) {
+      status(`Bundle status update failed: ${j.error || "unknown"}`, "err");
+      $("exportOut").textContent = JSON.stringify(j, null, 2);
+      return { ok: false, response: j };
+    }
+    if (!state.actionStates[actionKey]) state.actionStates[actionKey] = {};
+    state.actionStates[actionKey].status = j.status;
+    if (j.session_id) state.actionStates[actionKey].sessionId = j.session_id;
+    if (typeof j.job_id === "string") state.actionStates[actionKey].jobId = j.job_id;
+    renderBundleActionTabs();
+    updateBundleUI();
+    return { ok: true, response: j };
+  }
+
+  async function flushPendingWholeSheetDrawSaveTimer() {
+    if (state._wsDrawSaveTimer) {
+      clearTimeout(state._wsDrawSaveTimer);
+      state._wsDrawSaveTimer = null;
+    }
+  }
+
+  async function saveCurrentActionProgress(opts = {}) {
+    if (!state.sessionId) return { ok: false, skipped: "no_session" };
+    const reason = String(opts.reason || "manual-save");
+    const autoAdvance = !!opts.auto_advance;
+    await flushPendingWholeSheetDrawSaveTimer();
+    const saveRes = await saveSessionState(reason, { wait_for_idle: true, timeout_ms: 15000 });
+    if (!saveRes || !saveRes.ok) {
+      $("exportOut").textContent = JSON.stringify({ stage: "save_failed", save: saveRes }, null, 2);
+      status("Save failed/timed out", "err");
+      return saveRes || { ok: false };
+    }
+    if (!isBundleMode() || !state.activeActionKey || !state.actionStates[state.activeActionKey]) {
+      status("Session saved", "ok");
+      return { ok: true };
+    }
+    const actState = state.actionStates[state.activeActionKey];
+    if (actState.status !== "converted") {
+      if (!visualLayerHasMeaningfulContent()) {
+        status("Session saved — add visual content before marking this action ready", "warn");
+        return { ok: true, ready: false };
+      }
+      const persist = await persistBundleActionStatus(state.activeActionKey, "saved");
+      if (!persist.ok) return { ok: false, bundle_status_failed: true };
+    }
+    if (areAllEnabledBundleActionsReady()) {
+      status("All required actions saved — click Test Bundle Skin", "ok");
+      highlightBundleTestButton();
+      return { ok: true, ready: true };
+    }
+    const nextIncomplete = getNextIncompleteBundleActionKey();
+    if (autoAdvance && nextIncomplete) {
+      status(`${state.activeActionKey} saved — advancing to ${nextIncomplete}...`, "ok");
+      setTimeout(() => switchBundleAction(nextIncomplete), 600);
+      return { ok: true, ready: true, advanced_to: nextIncomplete };
+    }
+    status(`${state.activeActionKey} saved`, "ok");
+    return { ok: true, ready: true };
+  }
+
   function renderBundleActionTabs() {
     const container = $("bundleActionTabs");
     if (!container) return;
@@ -6094,8 +6197,7 @@
       const btn = document.createElement("button");
       const actState = state.actionStates[key];
       const isActive = key === state.activeActionKey;
-      const isDone = actState && actState.status === "converted";
-      btn.textContent = `${spec.label} ${isDone ? "✓" : "○"}`;
+      btn.textContent = `${spec.label} ${getBundleActionStatusSymbol(actState?.status)}`;
       btn.className = isActive ? "primary" : "";
       btn.style.cssText = "border-radius:0; margin:0; min-width:120px;";
       if (isActive) btn.style.borderBottom = "2px solid #6cf";
@@ -6106,6 +6208,14 @@
 
   async function switchBundleAction(actionKey) {
     if (actionKey === state.activeActionKey) return;
+    if (state.sessionDirty && state.sessionId) {
+      const saveRes = await saveSessionState("switch-bundle-action", { wait_for_idle: true, timeout_ms: 15000 });
+      if (!saveRes || !saveRes.ok) {
+        $("exportOut").textContent = JSON.stringify({ stage: "save_before_switch_failed", save: saveRes }, null, 2);
+        status("Switch blocked: session save failed/timed out", "err");
+        return;
+      }
+    }
     state.activeActionKey = actionKey;
     const actState = state.actionStates[actionKey];
     if (actState && actState.sessionId) {
@@ -6118,6 +6228,8 @@
       state.cells = [];
       state.gridCols = 0;
       state.gridRows = 0;
+      $("btnSave").disabled = true;
+      $("btnExport").disabled = true;
       renderLegacyGrid();
       renderFrameGrid();
       status(`Action "${actionKey}" — upload a source image`, "warn");
@@ -6158,8 +6270,8 @@
         const enabled = ts ? getEnabledActions(ts) : {};
         const enabledKeys = new Set(Object.keys(enabled));
         const total = enabledKeys.size;
-        const done = Object.entries(state.actionStates).filter(([k, a]) => enabledKeys.has(k) && a.status === "converted").length;
-        bundleStatus.textContent = `Bundle: ${done}/${total} actions converted`;
+        const done = Object.entries(state.actionStates).filter(([k, a]) => enabledKeys.has(k) && isBundleActionReadyStatus(a.status)).length;
+        bundleStatus.textContent = `Bundle: ${done}/${total} actions ready`;
         bundleStatus.classList.remove("hidden");
       }
       if (templateStatus) templateStatus.textContent = "Bundle mode";
@@ -6321,6 +6433,7 @@
     updateSessionDirtyBadge();
     $("btnLoad").addEventListener("click", loadFromJob);
     $("xpImportBtn").addEventListener("click", importXp);
+    $("btnSave").addEventListener("click", () => saveCurrentActionProgress({ reason: "top-level-save", auto_advance: true }));
     $("btnExport").addEventListener("click", exportXp);
     $("btnNewXp").addEventListener("click", newXp);
     $("openXpToolBtn").addEventListener("click", openInXpTool);

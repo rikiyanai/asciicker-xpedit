@@ -1099,6 +1099,40 @@ def save_bundle(bundle: BundleSession) -> None:
     save_json(_bundle_path(bundle.bundle_id), bundle.to_dict())
 
 
+def workbench_update_bundle_action_status(bundle_id: str, action_key: str, status_value: str, req_id: str) -> dict[str, Any]:
+    bundle = load_bundle(bundle_id, req_id)
+    allowed_statuses = {"empty", "blank", "saved", "converted"}
+    next_status = str(status_value or "").strip()
+    if next_status not in allowed_statuses:
+        raise ApiError(
+            f"invalid bundle action status: {next_status}",
+            "invalid_bundle_action_status",
+            "workbench",
+            req_id,
+            422,
+        )
+    action_state = bundle.actions.get(action_key)
+    if action_state is None:
+        raise ApiError("bundle action not found", "bundle_action_not_found", "workbench", req_id, 404)
+    if next_status in {"saved", "converted"} and not action_state.session_id:
+        raise ApiError(
+            "bundle action has no session to mark ready",
+            "bundle_action_missing_session",
+            "workbench",
+            req_id,
+            422,
+        )
+    action_state.status = next_status
+    save_bundle(bundle)
+    return {
+        "bundle_id": bundle.bundle_id,
+        "action_key": action_key,
+        "status": action_state.status,
+        "session_id": action_state.session_id,
+        "job_id": action_state.job_id,
+    }
+
+
 def _is_bundle_session(session_id: str) -> bool:
     """Check if a session_id belongs to any bundle."""
     if not BUNDLES_DIR.exists():
@@ -2806,7 +2840,7 @@ def _run_structural_gates(
 
 
 def workbench_export_bundle(bundle_id: str, req_id: str) -> dict[str, Any]:
-    """Export all converted actions in a bundle."""
+    """Export all ready actions with saved sessions in a bundle."""
     bundle = load_bundle(bundle_id, req_id)
     reg = load_template_registry()
     ts = reg.get("template_sets", {}).get(bundle.template_set_key)
@@ -2848,7 +2882,7 @@ def workbench_export_bundle(bundle_id: str, req_id: str) -> dict[str, Any]:
     for act_key, action_spec in ts.get("actions", {}).items():
         if action_spec.get("required") and act_key not in exports:
             raise ApiError(
-                f"required action '{act_key}' not converted",
+                f"required action '{act_key}' not ready",
                 "bundle_incomplete", "workbench", req_id, 422,
             )
 
@@ -2881,7 +2915,7 @@ def workbench_web_skin_bundle_payload(bundle_id: str, req_id: str) -> dict[str, 
                 unmapped_families.append(family)
                 continue
             raise ApiError(
-                f"required action '{act_key}' not converted",
+                f"required action '{act_key}' not ready",
                 "bundle_incomplete", "workbench", req_id, 422,
             )
 

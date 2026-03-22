@@ -291,7 +291,7 @@ class TestPrefixedWorkflowSmoke:
         assert r.status_code == 201
         j = r.get_json()
         assert "bundle_id" in j
-        return j["bundle_id"]
+        assert j["bundle_id"]
 
     # ── Save / export round-trip ──
 

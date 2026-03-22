@@ -18,7 +18,8 @@ import { LineTool } from './rexpaint-editor/tools/line-tool.js';
 import { RectTool } from './rexpaint-editor/tools/rect-tool.js';
 import { FillTool } from './rexpaint-editor/tools/fill-tool.js';
 
-const FONT_URL = '/termpp-web-flat/fonts/cp437_12x12.png';
+const _BP = String(window.__WB_BASE_PATH || '');
+const FONT_URL = _BP + '/termpp-web-flat/fonts/cp437_12x12.png';
 const CELL_SIZE = 12;
 const PALETTE_CELL = 11;
 const DEFAULT_PALETTE = [

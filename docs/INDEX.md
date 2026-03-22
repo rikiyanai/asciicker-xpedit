@@ -13,7 +13,7 @@ Canonical doc hub for agents working in `/Users/r/Downloads/asciicker-pipeline-v
 - Audit date: 2026-03-21
 - Audited worktree: `/Users/r/Downloads/asciicker-pipeline-v2`
 - Audited branch: `master`
-- Audited HEAD: `14d99d6`
+- Audited HEAD: `7e0758c`
 - Current branch role: active XP-editor Phase 4 acceptance line
 - **Self-containment**: This repo must be 100% self-contained. No runtime, test, or build-time dependency on external folders (e.g. `/Users/r/Downloads/asciicker-Y9-2`, `/Users/r/Downloads/n`). Run `python3 scripts/self_containment_audit.py` at startup.
 
@@ -117,16 +117,15 @@ Milestone 2 is **not**:
 
 ## Launch / Deployment Truth
 
-- The current MVP target is a deployed workbench/server, not a static GitHub Pages site.
-- The shipped product currently depends on:
-  - Flask routes under `/api/workbench/*`
-  - runtime assets under `runtime/termpp-skin-lab-static`
-  - root-relative frontend asset and runtime paths
-- Therefore:
-  - static-subpath hosting such as `rikiworld.com/XPEdit` is **not** safe without explicit base-path/proxy work
-  - the fastest MVP deployment shape is a server deployment behind a reverse proxy
-  - a subdomain is cleaner than a subpath if there is a choice
-- The runtime payload should remain committed inside this repo. Do not reintroduce any dependency on external runtime folders.
+Canonical deployment doc: `docs/MVP_DEPLOYMENT.md`
+
+Summary:
+- MVP is server-backed Flask, not static GitHub Pages
+- committed runtime payload under `runtime/termpp-skin-lab-static` is part of the deployable product
+- current frontend is not safe for `/XPEdit` subpath hosting without explicit base-path/proxy work
+- preferred MVP launch shape is subdomain or reverse-proxied root path
+- GitHub Actions CI exists (`.github/workflows/ci.yml`); CD can be added later
+- The runtime payload must remain committed inside this repo. Do not reintroduce any dependency on external runtime folders.
 
 ## UI Reskin Constraint
 

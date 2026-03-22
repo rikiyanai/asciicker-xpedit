@@ -722,11 +722,12 @@ async function main() {
     // ── Step 3: Bundle Skin Dock test ──
     console.error('[4] Testing bundle in Skin Dock...');
 
-    // Wait for all actions to show "converted" in the bundleStatus text.
-    // The export-on-blank path promotes blank→converted in the frontend.
+    // Wait for all actions to show "ready" (or legacy "converted") in the
+    // bundleStatus text.  The save-first workflow uses isBundleActionReadyStatus()
+    // which accepts both "saved" and "converted".
     await page.waitForFunction(() => {
       const bs = String(document.getElementById('bundleStatus')?.textContent || '');
-      return /3\/3 actions converted/i.test(bs);
+      return /3\/3 actions (converted|ready)/i.test(bs);
     }, null, { timeout: 15000 });
 
     // Ensure Test Bundle Skin button is enabled

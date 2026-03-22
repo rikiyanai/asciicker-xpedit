@@ -5,9 +5,11 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+const DEFAULT_WORKBENCH_URL = process.env.WORKBENCH_URL || "http://127.0.0.1:5071/workbench";
+
 function parseArgs(argv) {
   const out = {
-    url: "http://127.0.0.1:5071/workbench",
+    url: DEFAULT_WORKBENCH_URL,
     idlePng: "",
     attackPng: "",
     deathPng: "",

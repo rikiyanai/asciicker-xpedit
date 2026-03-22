@@ -2,6 +2,19 @@ import { spawn } from 'node:child_process';
 
 async function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+function normalizeWorkbenchUrl(baseUrl) {
+  const raw = String(baseUrl || process.env.WORKBENCH_URL || 'http://127.0.0.1:5071/workbench');
+  try {
+    const u = new URL(raw);
+    if (!u.pathname || u.pathname === '/') {
+      u.pathname = '/workbench';
+    }
+    return u.toString();
+  } catch {
+    return raw;
+  }
+}
+
 export async function httpOk(url) {
   try {
     const r = await fetch(url, { redirect: 'follow' });
@@ -12,7 +25,7 @@ export async function httpOk(url) {
 }
 
 export async function ensureFlaskWorkbenchServer(opts = {}) {
-  const url = String(opts.baseUrl || 'http://127.0.0.1:5071/workbench');
+  const url = normalizeWorkbenchUrl(opts.baseUrl);
   const cwd = opts.cwd || process.cwd();
   if (await httpOk(url)) return { started: false, url };
   const proc = spawn('python3', ['-m', 'pipeline_v2.app'], {

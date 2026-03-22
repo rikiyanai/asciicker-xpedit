@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..', '..');
 const args = process.argv.slice(2);
+const DEFAULT_WORKBENCH_URL = process.env.WORKBENCH_URL || 'http://127.0.0.1:5071/workbench';
 
 function getArg(name, fallback = null) {
   const idx = args.indexOf(name);
@@ -16,7 +17,7 @@ function getArg(name, fallback = null) {
 const xpPath = getArg('--xp');
 const truthTablePath = getArg('--truth-table');
 const recipePath = getArg('--recipe');
-const url = getArg('--url', 'http://127.0.0.1:5071/workbench');
+const url = getArg('--url', DEFAULT_WORKBENCH_URL);
 const headed = args.includes('--headed');
 const mode = getArg('--mode', 'diagnostic');
 

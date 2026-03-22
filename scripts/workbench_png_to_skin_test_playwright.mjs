@@ -3,12 +3,16 @@ import fs from "node:fs/promises";
 import fssync from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, "..");
+const DEFAULT_WORKBENCH_URL = process.env.WORKBENCH_URL || "http://127.0.0.1:5071/workbench";
 
 function parseArgs(argv) {
   const out = {
-    url: "http://127.0.0.1:5071/workbench",
+    url: DEFAULT_WORKBENCH_URL,
     pngPath: "",
     xpPath: "",
     attackXpPath: "",
@@ -73,7 +77,8 @@ async function loadPlaywright() {
 
 function findDaimonPngCandidates() {
   const roots = [
-    "/Users/r/Downloads/asciicker-pipeline-v2",
+    repoRoot,
+    process.cwd(),
   ].filter((p) => fssync.existsSync(p));
   if (!roots.length) return [];
   const cmd = ["find", ...roots, "-type", "f", "(", "-iname", "*daimon*.png", "-o", "-iname", "*demon*.png", ")", "-print"];

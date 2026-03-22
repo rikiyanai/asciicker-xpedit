@@ -18,10 +18,19 @@ import {
 } from '../subagents/workbench_agents.mjs';
 import { WorkbenchUICoverageAgent } from '../subagents/workbench_coverage_agent.mjs';
 
+function defaultBaseUrl() {
+  const raw = String(process.env.WORKBENCH_URL || 'http://127.0.0.1:5071/workbench');
+  try {
+    return new URL(raw).origin;
+  } catch {
+    return 'http://127.0.0.1:5071';
+  }
+}
+
 function parseArgs(argv) {
   const out = {
     command: argv[0] || 'test:smoke',
-    baseUrl: 'http://127.0.0.1:5071',
+    baseUrl: defaultBaseUrl(),
     headed: false,
     timeoutSec: 240,
     feature: '',

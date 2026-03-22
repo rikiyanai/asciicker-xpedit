@@ -24,6 +24,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..', '..');
 const argv = process.argv.slice(2);
+const DEFAULT_WORKBENCH_URL = process.env.WORKBENCH_URL || 'http://127.0.0.1:5071/workbench';
 
 function getArg(name, fallback = null) {
   const idx = argv.indexOf(name);
@@ -32,7 +33,7 @@ function getArg(name, fallback = null) {
 
 const headed = argv.includes('--headed');
 const holdOpen = argv.includes('--hold');
-const url = getArg('--url', 'http://127.0.0.1:5071/workbench');
+const url = getArg('--url', DEFAULT_WORKBENCH_URL);
 const outDir = getArg('--out-dir');
 
 const ACTION_KEYS = ['idle', 'attack', 'death'];

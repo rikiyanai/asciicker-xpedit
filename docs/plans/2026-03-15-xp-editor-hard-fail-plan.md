@@ -267,12 +267,13 @@ Recent high-signal commits on `master`:
 ### What remains for Milestone 1
 
 1. final real-content acceptance pass completion and logging
-2. responsiveness signoff in real browser use
-3. save-first bundle workflow cleanup:
+2. fix the last narrow verifier/editor interaction bug if `full_recreation` still shows deterministic cell misses
+3. responsiveness signoff in real browser use
+4. save-first bundle workflow cleanup:
    - explicit top-level Save
    - `blank` / `saved` / `converted` bundle states
    - readiness based on `saved|converted`, not export/download only
-4. repeatability across reruns
+5. repeatability across reruns
 
 ### What remains beyond Milestone 1
 
@@ -324,13 +325,31 @@ Update after B1 patch:
 
 1. finish the current `full_recreation` real-content run and log its result honestly
 2. log any new verifier/harness failures in `PLAYWRIGHT_FAILURE_LOG.md`
-3. close Milestone 1 product-flow gaps:
+3. close the last narrow verifier/editor interaction bug if the current run still misses deterministic cells
+4. close Milestone 1 product-flow gaps:
    - top-level Save
    - `blank` / `saved` / `converted`
    - save-first bundle progression
-4. review responsiveness and stroke-end autosave behavior
-5. rerun for repeatability
-6. only after Milestone 1 closes, begin Milestone 2 practical PNG-ingest work, then return to the broader existing-XP parity line
+5. review responsiveness and stroke-end autosave behavior
+6. rerun for repeatability
+7. only after Milestone 1 closes, begin Milestone 2 practical PNG-ingest work, then return to the broader existing-XP parity line
+
+## MVP Deployment Posture
+
+For the first MVP launch:
+
+- deploy the existing Flask/server-backed workbench
+- keep the committed runtime payload under `runtime/termpp-skin-lab-static`
+- do not assume pure static hosting is sufficient
+- do not assume subpath hosting like `/XPEdit` works without explicit proxy/base-path work
+
+Fastest practical launch shape:
+
+- server deployment
+- reverse proxy in front
+- subdomain preferred over subpath when possible
+
+GitHub Actions may be used for CI/CD, but the current product is not yet a pure static-site deployment target.
 
 When Milestone 2 begins, the first required moves are:
 

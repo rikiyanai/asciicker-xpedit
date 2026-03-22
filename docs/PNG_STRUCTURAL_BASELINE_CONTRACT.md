@@ -25,6 +25,10 @@ protects the **structural and runtime safety** checkpoint established during Mil
 Visual correctness is explicitly out of scope. A badly-sliced PNG that produces a
 structurally valid, runtime-safe bundle is a PASS under this contract.
 
+The runtime payload used for this path must remain committed inside this repo under
+`runtime/termpp-skin-lab-static`. This contract does not allow hidden dependence on an
+external runtime checkout or ad hoc local asset folder.
+
 ## The Structural Pipeline
 
 The pipeline under protection:
@@ -129,6 +133,20 @@ During Milestone 2 development:
 - If a gate is strengthened (e.g., integrating G7-G9), existing passing PNGs must still
   pass under the new gate set, or the change must be documented as intentional tightening
 - The non-regression test (when created) should run in CI or as a pre-merge check
+
+## Deployment Note
+
+This contract protects server-backed structural/runtime safety, not pure static hosting.
+
+Current truth:
+
+- the workbench depends on Flask API routes
+- runtime assets are served from committed repo paths
+- frontend paths are root-relative
+
+So preserving this contract does not by itself make the product ready for GitHub Pages or
+subpath-only hosting. MVP deployment should treat this as a server deployment unless and
+until explicit base-path/static-hosting work is completed.
 
 ## Related Documents
 

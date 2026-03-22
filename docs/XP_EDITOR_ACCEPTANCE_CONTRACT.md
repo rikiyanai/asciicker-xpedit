@@ -64,6 +64,7 @@ Milestone 1 may be reported complete only when all of the following are true:
 - structure, layer behavior, export, and runtime load all pass for that workflow
 - the canonical verifier passes in a Milestone 1 acceptance-eligible mode, with final signoff coming from `full_recreation`
 - save/export/test behavior is usable enough to support a normal authoring loop
+- users are not forced through export/download just to mark bundle progress or move to the next required action
 - responsiveness and repeatability are good enough that the workflow is not merely a one-off proof
 
 ### Milestone 2 requirements
@@ -73,12 +74,49 @@ Milestone 2 starts only after Milestone 1 closes.
 Milestone 2 is the practical PNG-ingest/manual-assembly milestone. It requires:
 
 - preserving the arbitrary-PNG structural bundle baseline established in Milestone 1
+- preserving the committed in-repo runtime payload needed for structural/runtime-safe PNG bundle injection
 - shipped source-panel bbox extraction and source-to-grid assembly as the practical PNG workflow
 - whole-sheet editing as the primary correction surface
 - human-verified semantic dictionaries for canonical sprite families
 - semantic edits building on those dictionaries, not on naive global color replacement or heroic analyze guesses
 
 Milestone 2 does **not** require perfect automatic slicing.
+
+## Deployment Constraint
+
+Deployment is not itself a parity gate, but MVP launch claims must respect current product shape:
+
+- the workbench is currently a Flask-served app with live `/api/workbench/*` routes
+- runtime assets are served from committed repo paths under `runtime/termpp-skin-lab-static`
+- current frontend paths are root-relative, not base-path-aware
+
+Therefore, until explicitly changed:
+
+- do not represent the workbench as ready for pure static GitHub Pages hosting
+- do not assume subpath hosting like `/XPEdit` works without proxy/base-path work
+- if an MVP must go live quickly, prefer a server deployment behind a reverse proxy
+
+## UI Reskin Constraint
+
+During Milestone 1 closeout and early MVP deployment:
+
+- look-only reskin work is acceptable
+- behavior-changing UI rewrites are not
+
+Allowed:
+
+- fonts
+- CSS variables
+- colors
+- spacing
+- borders
+- typography
+
+Not allowed as a "reskin":
+
+- replacing the app shell with an external web template
+- changing DOM ids or control wiring
+- changing product workflows while claiming it is cosmetic only
 
 ## Two Required Workflow Families
 

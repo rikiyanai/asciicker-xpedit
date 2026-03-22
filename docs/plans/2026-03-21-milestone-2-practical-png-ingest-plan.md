@@ -26,6 +26,7 @@ Milestone 1 requirement summary:
 Milestone 2 requirement summary:
 
 - preserve the structural/runtime-safe arbitrary-PNG baseline from Milestone 1
+- preserve the committed in-repo runtime payload required for that baseline
 - make source-panel/manual assembly practical through shipped controls
 - keep whole-sheet as the primary correction surface
 - add canonical human-verified semantic dictionaries and build semantic editing on top of them
@@ -51,6 +52,9 @@ For the required bundle families (`player`, `attack`, `plydie`):
 - produce structurally valid XP for the target family
 - load/edit/export in the workbench
 - inject into Skin Dock/runtime successfully
+
+The runtime payload that supports this baseline should stay committed in this repo.
+Milestone 2 must not reintroduce any dependency on external runtime folders or manual sidecar checkouts.
 
 This baseline remains valuable even when visual slicing fidelity is poor.
 
@@ -87,6 +91,21 @@ The reliable path should be:
 - drag/append into the grid
 - correct in whole-sheet editor
 - save/test/export
+
+## UI Reskin Constraint
+
+Milestone 2 may improve look and presentation, but practical-ingest work must not be conflated with a behavior-changing UI rewrite.
+
+Allowed cosmetic work:
+
+- font swap
+- CSS restyling
+- color and spacing changes
+
+Not acceptable as a "reskin only" change:
+
+- replacing the workbench with an external app template
+- changing control ids, handlers, or workflow semantics while claiming the change is cosmetic
 
 ## Current UI Reality
 

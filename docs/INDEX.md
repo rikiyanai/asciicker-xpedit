@@ -13,7 +13,7 @@ Canonical doc hub for agents working in `/Users/r/Downloads/asciicker-pipeline-v
 - Audit date: 2026-03-21
 - Audited worktree: `/Users/r/Downloads/asciicker-pipeline-v2`
 - Audited branch: `master`
-- Audited HEAD: `2a43c2b`
+- Audited HEAD: `c58307a`
 - Current branch role: active XP-editor Phase 4 acceptance line
 - **Self-containment**: This repo must be 100% self-contained. No runtime, test, or build-time dependency on external folders (e.g. `/Users/r/Downloads/asciicker-Y9-2`, `/Users/r/Downloads/n`). Run `python3 scripts/self_containment_audit.py` at startup.
 
@@ -63,6 +63,9 @@ Milestone 1 is complete only when all of the following are true:
   - test/apply
 - canonical verifier evidence passes in an acceptance-eligible mode, with final signoff coming from `full_recreation`
 - manual/runtime review and repeatability are good enough to support an honest milestone-close claim
+- the save-first authoring loop is honest and usable:
+  - users can save progress without being forced to download an XP file
+  - bundle readiness is not coupled only to export/download side effects
 
 Milestone 1 is **not**:
 
@@ -84,6 +87,7 @@ Milestone 2 is complete only when all of the following are true:
 - auto-slicing/analyze are assistive hints, not authoritative truth
 - canonical human-verified semantic dictionaries exist for the enabled native families
 - semantic editing can safely build on those dictionaries
+- the arbitrary-PNG structural ingest baseline remains deployable from this repo alone, including committed runtime payload assets
 
 Milestone 2 is **not**:
 
@@ -97,6 +101,32 @@ Milestone 2 is **not**:
   - non-regression contract for the arbitrary-PNG structural ingest baseline; protects the Milestone 1 structural checkpoint (PNG → bundle apply → valid XP → editor load/export → runtime-safe injection) during Milestone 2 work
 - `docs/XP_EDITOR_ACCEPTANCE_CONTRACT.md`
   - canonical acceptance contract for XP-editor parity
+
+## Launch / Deployment Truth
+
+- The current MVP target is a deployed workbench/server, not a static GitHub Pages site.
+- The shipped product currently depends on:
+  - Flask routes under `/api/workbench/*`
+  - runtime assets under `runtime/termpp-skin-lab-static`
+  - root-relative frontend asset and runtime paths
+- Therefore:
+  - static-subpath hosting such as `rikiworld.com/XPEdit` is **not** safe without explicit base-path/proxy work
+  - the fastest MVP deployment shape is a server deployment behind a reverse proxy
+  - a subdomain is cleaner than a subpath if there is a choice
+- The runtime payload should remain committed inside this repo. Do not reintroduce any dependency on external runtime folders.
+
+## UI Reskin Constraint
+
+- A visual reskin is allowed only if it is presentation-only:
+  - CSS
+  - fonts
+  - color/spacing/border styling
+- Do **not** replace the workbench with an external site template or component system during Milestone 1 closeout.
+- Safe reskin rule:
+  - existing DOM ids, JS hooks, workflows, and behavior must remain unchanged
+  - font/style-only changes are acceptable
+  - behavior-preserving typography updates are acceptable
+- In particular, `www-server-mono` may be used as a font/style reference only, not adopted as a full app/template.
 
 ## First Reads By Task
 
@@ -199,8 +229,12 @@ metadata, layer, visual, export, and Skin Dock/runtime mismatches.
   - strategic plan for Milestone 2: defines the milestone explicitly, preserves the structural baseline, centers on manual assembly, and promotes whole-sheet editing
 - `docs/plans/2026-03-21-milestone-2-implementation-checklist.md`
   - implementation-ready checklist with explicit Milestone 1/Milestone 2 boundary, EXISTS/PARTIAL/MISSING status per item, file:line references, and wave ordering
+- `docs/plans/2026-03-21-milestone-2-png-verifier-design.md`
+  - target design doc for the Milestone 2 verifier architecture: state/action/response maps, PNG recipe generation, verifier slices, and acceptance boundaries
 - `docs/PNG_STRUCTURAL_BASELINE_CONTRACT.md`
   - non-regression contract for the PNG structural ingest path (also linked under Structural Contracts above)
+- `docs/2026-03-21-CLAUDE-HANDOFF-M2-PNG-VERIFIER-DESIGN.md`
+  - fresh-session handoff for writing the Milestone 2 PNG verifier design doc, starting from a complete map of user-reachable actions
 
 ## Local / Untracked Research (not committed)
 

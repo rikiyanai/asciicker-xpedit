@@ -148,9 +148,13 @@ async function dragOnCanvas(page, selector, x1, y1, x2, y2, cellSize) {
     Math.max(startY, endY),
   );
   const locator = page.locator(selector);
-  await locator.hover({ position: { x: startX, y: startY }, timeout: 10000 });
+  // force: true bypasses Playwright's actionability/interception check.
+  // centerCanvasRegion already ensures the target is in the safe zone;
+  // the interception check fails because getBoundingClientRect() on the
+  // scrolled canvas can map to viewport coords under the sidebar.
+  await locator.hover({ position: { x: startX, y: startY }, force: true, timeout: 10000 });
   await page.mouse.down();
-  await locator.hover({ position: { x: endX, y: endY }, timeout: 10000 });
+  await locator.hover({ position: { x: endX, y: endY }, force: true, timeout: 10000 });
   await page.mouse.up();
 }
 
@@ -160,6 +164,7 @@ async function clickCanvasCell(page, selector, x, y, cellSize) {
   await centerCanvasRegion(page, posX, posY, posX, posY);
   await page.locator(selector).click({
     position: { x: posX, y: posY },
+    force: true,
     timeout: 10000,
   });
 }

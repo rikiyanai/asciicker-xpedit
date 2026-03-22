@@ -813,11 +813,14 @@
     }
     const quickBtn = $("webbuildQuickTestBtn");
     if (quickBtn) {
-      quickBtn.disabled = actionBusy || !preflightOk || !sessionReady;
+      const bundleNotReady = isBundleMode() && !areAllEnabledBundleActionsReady();
+      quickBtn.disabled = actionBusy || !preflightOk || !sessionReady || bundleNotReady;
       if (!preflightOk) {
         quickBtn.title = preflightTitle;
       } else if (actionBusy) {
         quickBtn.title = actionBusyTitle;
+      } else if (bundleNotReady) {
+        quickBtn.title = "Disabled: not all required bundle actions are ready";
       } else {
         quickBtn.title = sessionReady ? "Deterministic test path (opens/reloads preview as needed, then applies current XP skin)" : "Disabled: load or create a session first";
       }

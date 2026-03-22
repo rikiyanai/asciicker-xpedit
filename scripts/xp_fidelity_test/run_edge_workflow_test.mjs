@@ -337,14 +337,16 @@ const RECIPE_PARTIAL_BUNDLE_GATING = {
         { field: 'buttons.save', op: 'enabled', message: 'Save must still be enabled (workbench responsive)' },
       ],
     },
-    // Step 3: Save idle action — transitions to "saved" but not "converted"
+    // Step 3: Save idle action — blank content stays blank (visual layer gate)
+    // Note: saveCurrentActionProgress() correctly refuses to mark a blank action
+    // as "saved" when visualLayerHasMeaningfulContent() returns false.
     {
       action: 'save_action',
       params: {},
       assertions: [
-        { field: 'actionStates.idle.status', op: 'match', value: 'saved|converted', message: 'idle should be saved or converted after save' },
-        { field: 'bundleStatus', op: 'match', value: '0/3|1/3', message: 'Bundle status must reflect partial readiness' },
-        { field: 'buttons.testThisSkin', op: 'disabled', message: 'Test This Skin must still be disabled after 1 save' },
+        { field: 'actionStates.idle.status', op: 'eq', value: 'blank', message: 'idle stays blank when visual layer has no content' },
+        { field: 'bundleStatus', op: 'contains', value: '0/3', message: 'Bundle status must still show 0/3 (blank save does not advance readiness)' },
+        { field: 'buttons.testThisSkin', op: 'disabled', message: 'Test This Skin must still be disabled after blank save' },
       ],
     },
     // Step 4: Verify gating honesty after partial save — attack and death still blank

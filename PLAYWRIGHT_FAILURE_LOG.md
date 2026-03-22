@@ -960,3 +960,287 @@ Milestone 1. This sequence records the first three full-sheet real-content bundl
   (`idle`, `attack`, `death`)
 - Weapon-holding/item variants are out of scope for this Milestone 1 bundle set and should not be
   misclassified as a regression in the current override flow
+
+### Run 4: Browser crash during idle execution (repeatability failure)
+
+- Artifact: `output/xp-fidelity-test/bundle-run-2026-03-21T02-19-33Z/result.json`
+- Mode: `full_recreation`
+- HEAD: `ba0284c` (2 docs-only commits ahead of Run 3's `0be3c4a`)
+- Result:
+  - `idle_pass=false`
+  - `attack_pass=false`
+  - `death_pass=false`
+  - `skin_dock_pass=false`
+  - `overall_pass=false`
+
+**Failure**:
+
+- Fatal `locator.scrollIntoViewIfNeeded: Target page, context or browser has been closed`
+- Crash occurred during idle recipe execution (4694 actions)
+- Same crash family as Run 2 (browser crash from paint storm)
+
+**Pre-run state**:
+
+- Previous held-open run (Run 3, PIDs 9387/9457) was killed and confirmed dead before this run
+- No stale Playwright-launched Chromium processes found
+- Stale Playwright profile dir from 2026-03-19 exists at `/var/folders/.../playwright_chromiumdev_profile-aJCRHA` but is unlikely to cause cross-session contamination
+- No code changes between Run 3 and Run 4 (only docs commits `af561e7`, `ba0284c`)
+
+**Contamination assessment**: NOT CONTAMINATED — clean process state confirmed before run
+
+**Classification**:
+
+- repeatability/stability failure
+- The debounced save fix from Run 2 (`62b0f83`) reduced crash frequency but did not eliminate it
+- The idle action's 4694-action recipe is still producing enough UI load to crash the browser
+
+**Implication**:
+
+- Stability is now the primary Phase 4 blocker, ahead of the small cell-fidelity misses from Run 3
+- Priority order changed from "clear last few mismatches" to "restore repeatable full_recreation stability first"
+- Milestone 1 is still not done — this run is evidence of instability, which is itself a Phase 4 blocker
+
+**Next step**:
+
+- Before retrying, diagnose the crash/stability issue directly
+- Do not chase cell mismatches until full_recreation can complete without crashing
+
+### Runs 5-6: Crash diagnosis and render suppression fix
+
+These two runs occurred during the same diagnostic session as Run 4.
+
+#### Run 5: autosave suppression only (still crashed)
+
+- Artifact: `output/xp-fidelity-test/bundle-run-2026-03-21T03-31-01Z/result.json`
+- Mode: `full_recreation`
+- HEAD: `ba0284c` (uncommitted changes to workbench.js and runner)
+- Result: browser crash during idle (`mouse.move: Target page, context or browser has been closed`)
+- Fix applied: `suppressAutoSave(true)` via `__wb_debug` during recipe replay
+- Outcome: autosave suppression alone did NOT fix the crash
+
+**Conclusion**: The debounced save storm was not the sole crash vector.
+
+#### Run 6: autosave + render suppression + throttle (CRASH ELIMINATED)
+
+- Artifact: `output/xp-fidelity-test/bundle-run-2026-03-21T03-38-42Z/result.json`
+- Mode: `full_recreation`
+- HEAD: `ba0284c` (uncommitted changes)
+- Result:
+  - `idle_pass=true` (0 mismatches — first clean idle pass)
+  - `attack_pass=false` (1 mismatch, down from 26 in Run 3)
+  - `death_pass=false` (4 mismatches, down from 22 in Run 3)
+  - `skin_dock_pass=true`
+  - `overall_pass=false`
+
+**Fix applied**: Three mitigations during recipe replay:
+
+1. `suppressAutoSave(true)` — prevents debounced `saveSessionState("whole-sheet-draw")`
+2. `suppressRender(true)` — **prevents `renderFrameGrid()` and `renderPreviewFrame()` in `onStrokeComplete`**
+3. 50ms yield every 200 actions (minor throttle)
+
+**Root cause identified**: `renderFrameGrid()` calls `panel.innerHTML = ""` then rebuilds
+~144 canvas DOM elements (8 angles × 18 frame columns for idle). Called 4694 times during
+idle recipe = ~676,000 canvas element creations/destructions. This DOM churn crashed the
+Chromium renderer process.
+
+**Cross-run mismatch comparison (Run 3 → Run 6)**:
+
+| Metric | Run 3 | Run 6 | Change |
+|--------|-------|-------|--------|
+| idle mismatches | 2 | 0 | **fixed** |
+| attack mismatches | 26 | 1 | -96% |
+| death mismatches | 22 | 4 | -82% |
+| total mismatches | 50 | 5 | -90% |
+| crash | no | no | stable |
+
+**Persistent mismatches (appeared in both Run 3 and Run 6)**:
+
+- attack (71,42): glyph 221 expected, clear actual
+- death (71,24): glyph 220 expected, clear actual
+- death (4,28): glyph 220 expected, clear actual
+
+**Classification**: The render suppression fix eliminated the crash class and 90% of cell
+mismatches. The remaining 5 mismatches (3 persistent, 2 new) are narrow harness/input-precision
+issues, not broad product or stability failures.
+
+### Run 7: Repeatability confirmation
+
+- Artifact: `output/xp-fidelity-test/bundle-run-2026-03-21T18-18-39Z/result.json`
+- Mode: `full_recreation`
+- HEAD: `ba0284c` (same uncommitted changes as Run 6)
+- Result:
+  - `idle_pass=true` (0 mismatches — second consecutive clean idle)
+  - `attack_pass=false` (1 mismatch — same cell as Run 6)
+  - `death_pass=false` (5 mismatches — 4 same as Run 6, 1 new random)
+  - `skin_dock_pass=true`
+  - `overall_pass=false`
+
+**Stability**: CONFIRMED — two consecutive crash-free runs with render suppression.
+
+**Cross-run mismatch classification (Runs 3, 6, 7)**:
+
+| Category | Cells | Runs |
+|----------|-------|------|
+| Persistent (all 3) | attack(71,42), death(4,28), death(71,24) | 3,6,7 |
+| Consistent (post-fix) | death(71,60), death(73,71) | 6,7 |
+| Random (single run) | 19 cells in Run 3, 1 in Run 7 | noise |
+
+Run 3's 19 random mismatches were caused by render-storm instability (now fixed).
+Run 7's 1 random mismatch (death 38,69) is noise.
+
+**5 deterministic mismatches remain**: all show `ws_paint_cell` click at correct coordinates
+but exported cell remains clear/transparent. Likely a click-coordinate precision issue in
+the harness-to-editor interaction path.
+
+**Next step**: Diagnose the 5 persistent coordinates narrowly as a harness/input-precision
+bug. Do not broaden investigation.
+
+### 2026-03-22: Base-Path Manual Verification Findings (`/xpedit`)
+
+- Branch/worktree: `feat/base-path-support`
+- Scope: manual verification of prefixed hosting under `/xpedit`
+- Status: NOT ACCEPTED
+
+**Observed failures**:
+
+1. **Idle skin-only run fails under base path**
+   - Manual report: the idle skin-only path does not complete successfully under `/xpedit`.
+   - Important: this may not be base-path-specific; canonical/root-hosted workbench should be compared directly.
+
+2. **Skin Dock appears hung under base path**
+   - Manual report: Skin Dock did not complete after ~120 seconds under `/xpedit`.
+   - Important: this may be the same remaining canonical `skin_dock` blocker rather than a prefix-only regression.
+
+3. **Whole-sheet editor does not update after new XP/upload actions**
+   - Manual report: clicking "new XP" after upload does not update the whole-sheet XP editor.
+   - Manual report: clicking the next bundle item also does not update the whole-sheet editor.
+   - Likely classification: session/hydration/update regression in the whole-sheet editor flow under manual verification.
+
+4. **Whole-sheet editor layout appears wrong under base path**
+   - Manual report: layer selection appears above instead of bottom-left where it is expected.
+   - Manual report: glyphs are not showing fully.
+   - Likely classification: editor asset/style/runtime rendering issue under prefixed hosting, or a more general whole-sheet regression that must be compared against canonical/root-hosted behavior.
+
+**Assessment**:
+
+- These findings block declaring the base-path branch merge-ready.
+- They are not yet proven to be base-path-only defects.
+- The next diagnostic step is a manual comparison matrix:
+  1. canonical/root-hosted `master`
+  2. base-path branch with `PIPELINE_BASE_PATH=""`
+  3. base-path branch with `PIPELINE_BASE_PATH="/xpedit"`
+
+**Goal of the comparison**:
+
+- Separate true `/xpedit` regressions from canonical workbench regressions that already exist on the root-hosted path.
+
+### 2026-03-22: Canonical verifier mixed result on `b1faac3`
+
+- Scope: canonical/root-hosted verifier lane
+- HEAD: `b1faac3`
+- Status: MIXED / NOT RELIABLE ENOUGH TO CLASSIFY AS REGRESSION YET
+
+**Reported result**:
+
+- `idle`: 7 mismatches
+- `attack`: 17 mismatches
+- `death`: geometry/session mismatch instead of normal cell-fidelity result
+- `skin_dock`: timeout (expected once death/session load failed)
+
+**Critical finding**:
+
+- The death phase loaded the wrong session geometry:
+  - observed `frame_w=7`, `frame_h=10`, `anims=[1,8]`
+  - expected death geometry is `frame_w=11`, `frame_h=11`, `anims=[5]`
+- This matches idle geometry, not death geometry.
+- Likely classification: action-tab/session-load race or stale session-state read during verifier replay.
+
+**Interpretation**:
+
+- This run is worse than the stronger recent result on `baf7916` (`0/0/1` + no crash), even though the delta between the two runs should not materially affect cell fidelity.
+- That makes this run poor evidence for a real product regression by itself.
+- The mismatch counts may still contain run-to-run variance/noise, but the death geometry mismatch is a separate and more serious issue because it points to loading the wrong action session entirely.
+
+**Working hypothesis**:
+
+- The runner may proceed after tab click before the correct action session has fully hydrated.
+- `_bboxCache` invalidation is not sufficient if the verifier starts replay against stale geometry/session state.
+
+**Next step**:
+
+- Prefer waiting for the currently active acceptance run on newer `HEAD` to finish before changing the runner again.
+- If the same wrong-session geometry appears there too, narrow the next investigation to tab-switch/session-hydration readiness only.
+
+### 2026-03-22: Manual canonical workbench findings (root-hosted)
+
+- Scope: manual root-hosted workbench verification
+- Status: FAILING / OPEN
+
+**Observed manual behavior**:
+
+1. **Player skin idle-only PNG convert does not work in the bundle workflow**
+   - Manual report: the player-skin idle-only PNG conversion path does not work for the normally expected bundle path.
+   - Important: this is a canonical/root-hosted finding, not a base-path-only issue.
+
+2. **Idle-only / walk-only partial bundle state still allows "Test this skin"**
+   - Manual report: doing only idle/walk does not prevent the UI from allowing "Test this skin".
+   - Manual report: attempting that test can freeze the UI; refreshing sometimes recovers it.
+   - Likely classification: bundle-readiness / runtime-test gating bug or stale frontend state bug in the canonical workflow.
+
+**Assessment**:
+
+- These findings confirm that at least part of the current Skin Dock / bundle-test failure behavior is present on the canonical workbench too.
+- Do not classify these as base-path regressions.
+- The canonical product still needs explicit gating and/or clearer runtime-test preconditions when only partial bundle content exists.
+
+---
+
+## Edge-Case Verifier Run — 2026-03-22
+
+**Runner:** `scripts/xp_fidelity_test/run_edge_workflow_test.mjs`
+**Commit:** `3a0c7bf`
+**Output:** `output/xp-fidelity-test/edge-workflow-2026-03-22T21-49-36Z/`
+
+### EV-001: Test This Skin enabled at 0/3 partial bundle state
+
+**Status:** OPEN
+**Severity:** HIGH
+**Recipe:** `partial_bundle_gating`, step 0
+**Evidence:**
+- After `apply_template('player_native_full')`, `bundleStatus` shows "Bundle: 0/3 actions ready"
+- All `actionStates` confirmed blank (idle=blank, attack=blank, death=blank)
+- `#webbuildQuickTestBtn` is `{ exists: true, disabled: false, text: "Test Bundle Skin" }`
+- Button remains enabled through all partial states (after save, after partial readiness)
+- Verifier screenshot: `edge-partial_bundle_gating-step0-FAIL.png`
+
+**Root cause:** `updateWebbuildUI()` at workbench.js:816 checked `actionBusy || !preflightOk || !sessionReady` but did NOT check bundle readiness. After template apply, a blank session is loaded (sessionReady=true), so the button was enabled despite 0/3 actions ready.
+
+**Fix:** Added `isBundleMode() && !areAllEnabledBundleActionsReady()` to the disabled condition at workbench.js:816. Button now shows "Disabled: not all required bundle actions are ready" in bundle mode when readiness < 3/3.
+
+**Verification:** Edge-case verifier re-run after fix: `partial_bundle_gating` PASS, `action_tab_hydration` PASS.
+
+**Relationship:** Confirms the manual finding at line 1185–1188 of this log with automated evidence.
+
+### EV-002: save_action does not transition actionState.status from blank
+
+**Status:** NOT_A_BUG
+**Severity:** N/A
+**Recipe:** `partial_bundle_gating`, step 3
+**Evidence:**
+- After `save_action` on idle tab, `actionStates.idle.status` remains `"blank"`
+- Originally expected: `"saved"` or `"converted"` per save-first workflow
+
+**Root cause:** Expected behavior. `saveCurrentActionProgress()` at workbench.js:6297 checks `visualLayerHasMeaningfulContent()` before calling `persistBundleActionStatus("saved")`. On a blank session with no visual content, this gate correctly prevents transitioning to "saved". The verifier assertion was wrong — corrected to expect `"blank"` for blank-content saves.
+
+### EV-PASS: action_tab_hydration — all 51 assertions PASS
+
+**Status:** PASS
+**Recipe:** `action_tab_hydration`
+**Evidence:**
+- All 5 tab switches verified exact per-action geometry from `config/template_registry.json`
+- idle: 126x80, angles=8, anims=[1,8], frameW=7, frameH=10
+- attack: 144x80, angles=8, anims=[8], frameW=9, frameH=10
+- death: 110x88, angles=8, anims=[5], frameW=11, frameH=11
+- Session ID stability: same action = same session across visits
+- Session ID uniqueness: different actions = different sessions
+- Whole-sheet editor mounted after every switch

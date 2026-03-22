@@ -123,6 +123,7 @@ Related docs:
 - `docs/HOST_DEPLOYMENT_CHECKLIST.md` — step-by-step host provisioning and config
 - `docs/LAUNCH_READINESS_CHECKLIST.md` — all launch gates with current status
 - `docs/BASE_PATH_SUPPORT_CHECKLIST.md` — exact work required before safe subpath hosting such as `/asciicker-XPEdit`
+- `docs/plans/2026-03-22-base-path-support-plan.md` — detailed implementation plan for `PIPELINE_BASE_PATH` support (config, routing, frontend, runtime iframe, proxy, acceptance criteria, phased rollout)
 - `docs/RESKIN_PREP.md` — safe font/CSS reskin surface
 - `deploy/README.md` — deployment config quick start
 

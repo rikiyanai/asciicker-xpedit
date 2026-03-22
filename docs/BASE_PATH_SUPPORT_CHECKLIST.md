@@ -148,3 +148,10 @@ So the recommended order is:
 
 1. launch on a subdomain or reverse-proxied root path first
 2. add base-path support later if `rikiworld.com/asciicker-XPEdit` is still desired
+
+## Implementation plan
+
+See `docs/plans/2026-03-22-base-path-support-plan.md` for the full phased
+implementation plan covering config model, Flask Blueprint routing, frontend
+`bp()` helper, runtime iframe audit, reverse proxy templates, and acceptance
+criteria.

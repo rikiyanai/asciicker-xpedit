@@ -154,11 +154,6 @@ async function dragOnCanvas(page, selector, x1, y1, x2, y2, cellSize) {
   await page.mouse.up();
 }
 
-// Cells that persistently fail across runs — log diagnostics for these.
-const DIAG_CELLS = new Set([
-  '71,42', '71,24', '4,28', '71,60', '73,71'
-]);
-
 async function clickCanvasCell(page, selector, x, y, cellSize) {
   const posX = x * cellSize + cellSize / 2;
   const posY = y * cellSize + cellSize / 2;

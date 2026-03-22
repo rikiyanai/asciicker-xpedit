@@ -113,54 +113,80 @@ function parseJsonText(text, label) {
 
 // ── Scroll + drag helpers (from run_fidelity_test.mjs) ──
 
-async function scrollToCell(page, targetPx, targetPy, cellSize) {
-  await page.evaluate(({ tx, ty, cs }) => {
+async function centerCanvasRegion(page, leftPx, topPx, rightPx, bottomPx) {
+  await page.evaluate(({ left, top, right, bottom }) => {
     const scroll = document.getElementById('wholeSheetScroll');
     if (!scroll) return;
     const viewW = scroll.clientWidth;
     const viewH = scroll.clientHeight;
-    const cx = tx + cs / 2;
-    const cy = ty + cs / 2;
-    const needX = cx < scroll.scrollLeft || cx > scroll.scrollLeft + viewW;
-    const needY = cy < scroll.scrollTop || cy > scroll.scrollTop + viewH;
+    const cx = (left + right) / 2;
+    const cy = (top + bottom) / 2;
+    const safeLeft = scroll.scrollLeft + viewW * 0.2;
+    const safeRight = scroll.scrollLeft + viewW * 0.8;
+    const safeTop = scroll.scrollTop + viewH * 0.2;
+    const safeBottom = scroll.scrollTop + viewH * 0.8;
+    const needX = cx < safeLeft || cx > safeRight;
+    const needY = cy < safeTop || cy > safeBottom;
     if (needX || needY) {
-      scroll.scrollLeft = Math.max(0, tx - viewW / 2);
-      scroll.scrollTop = Math.max(0, ty - viewH / 2);
+      scroll.scrollLeft = Math.max(0, cx - viewW / 2);
+      scroll.scrollTop = Math.max(0, cy - viewH / 2);
     }
-  }, { tx: targetPx, ty: targetPy, cs: cellSize });
+  }, { left: leftPx, top: topPx, right: rightPx, bottom: bottomPx });
 }
 
 async function dragOnCanvas(page, selector, x1, y1, x2, y2, cellSize) {
-  await scrollToCell(page, x1 * cellSize, y1 * cellSize, cellSize);
-  const canvasBox = await page.locator(selector).boundingBox();
-  if (!canvasBox) throw new Error(`dragOnCanvas: element not found: ${selector}`);
-  const vpX1 = canvasBox.x + x1 * cellSize + cellSize / 2;
-  const vpY1 = canvasBox.y + y1 * cellSize + cellSize / 2;
-  const vpX2 = canvasBox.x + x2 * cellSize + cellSize / 2;
-  const vpY2 = canvasBox.y + y2 * cellSize + cellSize / 2;
-  await page.mouse.move(vpX1, vpY1);
+  const startX = x1 * cellSize + cellSize / 2;
+  const startY = y1 * cellSize + cellSize / 2;
+  const endX = x2 * cellSize + cellSize / 2;
+  const endY = y2 * cellSize + cellSize / 2;
+  await centerCanvasRegion(
+    page,
+    Math.min(startX, endX),
+    Math.min(startY, endY),
+    Math.max(startX, endX),
+    Math.max(startY, endY),
+  );
+  const locator = page.locator(selector);
+  await locator.hover({ position: { x: startX, y: startY }, timeout: 10000 });
   await page.mouse.down();
-  await page.mouse.move(vpX2, vpY2);
+  await locator.hover({ position: { x: endX, y: endY }, timeout: 10000 });
   await page.mouse.up();
 }
 
+// Cells that persistently fail across runs — log diagnostics for these.
+const DIAG_CELLS = new Set([
+  '71,42', '71,24', '4,28', '71,60', '73,71'
+]);
+
 async function clickCanvasCell(page, selector, x, y, cellSize) {
-  await scrollToCell(page, x * cellSize, y * cellSize, cellSize);
-  const canvasBox = await page.locator(selector).boundingBox();
-  if (!canvasBox) throw new Error(`clickCanvasCell: element not found: ${selector}`);
-  const vpX = canvasBox.x + x * cellSize + cellSize / 2;
-  const vpY = canvasBox.y + y * cellSize + cellSize / 2;
-  await page.mouse.move(vpX, vpY);
-  await page.mouse.click(vpX, vpY);
+  const posX = x * cellSize + cellSize / 2;
+  const posY = y * cellSize + cellSize / 2;
+  await centerCanvasRegion(page, posX, posY, posX, posY);
+  await page.locator(selector).click({
+    position: { x: posX, y: posY },
+    timeout: 10000,
+  });
 }
 
 // ── Recipe executor ──
 
+// Throttle interval: yield to browser every N actions to prevent
+// Chromium from OOM-crashing under sustained canvas/DOM churn.
+const THROTTLE_EVERY = 200;
+const THROTTLE_MS = 50;
+
 async function executeRecipe(page, actionKey, recipe) {
-  for (const action of recipe.actions || []) {
+  const actions = recipe.actions || [];
+  for (let i = 0; i < actions.length; i++) {
+    const action = actions[i];
     if (!ALLOWED_ACTIONS.has(action.action)) {
       fail(actionKey, 'mode_violation', `Whole-sheet mode refused action: ${action.action}`);
       return false;
+    }
+
+    // Periodic yield — lets the browser flush its event queue and GC.
+    if (i > 0 && i % THROTTLE_EVERY === 0) {
+      await page.waitForTimeout(THROTTLE_MS);
     }
 
     switch (action.action) {
@@ -555,15 +581,28 @@ async function main() {
       // Execute whole-sheet recipe
       if (actionReport.geometry_pass) {
         console.error(`[3:${actionKey}] Executing ${recipeMode} recipe (${(recipe.actions || []).length} actions)...`);
+        // Suppress autosaves AND legacy frame grid/preview renders during
+        // recipe replay.  The save storm and DOM element churn (676K canvas
+        // elements for idle) are both proven Chromium crash vectors.
+        await page.evaluate(() => {
+          window.__wb_debug.suppressAutoSave(true);
+          window.__wb_debug.suppressRender(true);
+        });
         actionReport.execute_pass = await executeRecipe(page, actionKey, recipe);
+        // Resume rendering + autosave, do one final render, then flush save.
+        await page.evaluate(() => {
+          window.__wb_debug.suppressRender(false);
+          window.__wb_debug.suppressAutoSave(false);
+        });
+        console.error(`[3:${actionKey}] Flushing verifier save checkpoint...`);
+        await page.evaluate(() => window.__wb_debug.flushSave());
       } else {
         console.error(`[3:${actionKey}] Skipping recipe execution (geometry failed)`);
       }
 
-      // Wait for pending saves to settle. The export button internally calls
-      // saveSessionState("pre-export", { wait_for_idle: true }) before exporting,
-      // but give strokes time to trigger their auto-save callbacks first.
-      await page.waitForTimeout(2000);
+      // The explicit flushSave above replaces the old 2s wait for debounced
+      // saves to settle. Export internally calls saveSessionState("pre-export",
+      // { wait_for_idle: true }) as a safety net.
 
       // Export this action's session.
       // Clear exportOut first so we don't match stale content from a previous action.

@@ -114,10 +114,11 @@ function parseJsonText(text, label) {
 
 // ── Scroll + drag helpers (from run_fidelity_test.mjs) ──
 
+// Returns true if scrolling actually happened.
 async function centerCanvasRegion(page, leftPx, topPx, rightPx, bottomPx) {
-  await page.evaluate(({ left, top, right, bottom }) => {
+  return page.evaluate(({ left, top, right, bottom }) => {
     const scroll = document.getElementById('wholeSheetScroll');
-    if (!scroll) return;
+    if (!scroll) return false;
     const viewW = scroll.clientWidth;
     const viewH = scroll.clientHeight;
     const cx = (left + right) / 2;
@@ -131,27 +132,39 @@ async function centerCanvasRegion(page, leftPx, topPx, rightPx, bottomPx) {
     if (needX || needY) {
       scroll.scrollLeft = Math.max(0, cx - viewW / 2);
       scroll.scrollTop = Math.max(0, cy - viewH / 2);
+      return true;
     }
+    return false;
   }, { left: leftPx, top: topPx, right: rightPx, bottom: bottomPx });
 }
 
+// Per-selector bounding box cache.  Invalidated whenever a scroll happens.
+const _bboxCache = { selector: null, box: null };
+
+async function _getCanvasBox(page, selector, didScroll) {
+  if (!didScroll && _bboxCache.selector === selector && _bboxCache.box) {
+    return _bboxCache.box;
+  }
+  const box = await page.locator(selector).boundingBox();
+  if (!box) throw new Error(`canvas element not found: ${selector}`);
+  _bboxCache.selector = selector;
+  _bboxCache.box = box;
+  return box;
+}
+
 async function dragOnCanvas(page, selector, x1, y1, x2, y2, cellSize) {
-  // Center the drag region in the safe zone, then use raw mouse events
-  // with boundingBox() coordinates.  locator.hover({force}) scrolls the
-  // element into view internally which overrides our centering.
   const startPx = x1 * cellSize + cellSize / 2;
   const startPy = y1 * cellSize + cellSize / 2;
   const endPx = x2 * cellSize + cellSize / 2;
   const endPy = y2 * cellSize + cellSize / 2;
-  await centerCanvasRegion(
+  const didScroll = await centerCanvasRegion(
     page,
     Math.min(startPx, endPx),
     Math.min(startPy, endPy),
     Math.max(startPx, endPx),
     Math.max(startPy, endPy),
   );
-  const canvasBox = await page.locator(selector).boundingBox();
-  if (!canvasBox) throw new Error(`dragOnCanvas: element not found: ${selector}`);
+  const canvasBox = await _getCanvasBox(page, selector, didScroll);
   const vpX1 = canvasBox.x + startPx;
   const vpY1 = canvasBox.y + startPy;
   const vpX2 = canvasBox.x + endPx;
@@ -163,14 +176,10 @@ async function dragOnCanvas(page, selector, x1, y1, x2, y2, cellSize) {
 }
 
 async function clickCanvasCell(page, selector, x, y, cellSize) {
-  // Center the cell in the safe zone, then use raw mouse.click with
-  // boundingBox() coordinates — same approach as Run 6 (0/1/4 mismatches)
-  // but with safe-zone centering to keep cells away from sidebar overlap.
   const posX = x * cellSize + cellSize / 2;
   const posY = y * cellSize + cellSize / 2;
-  await centerCanvasRegion(page, posX, posY, posX, posY);
-  const canvasBox = await page.locator(selector).boundingBox();
-  if (!canvasBox) throw new Error(`clickCanvasCell: element not found: ${selector}`);
+  const didScroll = await centerCanvasRegion(page, posX, posY, posX, posY);
+  const canvasBox = await _getCanvasBox(page, selector, didScroll);
   const vpX = canvasBox.x + posX;
   const vpY = canvasBox.y + posY;
   await page.mouse.click(vpX, vpY);
@@ -510,7 +519,9 @@ async function main() {
 
       console.error(`[3:${actionKey}] Switching to action tab...`);
 
-      // Click the action tab
+      // Click the action tab — invalidate bbox cache since canvas changes.
+      _bboxCache.selector = null;
+      _bboxCache.box = null;
       const tabLocator = page.locator('#bundleActionTabs button').filter({ hasText: ACTION_LABELS[actionKey] });
       await tabLocator.first().click();
 

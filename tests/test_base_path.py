@@ -1,4 +1,4 @@
-"""Tests for Phase 1 base-path support: config helper + Blueprint routing."""
+"""Tests for base-path support: config helper, Blueprint routing, HTML injection."""
 from __future__ import annotations
 
 import importlib
@@ -100,3 +100,120 @@ class TestRoutesPrefixed:
     def test_prefixed_templates_reachable(self):
         r = self.client.get("/xpedit/api/workbench/templates")
         assert r.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: HTML asset injection and __WB_BASE_PATH
+# ---------------------------------------------------------------------------
+
+
+class TestHtmlInjectionRootHosted:
+    """HTML output under default BASE_PATH="" preserves root-relative paths."""
+
+    @pytest.fixture(autouse=True)
+    def _setup(self, client):
+        self.client = client
+
+    def test_workbench_contains_base_path_var(self, client):
+        r = client.get("/workbench")
+        html = r.data.decode()
+        assert 'window.__WB_BASE_PATH = ""' in html
+
+    def test_workbench_contains_boot_nonce(self, client):
+        r = client.get("/workbench")
+        html = r.data.decode()
+        assert "window.__WB_SERVER_BOOT_NONCE" in html
+
+    def test_workbench_styles_root_relative(self, client):
+        r = client.get("/workbench")
+        html = r.data.decode()
+        assert 'href="/styles.css?' in html
+
+    def test_workbench_rexpaint_css_root_relative(self, client):
+        r = client.get("/workbench")
+        html = r.data.decode()
+        assert 'href="/rexpaint-editor/styles.css?' in html
+
+    def test_workbench_js_root_relative(self, client):
+        r = client.get("/workbench")
+        html = r.data.decode()
+        assert 'src="/workbench.js?' in html
+
+    def test_workbench_whole_sheet_init_root_relative(self, client):
+        r = client.get("/workbench")
+        html = r.data.decode()
+        assert 'src="/whole-sheet-init.js?' in html
+
+    def test_wizard_styles_root_relative(self, client):
+        r = client.get("/wizard")
+        html = r.data.decode()
+        assert 'href="/styles.css?' in html
+
+    def test_wizard_js_root_relative(self, client):
+        r = client.get("/wizard")
+        html = r.data.decode()
+        assert 'src="/wizard.js?' in html
+
+    def test_wizard_workbench_link_root_relative(self, client):
+        r = client.get("/wizard")
+        html = r.data.decode()
+        assert 'href="/workbench"' in html
+
+
+class TestHtmlInjectionPrefixed:
+    """HTML output under BASE_PATH="/xpedit" has prefixed asset URLs."""
+
+    @pytest.fixture(autouse=True)
+    def _app_with_prefix(self, monkeypatch, clean_data_dir):
+        monkeypatch.setenv("PIPELINE_BASE_PATH", "/xpedit")
+        import pipeline_v2.config as cfg_mod
+        import pipeline_v2.app as app_mod
+        importlib.reload(cfg_mod)
+        importlib.reload(app_mod)
+        app = app_mod.create_app()
+        app.config["TESTING"] = True
+        self.client = app.test_client()
+        yield
+        monkeypatch.delenv("PIPELINE_BASE_PATH", raising=False)
+        importlib.reload(cfg_mod)
+        importlib.reload(app_mod)
+
+    def test_workbench_base_path_var(self):
+        r = self.client.get("/xpedit/workbench")
+        html = r.data.decode()
+        assert 'window.__WB_BASE_PATH = "/xpedit"' in html
+
+    def test_workbench_styles_prefixed(self):
+        r = self.client.get("/xpedit/workbench")
+        html = r.data.decode()
+        assert 'href="/xpedit/styles.css?' in html
+
+    def test_workbench_rexpaint_css_prefixed(self):
+        r = self.client.get("/xpedit/workbench")
+        html = r.data.decode()
+        assert 'href="/xpedit/rexpaint-editor/styles.css?' in html
+
+    def test_workbench_js_prefixed(self):
+        r = self.client.get("/xpedit/workbench")
+        html = r.data.decode()
+        assert 'src="/xpedit/workbench.js?' in html
+
+    def test_workbench_whole_sheet_init_prefixed(self):
+        r = self.client.get("/xpedit/workbench")
+        html = r.data.decode()
+        assert 'src="/xpedit/whole-sheet-init.js?' in html
+
+    def test_wizard_styles_prefixed(self):
+        r = self.client.get("/xpedit/wizard")
+        html = r.data.decode()
+        assert 'href="/xpedit/styles.css?' in html
+
+    def test_wizard_js_prefixed(self):
+        r = self.client.get("/xpedit/wizard")
+        html = r.data.decode()
+        assert 'src="/xpedit/wizard.js?' in html
+
+    def test_wizard_workbench_link_prefixed(self):
+        r = self.client.get("/xpedit/wizard")
+        html = r.data.decode()
+        assert 'href="/xpedit/workbench"' in html

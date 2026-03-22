@@ -79,13 +79,23 @@ def _v(path: str) -> str:
 def _serve_web_html(file_name: str):
     p = (WEB_DIR / file_name).resolve()
     html = p.read_text(encoding="utf-8")
-    html = html.replace('href="/styles.css"', f'href="{_v("/styles.css")}"')
-    html = html.replace('src="/wizard.js"', f'src="{_v("/wizard.js")}"')
-    html = html.replace('src="/workbench.js"', f'src="{_v("/workbench.js")}"')
+    # Prefix root-relative asset paths with BASE_PATH
+    html = html.replace('href="/styles.css"', f'href="{_v(BASE_PATH + "/styles.css")}"')
+    html = html.replace('href="/rexpaint-editor/styles.css"', f'href="{_v(BASE_PATH + "/rexpaint-editor/styles.css")}"')
+    html = html.replace('src="/workbench.js"', f'src="{_v(BASE_PATH + "/workbench.js")}"')
+    html = html.replace('src="/wizard.js"', f'src="{_v(BASE_PATH + "/wizard.js")}"')
+    html = html.replace('src="/whole-sheet-init.js"', f'src="{_v(BASE_PATH + "/whole-sheet-init.js")}"')
+    # Relative path — no base-path prefix needed
     html = html.replace('src="./termpp_skin_lab.js"', f'src="{_v("./termpp_skin_lab.js")}"')
-    boot_script = f'<script>window.__WB_SERVER_BOOT_NONCE = "{SERVER_BOOT_NONCE}";</script>'
+    # Prefix in-page navigation links
+    html = html.replace('href="/workbench"', f'href="{BASE_PATH}/workbench"')
+    # Inject base path and boot nonce into <head>
+    injected = (
+        f'<script>window.__WB_BASE_PATH = "{BASE_PATH}";</script>\n'
+        f'  <script>window.__WB_SERVER_BOOT_NONCE = "{SERVER_BOOT_NONCE}";</script>'
+    )
     if "</head>" in html:
-        html = html.replace("</head>", f"  {boot_script}\n</head>", 1)
+        html = html.replace("</head>", f"  {injected}\n</head>", 1)
     return _no_cache(Response(html, mimetype="text/html"))
 
 

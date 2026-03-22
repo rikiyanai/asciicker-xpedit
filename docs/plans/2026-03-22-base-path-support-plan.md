@@ -486,6 +486,12 @@ Subpath support is complete only when **all** of the following pass with `PIPELI
 - [ ] **Zero** requests should go to root-relative paths (no `/api/...`, no `/styles.css`, no `/termpp-web-flat/...`)
 - [ ] Exception: browser-initiated requests like `favicon.ico` are acceptable
 
+### Reverse proxy pass-through
+
+- [ ] Full workflow works through Caddy or Nginx using subpath template config
+- [ ] `redirect()` at `GET {BASE_PATH}/` produces correct external URL (scheme, host, prefix) — confirms ProxyFix
+- [ ] Health probe through proxy: `GET https://<domain>{BASE_PATH}/healthz` returns `ok`
+
 ### Root-hosted regression
 
 - [ ] With `PIPELINE_BASE_PATH=""` (default), all existing behavior is unchanged
@@ -497,12 +503,24 @@ Subpath support is complete only when **all** of the following pass with `PIPELI
 
 ### Phase 1: Config and server plumbing
 
-**Scope:** Add `PIPELINE_BASE_PATH` to config, create Blueprint, move all routes into it.
+**Scope:** Add `PIPELINE_BASE_PATH` to config, create Blueprint, move all routes into it. Add `ProxyFix` middleware for correct scheme/host behind reverse proxy.
 
 **Files likely touched:**
 - `src/pipeline_v2/config.py` — add `BASE_PATH` with normalization
-- `src/pipeline_v2/app.py` — refactor `create_app()` to use Blueprint with `url_prefix=BASE_PATH`
+- `src/pipeline_v2/app.py` — refactor `create_app()` to use Blueprint with `url_prefix=BASE_PATH`; add `ProxyFix` wrapper
 - `deploy/.env.example` — add `PIPELINE_BASE_PATH=` line
+
+**ProxyFix requirement:**
+Flask behind a reverse proxy needs `werkzeug.middleware.proxy_fix.ProxyFix` to
+trust `X-Forwarded-*` headers. Without it, `redirect()` generates
+`http://127.0.0.1:5071/...` instead of `https://rikiworld.com/...`. Add in
+`create_app()`:
+```python
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+```
+This is correct for both root-hosted and subpath deployments. Safe to add
+unconditionally — no-op when not behind a proxy.
 
 **Risks:**
 - Blueprint refactor could break route ordering. The catch-all `/<path:filename>` must be registered last on the blueprint.
@@ -561,35 +579,62 @@ Subpath support is complete only when **all** of the following pass with `PIPELI
 
 **Commit:** `feat: frontend base-path prefixing via bp() helper`
 
-### Phase 4: Runtime iframe audit and fix
+### Phase 4: Runtime iframe verification and proxy-through test
 
-**Scope:** Verify the termpp-web-flat runtime HTML references bootstrap/WASM/data via relative paths. Fix any absolute references.
+**Scope:** Verify runtime iframe loads correctly under prefix. Test the full
+stack through an actual reverse proxy (Caddy or Nginx), not just direct Flask.
 
-**Files likely touched:**
-- `runtime/termpp-skin-lab-static/termpp-web-flat/index.html` — audit only (likely relative already)
-- `web/workbench.js` — already done in Phase 3 (iframe src)
+**Runtime iframe:** Already audited — all paths are relative (see Appendix A).
+No code changes expected. This phase is verification-only for the runtime.
 
-**Risks:**
-- If the compiled Emscripten `index.html` uses absolute paths for `.wasm`/`.data`, there is no good fix short of post-processing the HTML or patching the JS loader. This is the highest-risk audit item.
-- The runtime payload is committed binary; changing it requires a rebuild.
+**Proxy-through test:** Set up a local Caddy or Nginx using the subpath
+template from Phase 5 (write templates first, or inline a temporary config).
+Verify the full workflow through the proxy, not just direct Flask access.
+Subtle issues (header forwarding, trailing-slash redirects, scheme in
+generated URLs) only surface through the proxy.
 
 **Verification:**
-- `PIPELINE_BASE_PATH="/test"` → click "Test This Skin" → iframe loads → player spawns → moves
+- `PIPELINE_BASE_PATH="/test"` → direct Flask: click "Test This Skin" → iframe loads → player spawns → moves
 - Network tab inside iframe: all fetches relative (no root-absolute 404s)
+- Through reverse proxy: `https://localhost/test/workbench` → full workflow works
+- `redirect()` response uses correct external scheme/host (not `127.0.0.1:5071`) — confirms ProxyFix is working
 
-**Rollback:** If runtime HTML has absolute paths, document the finding and defer. Subpath support would be blocked on a runtime rebuild.
+**Rollback:** No code changes expected. If issues found, fix in a follow-up commit.
 
-**Commit:** `fix: verify/fix runtime iframe paths for base-path support` (if changes needed)
+**Commit:** none expected (verification-only) unless fixes discovered
 
 ### Phase 5: Reverse proxy templates and deploy docs
 
-**Scope:** Add subpath reverse proxy examples. Update `deploy/.env.example` docs.
+**Scope:** Add subpath reverse proxy examples. Update ops docs with prefixed
+health-check paths. Add favicon/robots.txt handling note.
 
 **Files likely touched:**
 - `deploy/Caddyfile` — add subpath section (commented) or create `deploy/Caddyfile.subpath`
 - `deploy/nginx.conf` — add subpath section (commented) or create `deploy/nginx-subpath.conf`
 - `deploy/README.md` — add subpath deployment instructions
 - `deploy/.env.example` — already done in Phase 1
+- `docs/HOST_DEPLOYMENT_CHECKLIST.md` — note that health-check path becomes `{BASE_PATH}/healthz` under subpath hosting
+- `docs/LAUNCH_READINESS_CHECKLIST.md` — same health-check path note
+
+**Health-check path note:**
+Ops docs currently hardcode `GET /healthz`. Under subpath hosting this becomes
+`GET {BASE_PATH}/healthz`. Add a note to both checklists: "If
+`PIPELINE_BASE_PATH` is set, all paths including `/healthz` are under the
+prefix."
+
+**Systemd propagation note:**
+The systemd service reads `.env` via `EnvironmentFile=`. As long as the
+deployed `.env` includes `PIPELINE_BASE_PATH=...`, gunicorn inherits it. No
+service file changes needed. Add a verification step in the checklist: after
+starting the service, `curl http://127.0.0.1:5071{BASE_PATH}/healthz` must
+return `ok`.
+
+**Favicon / robots.txt:**
+Browsers request `/favicon.ico` at the domain root regardless of page prefix.
+Under subpath hosting, this is outside the app's prefix. Options:
+- The reverse proxy serves a favicon at `/favicon.ico` (recommended)
+- Ignore — causes 404 noise in proxy logs but no functional impact
+Add a note in the subpath proxy template with a commented-out favicon handler.
 
 **Risks:** None (doc/config only).
 
@@ -597,7 +642,7 @@ Subpath support is complete only when **all** of the following pass with `PIPELI
 
 **Rollback:** Revert docs.
 
-**Commit:** `docs: add subpath reverse proxy config templates`
+**Commit:** `docs: add subpath reverse proxy config templates and ops notes`
 
 ### Phase 6: Script re-validation
 
@@ -793,7 +838,7 @@ def create_app() -> Flask:
     @bp.route("/healthz")
 ```
 
-Then change every `@app.route`, `@app.get`, `@app.post` to `@bp.route`, `@bp.get`, `@bp.post` respectively (36 route decorators total).
+Then change every `@app.route`, `@app.get`, `@app.post` to `@bp.route`, `@bp.get`, `@bp.post` respectively (37 route decorators total).
 
 **Keep `@app.errorhandler(500)` on `app`** — it stays as `@app.errorhandler`, NOT on the blueprint.
 
@@ -844,6 +889,35 @@ kill %1
 # Example: /asciicker-XPEdit
 PIPELINE_BASE_PATH=
 ```
+
+#### Task 1.4: Add ProxyFix middleware
+
+**File:** `src/pipeline_v2/app.py`
+
+**Add import at top of file:**
+```python
+from werkzeug.middleware.proxy_fix import ProxyFix
+```
+
+**Add in `create_app()`, after `app = Flask(__name__)` and before the blueprint:**
+```python
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+```
+
+This is safe to add unconditionally — it's a no-op when not behind a proxy.
+When behind a proxy, it ensures `redirect()` generates the correct external
+URL (scheme, host, prefix) instead of `http://127.0.0.1:5071/...`.
+
+**Verify:**
+```bash
+PIPELINE_BASE_PATH="/test" PYTHONPATH=src python3 -m pipeline_v2.app &
+# Direct access (no proxy) — redirect still works:
+curl -sI http://127.0.0.1:5071/test/ | grep Location
+# → Location: http://127.0.0.1:5071/test/workbench
+kill %1
+```
+
+Full ProxyFix verification happens in Phase 4 (proxy-through test).
 
 ---
 

@@ -35,6 +35,10 @@ Milestone 1 specifically covers:
 - Skin Dock/runtime success for that workflow
 - final real-content signoff through the canonical verifier family
 - responsiveness and repeatability sufficient for normal use
+- a shipped pre-alpha bug-report path that lets MVP users submit issues without leaving the product blind:
+  - visible entrypoint in the workbench
+  - structured category/severity capture
+  - optional screenshot / recorder / session metadata attachment
 
 Milestone 1 does **not** mean:
 
@@ -220,6 +224,25 @@ This verifier must never:
 Exit gate:
 
 - verifier is honest, narrow when narrow, and full only when full
+
+## Milestone 1 verifier split
+
+Milestone 1 now requires two verifier lanes with different jobs:
+
+1. `full_recreation`
+   - canonical fidelity / repeatability / crash / final signoff lane
+2. edge-case workflow verifier
+   - partial bundle gating
+   - action-tab/session hydration
+   - `New XP` / refresh / recovery
+   - Skin Dock precondition honesty
+
+Canonical implementation plan:
+
+- `docs/plans/2026-03-22-milestone-1-edge-case-verifier-plan.md`
+
+Do not try to force all workflow-state bugs into `full_recreation`. If a blocker is about
+state transitions, gating, or session truth rather than cell fidelity, use the edge-case lane.
 
 ## Progress Snapshot (2026-03-20)
 

@@ -72,3 +72,58 @@ The result.json includes these contract-required fields:
 
 See `docs/AGENT_PROTOCOL.md` Section 13 and
 `docs/XP_EDITOR_ACCEPTANCE_CONTRACT.md` Verification Evidence Protocol.
+
+## Edge-Case Workflow Verifier
+
+Tests workflow state transitions and gating honesty. Does not replace
+`full_recreation` or bundle fidelity testing.
+
+### What it tests
+
+- Bundle readiness gating honesty at partial states (0/3, after 1 save)
+- `Test This Skin` blocked state honesty — no silent freeze at invalid states
+- Action-tab session hydration with exact geometry verification per action
+- Session ID stability (same action = same session) and uniqueness (different actions = different sessions)
+- Whole-sheet editor mounting after tab switches
+
+### Geometry oracle
+
+Expected geometry per action is derived from `config/template_registry.json`
+(`player_native_full` template set — Milestone 1 bundle-native actions only):
+
+| Action | gridCols | gridRows | angles | anims | frameWChars | frameHChars |
+|--------|----------|----------|--------|-------|-------------|-------------|
+| idle | 126 | 80 | 8 | [1, 8] | 7 | 10 |
+| attack | 144 | 80 | 8 | [8] | 9 | 10 |
+| death | 110 | 88 | 8 | [5] | 11 | 11 |
+
+### Usage
+
+```bash
+# All edge-case recipes
+bash scripts/xp_fidelity_test/run_edge_workflow.sh --headed
+
+# Specific recipe
+bash scripts/xp_fidelity_test/run_edge_workflow.sh --recipe partial_bundle_gating --headed
+bash scripts/xp_fidelity_test/run_edge_workflow.sh --recipe action_tab_hydration
+
+# Custom URL
+bash scripts/xp_fidelity_test/run_edge_workflow.sh --url http://localhost:5071/workbench
+```
+
+### Report shape
+
+The `edge-workflow-result.json` includes:
+
+- `workflow_type: "edge_workflow"`
+- `overall_pass`
+- `recipes[]`: per-recipe results with step-by-step pre/post state snapshots and assertion results
+
+### State snapshot fields
+
+Each step records pre/post state including:
+- `templateSetKey`, `bundleId`, `activeActionKey`, `sessionId`, `actionStates`
+- `bundleStatus`, `wbStatus`, `webbuildState` (DOM text)
+- `geometry` (gridCols, gridRows, frameWChars, frameHChars, angles, anims, projs)
+- `buttons` (save, exportXp, newXp, testThisSkin — exists + disabled + text)
+- `wholeSheetMounted`

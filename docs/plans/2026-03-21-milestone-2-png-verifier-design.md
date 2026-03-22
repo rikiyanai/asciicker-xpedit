@@ -10,6 +10,11 @@ Revision: 2026-03-21 v2 — incorporated findings from 6-agent audit (performanc
 
 Define the Milestone 2 verifier architecture for practical PNG ingest and manual assembly.
 
+This design should now be read as the Milestone 2 realization of the broader workbench-wide
+SAR verifier model described in:
+
+- `docs/plans/2026-03-22-workbench-verifier-sar-model.md`
+
 Milestone 1's verifier was paint-sequence-centered: the recipe generator produced a list of
 `ws_paint_cell` actions that recreated L2 content, and the verifier checked cell fidelity after
 replay. That model does not cover Milestone 2 because the PNG workflow involves:

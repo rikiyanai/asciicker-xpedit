@@ -66,6 +66,10 @@ Milestone 1 may be reported complete only when all of the following are true:
 - save/export/test behavior is usable enough to support a normal authoring loop
 - users are not forced through export/download just to mark bundle progress or move to the next required action
 - responsiveness and repeatability are good enough that the workflow is not merely a one-off proof
+- the pre-alpha MVP includes an honest, user-reachable bug-report path:
+  - visible from the shipped UI
+  - simple enough that non-technical users can submit reports
+  - capable of attaching structured context such as session ID, bundle/action state, and optional screenshot/recorder data
 
 Current 2026-03-21 implementation status:
 
@@ -75,6 +79,11 @@ Current 2026-03-21 implementation status:
   - bundle readiness on `saved|converted`
 - the latest remaining verifier/editor interaction fix is now implemented in the verifier path as a narrow canvas-targeting change
 - Milestone 1 is still open until those landed changes are verified by a clean `full_recreation` pass, repeatability rerun(s), and final manual/runtime review
+- workflow-state bugs that are not fundamentally cell-fidelity problems should be handled by the dedicated Milestone 1 edge-case verifier lane rather than forcing them into `full_recreation`
+- the verifier truth model is currently split:
+  - XP truth tables for fidelity/export/runtime oracle comparison
+  - workbench SAR/state models for UI workflow truth
+  The long-term verifier must cover the entire shipped workbench, not only the whole-sheet editor.
 
 ### Milestone 2 requirements
 

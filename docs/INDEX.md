@@ -66,6 +66,15 @@ Milestone 1 is complete only when all of the following are true:
 - the save-first authoring loop is honest and usable:
   - users can save progress without being forced to download an XP file
   - bundle readiness is not coupled only to export/download side effects
+- the shipped MVP UI includes an easy bug-report path for pre-alpha users:
+  - visible entrypoint near the pre-alpha warnings
+  - structured report fields instead of free-text-only reporting
+  - automatic inclusion of useful session/runtime metadata when available
+  - local report persistence at minimum, with GitHub issue or email fallback as follow-up wiring
+- workflow-state bugs that are hard to reproduce manually should be covered by the dedicated Milestone 1 edge-case verifier lane, not forced into `full_recreation`
+- verifier architecture is now explicitly split into:
+  - XP truth tables for fidelity/oracle comparison
+  - a workbench-wide SAR model (state/action/response) for workflow truth
 
 Current 2026-03-21 closeout truth:
 
@@ -190,6 +199,10 @@ Summary:
   - canonical code-backed XP data contract: binary format, layer roles, frame layout, geometry derivation, confirmed contradictions, and unknowns
 - `docs/plans/2026-03-15-xp-editor-hard-fail-plan.md`
   - active hard-fail plan replacing the deleted single-frame harness plan
+- `docs/plans/2026-03-22-milestone-1-edge-case-verifier-plan.md`
+  - dedicated Milestone 1 verifier plan for partial bundle gating, action-tab/session hydration, `New XP`, refresh/recovery, and Skin Dock precondition bugs
+- `docs/plans/2026-03-22-workbench-verifier-sar-model.md`
+  - canonical explanation of the verifier data model split: current XP truth table vs the required full workbench SAR map across bundle controls, source panel, grid, whole-sheet editor, runtime dock, and bug reporting
 - `docs/plans/2026-03-21-milestone-2-practical-png-ingest-plan.md`
   - next-step roadmap after Milestone 1: preserve the arbitrary-PNG structural baseline, center PNG workflows on source-panel/manual assembly, promote whole-sheet correction, and add human-verified semantic dictionaries
 - `docs/2026-03-13-CLAUDE-HANDOFF-EDITOR-DOC-ALIGNMENT.md`

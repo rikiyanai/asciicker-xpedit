@@ -13,7 +13,7 @@ Canonical doc hub for agents working in `/Users/r/Downloads/asciicker-pipeline-v
 - Audit date: 2026-03-21
 - Audited worktree: `/Users/r/Downloads/asciicker-pipeline-v2`
 - Audited branch: `master`
-- Audited HEAD: `d5eb6d5`
+- Audited HEAD: `14d99d6`
 - Current branch role: active XP-editor Phase 4 acceptance line
 - **Self-containment**: This repo must be 100% self-contained. No runtime, test, or build-time dependency on external folders (e.g. `/Users/r/Downloads/asciicker-Y9-2`, `/Users/r/Downloads/n`). Run `python3 scripts/self_containment_audit.py` at startup.
 
@@ -66,6 +66,19 @@ Milestone 1 is complete only when all of the following are true:
 - the save-first authoring loop is honest and usable:
   - users can save progress without being forced to download an XP file
   - bundle readiness is not coupled only to export/download side effects
+
+Current 2026-03-21 closeout truth:
+
+- the save-first workflow patch has landed in `14d99d6`
+  - top-level `Save`
+  - persisted `blank` / `saved` / `converted` action states
+  - bundle readiness based on `saved|converted`
+  - dirty-save protection on bundle switching / `New XP`
+- the narrow verifier canvas-targeting patch has landed in `aed6e40`
+  - safer centered canvas targeting
+  - locator-relative click path
+  - drag targeting brought in line with the safer click discipline
+- both changes are implemented for the next acceptance reruns, but Milestone 1 is not closed until they are verified through the canonical `full_recreation` and manual/runtime loop
 
 Milestone 1 is **not**:
 

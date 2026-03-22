@@ -67,6 +67,15 @@ Milestone 1 may be reported complete only when all of the following are true:
 - users are not forced through export/download just to mark bundle progress or move to the next required action
 - responsiveness and repeatability are good enough that the workflow is not merely a one-off proof
 
+Current 2026-03-21 implementation status:
+
+- the save-first workflow is now implemented in the product path:
+  - top-level `Save`
+  - `blank` / `saved` / `converted`
+  - bundle readiness on `saved|converted`
+- the latest remaining verifier/editor interaction fix is now implemented in the verifier path as a narrow canvas-targeting change
+- Milestone 1 is still open until those landed changes are verified by a clean `full_recreation` pass, repeatability rerun(s), and final manual/runtime review
+
 ### Milestone 2 requirements
 
 Milestone 2 starts only after Milestone 1 closes.

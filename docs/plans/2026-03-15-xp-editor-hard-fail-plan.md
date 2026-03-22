@@ -255,6 +255,15 @@ Recent high-signal commits on `master`:
    - `manual_review` mode committed as diagnostic-only tooling
 7. `1c21ee7`
    - `full_recreation` mode committed as the real-content final signoff lane
+8. `aed6e40`
+   - narrow full-recreation canvas-targeting hardening
+   - centered region scroll discipline
+   - locator-relative click path and safer drag targeting
+9. `14d99d6`
+   - save-first bundle workflow implementation
+   - top-level `Save`
+   - persisted `blank` / `saved` / `converted` bundle states
+   - readiness on `saved|converted`
 
 ### What is established now
 
@@ -266,14 +275,14 @@ Recent high-signal commits on `master`:
 
 ### What remains for Milestone 1
 
-1. final real-content acceptance pass completion and logging
-2. fix the last narrow verifier/editor interaction bug if `full_recreation` still shows deterministic cell misses
+1. verify the landed narrow verifier/editor interaction fix with a clean `full_recreation` pass and honest logging
+2. verify the landed save-first bundle workflow through the real authoring loop:
+   - save without forced XP download
+   - auto-advance on save
+   - readiness and Test Bundle Skin on `saved|converted`
 3. responsiveness signoff in real browser use
-4. save-first bundle workflow cleanup:
-   - explicit top-level Save
-   - `blank` / `saved` / `converted` bundle states
-   - readiness based on `saved|converted`, not export/download only
-5. repeatability across reruns
+4. repeatability across reruns
+5. final manual/runtime acceptance review
 
 ### What remains beyond Milestone 1
 
@@ -325,14 +334,12 @@ Update after B1 patch:
 
 1. finish the current `full_recreation` real-content run and log its result honestly
 2. log any new verifier/harness failures in `PLAYWRIGHT_FAILURE_LOG.md`
-3. close the last narrow verifier/editor interaction bug if the current run still misses deterministic cells
-4. close Milestone 1 product-flow gaps:
-   - top-level Save
-   - `blank` / `saved` / `converted`
-   - save-first bundle progression
+3. verify the landed narrow verifier/editor interaction patch (`aed6e40`)
+4. verify the landed save-first bundle workflow patch (`14d99d6`)
 5. review responsiveness and stroke-end autosave behavior
 6. rerun for repeatability
-7. only after Milestone 1 closes, begin Milestone 2 practical PNG-ingest work, then return to the broader existing-XP parity line
+7. complete final manual/runtime review
+8. only after Milestone 1 closes, begin Milestone 2 practical PNG-ingest work, then return to the broader existing-XP parity line
 
 ## MVP Deployment Posture
 

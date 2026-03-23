@@ -8,6 +8,33 @@ Canonical doc hub for agents working in `/Users/r/Downloads/asciicker-pipeline-v
 - All sprites, runtime assets, `.web` files, `.a3d` maps, fonts — everything the workbench needs must live inside this repo.
 - Symlinks pointing outside the repo are violations.
 
+## Document Authority Model
+
+This repo uses a 3-doc canonical authority model. Agents must treat ONLY these 3 docs as authority for active execution state:
+
+| # | Doc | Role |
+|---|-----|------|
+| 1 | `PLAYWRIGHT_FAILURE_LOG.md` | Reality/failure/proof log — ground truth for what actually happened |
+| 2 | `docs/plans/2026-03-23-workbench-canonical-spec.md` | Normative requirements, roadmap, bug-priority, active execution truth |
+| 3 | `docs/plans/2026-03-23-m2-capability-canon-inventory.md` | Capability inventory, truth-table, SAR-facing workflow canon |
+
+### Doc Classifications
+
+| Classification | Examples | Rule |
+|---------------|----------|------|
+| **Canonical** | The 3 docs above | Only source of active truth; update in-place |
+| **Structural Contract** | `XP_EDITOR_ACCEPTANCE_CONTRACT.md`, `PNG_STRUCTURAL_BASELINE_CONTRACT.md` | Stable normative contracts; update only on milestone boundary |
+| **Reference** | `COMPLETE_UI_CONTROL_REFERENCE.md`, `REXPAINT_MANUAL.txt`, `REXPAINT_UI_COMPLETE_INDEX.md` | Stable reference material; does not claim active state |
+| **Worksheet** | `CLAUDE-HANDOFF-*.md`, most `docs/plans/*.md`, `docs/research/*` | Temporary; must be retired via `scripts/doc_lifecycle_stitch.sh` after completion |
+| **Archive** | `docs/WORKBENCH_DOCS_ARCHIVE.md` | Retired worksheets; append-only via stitch script |
+
+### Retirement Policy
+
+- Completed or superseded worksheets MUST be retired using `scripts/doc_lifecycle_stitch.sh`.
+- The stitch script appends to the archive, rewrites repo-wide references, deletes the original, and logs to the failure log.
+- Canonical docs and structural contracts are protected — the script refuses to archive them.
+- Do not create new authority docs. If a canonical doc is insufficient, update it in-place.
+
 ## Current Branch Truth
 
 - Audit date: 2026-03-21
@@ -88,6 +115,8 @@ Current 2026-03-21 closeout truth:
   - locator-relative click path
   - drag targeting brought in line with the safer click discipline
 - both changes are implemented for the next acceptance reruns, but Milestone 1 is not closed until they are verified through the canonical `full_recreation` and manual/runtime loop
+
+> **2026-03-23 status correction:** Milestone 1 IS now closed on canonical root-hosted master. Evidence: PLAYWRIGHT_FAILURE_LOG.md records commit 14e8e95 with 7/7 edge-workflow PASS (partial_bundle_gating, action_tab_hydration, 5× generated_sar recipes), Skin Dock PASS, and base-path verification showing 0 `/xpedit`-specific regressions. The "not closed until verified" clause above has been satisfied. M2-A structural PNG baseline is also established (9/9 gate verdicts PASS). See `docs/plans/2026-03-23-m2-capability-canon-inventory.md` for the full M2 capability audit.
 
 Milestone 1 is **not**:
 
@@ -317,3 +346,20 @@ No distinct palette asset files (`.pal`, `palette.json`, etc.) exist in the repo
 - The finding that the editor modal/UI is still incomplete for REXPaint-parity goals remains valid; existence of whole-sheet integration does not mean full parity is proven.
 - XP-file fidelity is not proven end-to-end. No canonical test exists. The deleted harness was not a valid fidelity test — see `PLAYWRIGHT_FAILURE_LOG.md`.
 - Self-containment is now machine-enforced via `scripts/self_containment_audit.py` and installable git hooks in `.githooks/`. Blocking findings are external symlinks and live/build/runtime/test references to absolute paths outside this repo.
+
+## 2026-03-23 Audit Note: Capability Canon and Doc Alignment
+
+> A canonical M2 capability inventory now exists at `docs/plans/2026-03-23-m2-capability-canon-inventory.md`. It cross-references every doc in this index against current code wiring and failure-log proof to classify each user-reachable behavior as PROVEN, WIRED, PARTIAL, PLANNED, BLOCKED, or DEFERRED.
+>
+> Key findings from the audit (updated 2026-03-23):
+> - M1 is closed (see status correction above)
+> - 96 SAR-enumerated actions: 10 PROVEN on committed code, 67 WIRED, 7 PARTIAL, 4 PLANNED, 1 BLOCKED, 2 DEFERRED
+> - 1 of 5 M2 verifier slices is built on committed code (M2-A structural baseline). M2-B source-panel runner exists but is uncommitted — treat its evidence as provisional.
+> - **CAVEAT:** M2-B source-panel coverage claims (runner + PB-02/Delete Box fixes) are from uncommitted code. Not acceptance-grade until committed and independently reverified.
+> - The manual-assembly end-to-end workflow (PNG → source → grid → WS → export) is fully wired but has zero proof
+> - Next priority: commit M2-B runner + fixes, reverify, then source-to-grid slice
+>
+> For reality/proof status on any capability claim in this repo, always check:
+> 1. `PLAYWRIGHT_FAILURE_LOG.md` (ground truth)
+> 2. `docs/plans/2026-03-23-m2-capability-canon-inventory.md` (classified inventory)
+> 3. The code itself (`web/workbench.js`, `web/whole-sheet-init.js`)

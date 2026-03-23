@@ -1,0 +1,397 @@
+# M2 Capability Canon Inventory
+
+**Created:** 2026-03-23
+**Branch:** master @ b5034b5
+**Purpose:** Canonical answer to "what user-reachable workbench behaviors should be possible right now?" — distinguishing intent, code wiring, and verified proof.
+**Supersedes:** No prior canonical capability inventory existed. This doc synthesizes claims from the full doc set and measures them against code and failure-log reality.
+
+---
+
+## How To Read This Doc
+
+Each capability row has five columns:
+
+| Column | Meaning |
+|--------|---------|
+| **Canon Source** | Which doc(s) first defined or claimed this behavior |
+| **Code Evidence** | Is the handler wired in workbench.js / whole-sheet-init.js? (file:line if known) |
+| **Proof Evidence** | Is there failure-log, verifier, or screenshot evidence it actually works? |
+| **Status** | PROVEN / WIRED / PARTIAL / PLANNED / BLOCKED / DEFERRED (see key below) |
+| **M2 Scope** | Which M2 sub-phase owns this (A/B/C/D/E/F) or M1-closed |
+
+### Status Key
+
+- **PROVEN** — Failure log or verifier evidence confirms the behavior works end-to-end
+- **WIRED** — Code exists with complete handler + implementation, but no verifier/failure-log proof yet
+- **PARTIAL** — Handler exists but implementation is incomplete (stubs, known bugs, missing pushHistory)
+- **PLANNED** — Doc claims intent but code doesn't exist yet
+- **BLOCKED** — Depends on unresolved bug or missing infrastructure
+- **DEFERRED** — Explicitly deferred from M2 scope
+
+### Evidence Hierarchy (from AGENT_PROTOCOL.md §13)
+
+1. Canonical verifier path (truth_table → recipe → run) — highest
+2. PLAYWRIGHT_FAILURE_LOG.md entries with structured evidence
+3. Direct code audit (handler exists, API endpoint exists)
+4. Screenshot-backed doc claims
+5. SAR blueprint / planning doc claims — lowest
+
+---
+
+## Part 1: Milestone Status Reality
+
+| Claim | Source | Reality | Evidence |
+|-------|--------|---------|----------|
+| M1 is open | INDEX.md line 90 (2026-03-21) | **STALE — M1 is CLOSED** | PLAYWRIGHT_FAILURE_LOG.md: commit 14e8e95, 7/7 edge workflows PASS, Skin Dock PASS, base-path 0 regressions |
+| M2-A structural baseline established | CLAUDE.md, failure log | **CORRECT** | 9/9 structural gate verdicts PASS (G10 dims, G11 layers, G12 L0 metadata) for idle/attack/death |
+| Verifier drift between master and feat/base-path-support | failure log | **CORRECT but narrowing** | Base-path branch merged; drift was flagged pre-merge |
+| Cell mismatches block M1 | bug-gap-index Wave 0 | **STALE** — classified as NON-BLOCKING | 5 remaining mismatches are canvas-edge harness artifacts (rows 0-1, col 143, corners) |
+| PB-04 root-relative HTML paths | bug-gap-index | **STALE-DOC** — fixed by server-side rewrite | `_serve_web_html()` at app.py:79-99 rewrites all 4 paths |
+
+---
+
+## Part 2: Capability Inventory by Action Family
+
+### Family 1: Template/Bundle Controls (8 actions)
+
+| # | Action | Canon Source | Code Evidence | Proof Evidence | Status | M2 Scope |
+|---|--------|-------------|---------------|----------------|--------|----------|
+| T1 | Apply template | SAR blueprint | `applyTemplate()` workbench.js — wired | M1 edge-workflow PASS (action_tab_hydration) | PROVEN | M1-closed |
+| T2 | Switch action tab | SAR blueprint | `switchBundleAction()` — wired | M1 edge-workflow PASS (action_tab_hydration) | PROVEN | M1-closed |
+| T3 | Save session | SAR blueprint | `saveCurrentActionProgress()` → `/api/workbench/save-session` | M1 save-first workflow PASS | PROVEN | M1-closed |
+| T4 | Export XP | SAR blueprint | `exportXp()` → `/api/workbench/export-xp` | M1 full_recreation PASS | PROVEN | M1-closed |
+| T5 | New XP | SAR blueprint | `newXp()` → `/api/workbench/create-blank-session` | Wired, no specific proof entry | WIRED | M2-D |
+| T6 | Import XP | SAR blueprint | `importXp()` → `/api/workbench/upload-xp` | XP roundtrip test PASS (2686 cells consistent) | PROVEN | M1-closed |
+| T7 | Test skin (Skin Dock) | SAR blueprint | `testCurrentSkinInDock()` → `/api/workbench/web-skin-payload` | M1 Skin Dock PASS | PROVEN | M1-closed |
+| T8 | Delete action | SAR blueprint | Not visible in current UI | No handler found | PLANNED | M2-D |
+
+### Family 2: Upload/Convert (3 actions)
+
+| # | Action | Canon Source | Code Evidence | Proof Evidence | Status | M2 Scope |
+|---|--------|-------------|---------------|----------------|--------|----------|
+| U1 | Upload PNG | M2 plan, SAR blueprint | `wbUpload()` → `/api/upload` | M2-A structural baseline PASS | PROVEN | M2-A |
+| U2 | Analyze | M2 plan | `wbAnalyze()` → `/api/analyze` | Wired, no specific proof entry | WIRED | M2-F |
+| U3 | Convert to XP (Run pipeline) | M2 plan | `wbRun()` → `/api/run` | M2-A structural baseline PASS | PROVEN | M2-A |
+
+### Family 3: Source Panel (19 actions)
+
+| # | Action | Canon Source | Code Evidence | Proof Evidence | Status | M2 Scope |
+|---|--------|-------------|---------------|----------------|--------|----------|
+| S1 | Set mode: Select | UX checklist §1 | `setSourceMode("select")` — wired | M2-B runner step 5 | **PROVEN** | M2-B |
+| S2 | Set mode: Draw Box | UX checklist §2 | `setSourceMode("draw_box")` — wired | M2-B runner step 2 | **PROVEN** | M2-B |
+| S3 | Set mode: Drag Row | UX checklist §7 | `setSourceMode("row_select")` — wired | No verifier coverage | WIRED | M2-D |
+| S4 | Set mode: Drag Column | UX checklist §8 | `setSourceMode("col_select")` — wired | No verifier coverage | WIRED | M2-D |
+| S5 | Set mode: Vertical Cut | UX checklist §9 | `setSourceMode("cut_v")` — wired | No verifier coverage | WIRED | M2-D |
+| S6 | Set mode: Delete Box | UX checklist §4 | `deleteSourceBox()` — wired | No verifier coverage | WIRED | M2-D |
+| S7 | Draw box (draft → commit) | UX checklist §2 | `onSourceMouseDown/Move/Up` + `commitDraftSource()` | M2-B runner steps 3, 4, 7 | **PROVEN** | M2-B |
+| S8 | Select box | UX checklist §1 | Click handler in source canvas — wired | M2-B runner step 5 | **PROVEN** | M2-B |
+| S9 | Move box (drag) | UX checklist §1 | Drag handler in source canvas — wired | No verifier coverage | WIRED | M2-D |
+| S10 | Resize box (handles) | UX checklist §1 | Resize handles in source canvas — wired | No verifier coverage | WIRED | M2-D |
+| S11 | Delete box | UX checklist §4 | `deleteSourceBox()` — wired | No verifier coverage | WIRED | M2-D |
+| S12 | Find Sprites | UX checklist §6 | `extractSprites()` — wired | M2-B runner step 8 | **PROVEN** | M2-B |
+| S13 | Drag row borders | UX checklist §7 | Row drag in source canvas — wired | No verifier coverage | WIRED | M2-D |
+| S14 | Drag column borders | UX checklist §8 | Column drag in source canvas — wired | No verifier coverage | WIRED | M2-D |
+| S15 | Set anchor | UX checklist §5 | `setAnchorBox()` — wired | M2-B runner step 6 | **PROVEN** | M2-B |
+| S16 | Pad box to anchor size | UX checklist §5 | `padBoxToAnchorSize()` — wired | M2-B runner step 7 (PB-02 fixed) | **PROVEN** | M2-B |
+| S17 | Vertical cut insert | UX checklist §9 | Cut-v mode in source canvas — wired | No verifier coverage | WIRED | M2-D |
+| S18 | Source zoom | UX checklist §10 | `sourceZoomInput` → `renderSourceCanvas()` | No verifier coverage | WIRED | M2-D |
+| S19 | Source undo/redo participation | SAR blueprint | `pushHistory()` called from findSprites, cut-line | **GAP**: anchor ops (PB-01/03) do NOT pushHistory | PARTIAL | M2-D |
+
+**Source Panel Known Bugs:**
+- PB-01: `setAnchorBox()` via context menu does not call `pushHistory()` (workbench.js ~6592)
+- ~~PB-02~~: **CLOSED** — Implicit anchor override removed from `setDraftBox()` (2026-03-23)
+- PB-03: File upload clears anchor without undo (workbench.js ~6513)
+
+### Family 4: Context Menu (9 actions)
+
+| # | Action | Canon Source | Code Evidence | Proof Evidence | Status | M2 Scope |
+|---|--------|-------------|---------------|----------------|--------|----------|
+| C1 | Add as 1 sprite | SAR blueprint | `addSpriteFromSelectedBox()` — wired | M2-B runner step 4 | **PROVEN** | M2-B |
+| C2 | Add to selected row sequence | SAR blueprint | `addSpriteToRowSequence()` — wired | No verifier | WIRED | M2-B |
+| C3 | Set as anchor for Find Sprites | SAR blueprint | `setAnchorBox()` — wired | M2-B runner step 6; PB-01 undo gap remains | **PROVEN** | M2-B |
+| C4 | Pad this bbox to anchor size | SAR blueprint | `padBoxToAnchorSize()` — wired | M2-B runner step 7; PB-02 CLOSED | **PROVEN** | M2-B |
+| C5 | Delete (source context) | SAR blueprint | `deleteSourceBox()` — wired | No verifier | WIRED | M2-D |
+| C6 | Copy frame (grid context) | SAR blueprint | `copySelectedFrame()` — wired | No verifier | WIRED | M2-D |
+| C7 | Paste frame (grid context) | SAR blueprint | `pasteFrame()` — wired | No verifier | WIRED | M2-D |
+| C8 | Focus Whole-Sheet (grid context) | SAR blueprint | `openInspectorForSelectedFrame()` — wired | No verifier | WIRED | M2-C |
+| C9 | Delete (grid context) | SAR blueprint | `deleteSelectedFrames()` — wired | No verifier | WIRED | M2-D |
+
+### Family 5: Source-to-Grid (2 actions)
+
+| # | Action | Canon Source | Code Evidence | Proof Evidence | Status | M2 Scope |
+|---|--------|-------------|---------------|----------------|--------|----------|
+| D1 | Drag source to grid | UX checklist §11, M2 plan | Drag/drop handler — wired | No verifier coverage | WIRED | M2-B |
+| D2 | Add to row sequence | UX checklist §12, M2 plan | `addSpriteToRowSequence()` — wired | No verifier coverage | WIRED | M2-B |
+
+### Family 6: Grid Panel (14 actions)
+
+| # | Action | Canon Source | Code Evidence | Proof Evidence | Status | M2 Scope |
+|---|--------|-------------|---------------|----------------|--------|----------|
+| G1 | Select frame (click) | UI control ref §6 | Click handler on grid — wired | No verifier | WIRED | M2-D |
+| G2 | Shift-select (multi) | UI control ref §6 | Shift+click — wired | No verifier | WIRED | M2-D |
+| G3 | Move row up/down | UI control ref §6 | `moveSelectedRow()` — wired | No verifier | WIRED | M2-D |
+| G4 | Move col left/right | UI control ref §6 | `moveSelectedCols()` — wired | No verifier | WIRED | M2-D |
+| G5 | Add frame | UI control ref §6 | `addGridFrameSlot()` — wired | No verifier | WIRED | M2-D |
+| G6 | Delete selected | UI control ref §6 | `deleteSelectedFrames()` — wired | No verifier | WIRED | M2-D |
+| G7 | Copy frame | SAR blueprint | `copySelectedFrame()` — wired | No verifier | WIRED | M2-D |
+| G8 | Paste frame | SAR blueprint | `pasteFrame()` — wired | No verifier | WIRED | M2-D |
+| G9 | Assign row category | UI control ref §8 | `assignRowCategory()` — wired | No verifier | WIRED | M2-D |
+| G10 | Assign frame group | UI control ref §8 | `assignFrameGroup()` — wired | No verifier | WIRED | M2-D |
+| G11 | Apply groups to metadata | UI control ref §8 | `applyGroupsToAnims()` — wired | No verifier | WIRED | M2-D |
+| G12 | Double-click → open WS editor | UI control ref §6 | `openInspectorForSelectedFrame()` — wired | No verifier | WIRED | M2-C |
+| G13 | Grid zoom | UI control ref §6 | `gridZoomInput` → `renderGrid()` — wired | No verifier | WIRED | M2-D |
+| G14 | Drag-select frames | SAR blueprint | Drag handler on grid — wired | No verifier | WIRED | M2-D |
+
+### Family 7: Whole-Sheet Editor (18 actions)
+
+| # | Action | Canon Source | Code Evidence | Proof Evidence | Status | M2 Scope |
+|---|--------|-------------|---------------|----------------|--------|----------|
+| W1 | Focus whole-sheet | M2 plan, UI ref | `openInspectorForSelectedFrame()` → WS hydration | No verifier | WIRED | M2-C |
+| W2 | Paint cell (Cell tool) | REXPaint parity spec | whole-sheet-init.js Cell tool — wired | No verifier | WIRED | M2-C |
+| W3 | Eyedropper | REXPaint parity spec | whole-sheet-init.js Eyedropper — wired | No verifier | WIRED | M2-C |
+| W4 | Erase cell | REXPaint parity spec | whole-sheet-init.js Erase — wired | No verifier | WIRED | M2-C |
+| W5 | Erase drag | REXPaint parity spec | whole-sheet-init.js Erase (drag) — wired | No verifier | WIRED | M2-C |
+| W6 | Flood fill | REXPaint parity spec | whole-sheet-init.js Fill tool — wired | No verifier | WIRED | M2-C |
+| W7 | Rectangle tool | REXPaint parity spec | whole-sheet-init.js Rect tool — wired | No verifier | WIRED | M2-C |
+| W8 | Line tool | REXPaint parity spec | whole-sheet-init.js Line tool — wired | No verifier | WIRED | M2-C |
+| W9 | Switch tool (keyboard) | REXPaint parity spec | Keyboard shortcuts C/E/D/L/R/I — wired | No verifier | WIRED | M2-C |
+| W10 | Switch layer | UI control ref §7 | `switchToLayer()` — wired | No verifier | WIRED | M2-C |
+| W11 | Toggle layer visibility | UI control ref §7 | Layer visibility checkboxes — wired | No verifier | WIRED | M2-C |
+| W12 | Add layer | SAR blueprint | Not found in current WS init | No evidence | PLANNED | M2-C |
+| W13 | Delete layer | SAR blueprint | Not found in current WS init | No evidence | PLANNED | M2-C |
+| W14 | Move layer | SAR blueprint | Not found in current WS init | No evidence | PLANNED | M2-C |
+| W15 | Select tool | Implementation checklist | Code exists on disk but NOT wired (PB-06) | No evidence | BLOCKED | M2-C |
+| W16 | Oval tool | Implementation checklist | Code exists on disk but NOT wired (PB-05) | No evidence | DEFERRED | M2-C |
+| W17 | Text tool | Implementation checklist | Code exists on disk but NOT wired (PB-07) | No evidence | DEFERRED | M2-C |
+| W18 | Per-stroke undo/redo | SAR blueprint, implementation checklist | Undo stubs at editor-app.js:950-960; WS has stroke-complete detection | No evidence | PARTIAL | M2-C |
+
+**Whole-Sheet Known Gaps:**
+- PB-05: OvalTool exists on disk, not wired — DEFERRED
+- PB-06: SelectTool exists on disk, not wired — BLOCKED (M2-C.2 priority)
+- PB-07: TextTool exists on disk, not wired — DEFERRED
+- W12-W14: Layer add/delete/move are SAR-claimed but no code found in whole-sheet-init.js
+- W18: Undo stubs exist but per-stroke undo is not connected end-to-end
+
+### Family 8: Jitter/Alignment (6 actions)
+
+| # | Action | Canon Source | Code Evidence | Proof Evidence | Status | M2 Scope |
+|---|--------|-------------|---------------|----------------|--------|----------|
+| J1 | Nudge left | UX checklist §20 | `nudgeFrameJitter("left")` — wired | No verifier | WIRED | M2-D |
+| J2 | Nudge right | UX checklist §20 | `nudgeFrameJitter("right")` — wired | No verifier | WIRED | M2-D |
+| J3 | Nudge up | UX checklist §20 | `nudgeFrameJitter("up")` — wired | No verifier | WIRED | M2-D |
+| J4 | Nudge down | UX checklist §20 | `nudgeFrameJitter("down")` — wired | No verifier | WIRED | M2-D |
+| J5 | Auto-align selected | UX checklist §20 | `autoAlignFrameJitter(false)` — wired | No verifier | WIRED | M2-D |
+| J6 | Auto-align row | UX checklist §20 | `autoAlignFrameJitter(true)` — wired | No verifier | WIRED | M2-D |
+
+### Family 9: Lifecycle (3 actions)
+
+| # | Action | Canon Source | Code Evidence | Proof Evidence | Status | M2 Scope |
+|---|--------|-------------|---------------|----------------|--------|----------|
+| L1 | Save session | SAR blueprint | `saveCurrentActionProgress()` — wired | M1 PROVEN | PROVEN | M1-closed |
+| L2 | Undo (workbench snapshot) | UI control ref §2 | `undo()` — wired, max 50 history | Wired with ~40 pushHistory call sites | WIRED | M2-D |
+| L3 | Redo (workbench snapshot) | UI control ref §2 | `redo()` — wired | Wired | WIRED | M2-D |
+
+### Family 10: Runtime Dock (7 actions)
+
+| # | Action | Canon Source | Code Evidence | Proof Evidence | Status | M2 Scope |
+|---|--------|-------------|---------------|----------------|--------|----------|
+| R1 | Test This Skin | UI control ref §10 | `testCurrentSkinInDock()` → iframe | M1 Skin Dock PASS | PROVEN | M1-closed |
+| R2 | Apply In Place | UI control ref §10 | `applyCurrentXpAsWebSkin({restart_if_overlay_hidden: false})` | Hidden/experimental, no proof | WIRED | M2-D |
+| R3 | Apply + Restart | UI control ref §10 | `applyCurrentXpAsWebSkin({force_restart: true})` | Hidden/experimental, no proof | WIRED | M2-D |
+| R4 | Open Preview | UI control ref §10 | `openWebbuild()` → iframe creation | No specific proof | WIRED | M2-D |
+| R5 | Reload Preview | UI control ref §10 | `reloadWebbuild()` | No specific proof | WIRED | M2-D |
+| R6 | Upload Skin (file) | UI control ref §10 | `onWebbuildUploadTestClick()` | No specific proof | WIRED | M2-D |
+| R7 | Apply Current XP (Advanced) | UI control ref §10 | `applyCurrentXpAsWebSkin()` → API | Hidden/experimental, no proof | WIRED | M2-D |
+
+### Family 11: Bug Report / UI Recorder (7 actions)
+
+| # | Action | Canon Source | Code Evidence | Proof Evidence | Status | M2 Scope |
+|---|--------|-------------|---------------|----------------|--------|----------|
+| B1 | Open bug report | UI control ref §14 | `openBugReportModal()` — wired | No specific proof | WIRED | M1-closed |
+| B2 | Submit bug report | UI control ref §14 | `submitBugReport()` → `/api/workbench/report-bug` | No specific proof | WIRED | M1-closed |
+| B3 | Dismiss bug report | UI control ref §14 | Modal close handler — wired | No specific proof | WIRED | M1-closed |
+| B4 | Start UI recording | UI control ref §15 | `startUiRecorder()` — wired | No specific proof | WIRED | M1-closed |
+| B5 | Stop UI recording | UI control ref §15 | `stopUiRecorder()` — wired | No specific proof | WIRED | M1-closed |
+| B6 | Clear recording | UI control ref §15 | `clearUiRecorder()` — wired | No specific proof | WIRED | M1-closed |
+| B7 | Download recording JSON | UI control ref §15 | `downloadUiRecorder()` — wired | No specific proof | WIRED | M1-closed |
+
+### Family 12: XP Preview (4 actions, not in SAR 96-count)
+
+| # | Action | Canon Source | Code Evidence | Proof Evidence | Status | M2 Scope |
+|---|--------|-------------|---------------|----------------|--------|----------|
+| P1 | Play animation preview | UI control ref §9 | `startPreview()` — wired | No specific proof | WIRED | M1-closed |
+| P2 | Stop animation preview | UI control ref §9 | `stopPreview()` — wired | No specific proof | WIRED | M1-closed |
+| P3 | Change FPS | UI control ref §9 | `fpsInput` change handler — wired | No specific proof | WIRED | M1-closed |
+| P4 | Change angle/direction | UI control ref §9 | `previewAngle` change handler — wired | No specific proof | WIRED | M1-closed |
+
+### Family 13: Legacy Inspector (cell-level editing, 25+ actions)
+
+The legacy XP Frame Inspector is fully wired with complete implementations for all tools (Inspect, Select, Glyph, Paint, Erase, Dropper), frame operations (Copy, Paste, Flip H, Clear), selection operations (Copy, Paste, Cut, Clear, Select All, Fill, Replace FG/BG), transforms (Rotate CW/CCW, Flip H/V), BG=Transparent, and Find & Replace.
+
+**Status:** All handlers are WIRED and fully implemented. However, the legacy inspector is a **Milestone 2 demotion target** (M2-C.1) — the whole-sheet editor should become the primary correction surface, with the inspector as a collapsed debug fallback.
+
+**Proof:** No specific verifier coverage for inspector-level actions. The inspector was the primary editing surface during M1, but verification focused on the save/export/runtime loop, not individual editing operations.
+
+---
+
+## Part 3: Workflow Proof Summary
+
+### End-to-End Workflows
+
+| Workflow | Steps | Proof Level | Evidence |
+|----------|-------|-------------|----------|
+| **XP import → edit → save → export → runtime** | T6 → edit → T3 → T4 → T7 | **PROVEN** | M1 full_recreation PASS, 7/7 edge workflows |
+| **Bundle: apply → per-action edit → save → test** | T1 → T2 → edit → T3 → T7 | **PROVEN** | M1 action_tab_hydration + partial_bundle_gating PASS |
+| **PNG upload → analyze → convert → session** | U1 → U2 → U3 → T3 | **PROVEN (structural)** | M2-A 9/9 structural gates PASS |
+| **PNG → source panel → manual assembly → grid → WS → export** | U1 → S12 → S7 → D1 → W2 → T3 → T4 | **NOT PROVEN** | All steps WIRED but no end-to-end verifier coverage |
+| **Source panel → manual box draw → drag to grid** | S2 → S7 → D1 | **NOT PROVEN** | All steps WIRED, zero verifier coverage |
+| **Whole-sheet correction → save → export** | W1 → W2-W8 → T3 → T4 | **NOT PROVEN** | WS tools WIRED, save/export PROVEN separately |
+| **Semantic editing (region-based)** | Dict lookup → W2 → T3 → T4 | **NOT PROVEN** | M2-E scope, dictionaries exist, no verifier |
+| **Base-path parity** | Any workflow at /xpedit | **PROVEN (structural)** | Base-path verification: 0 regressions, M2-A PASS at both root and /xpedit |
+
+---
+
+## Part 4: Aggregate Statistics
+
+### By Status
+
+| Status | Count | % of 96 SAR actions |
+|--------|-------|---------------------|
+| PROVEN | 10 | 10% |
+| WIRED | 67 | 70% |
+| PARTIAL | 7 | 7% |
+| PLANNED | 4 | 4% |
+| BLOCKED | 1 | 1% |
+| DEFERRED | 2 | 2% |
+| *Outside SAR 96* | ~35 | (inspector, preview, recorder, bug report) |
+
+### By M2 Sub-Phase
+
+| Sub-Phase | Total Actions | Proven | Wired | Partial/Blocked/Planned |
+|-----------|---------------|--------|-------|-------------------------|
+| M1-closed | ~18 | 10 | 8 | 0 |
+| M2-A (structural baseline) | 3 | 2 | 1 | 0 |
+| M2-B (source-panel assembly) | 6 | 0 | 6 | 0 |
+| M2-C (WS primary) | 12 | 0 | 5 | 7 |
+| M2-D (source/grid stability) | 49 | 0 | 42 | 7 |
+| M2-E (semantic dicts) | 0 | 0 | 0 | 0 (workflow-level, not action-level) |
+| M2-F (analyze assistive) | 1 | 0 | 1 | 0 |
+
+### Verifier Slice Readiness (from M2 verifier design)
+
+| Slice | Purpose | Acceptance? | Built? |
+|-------|---------|-------------|--------|
+| Slice 1 | PNG Structural Baseline | YES | **NO** (M2-A proven ad hoc but no automated slice) |
+| Slice 2 | Source-Panel Contract | diagnostic | NO |
+| Slice 3 | Source-to-Grid Contract | diagnostic | NO |
+| Slice 4 | Whole-Sheet Correction | diagnostic | NO |
+| Slice 5 | Manual Assembly E2E | YES | NO |
+
+**0 of 5 M2 verifier slices are built** (VB-04). The structural baseline is proven through ad-hoc failure-log evidence, not through an automated verifier slice.
+
+---
+
+## Part 5: Canon Conflicts (ranked by severity)
+
+### Conflict 1: M1 open vs closed (CRITICAL — doc drift)
+
+- **INDEX.md line 90** (2026-03-21): "Milestone 1 is not closed until they are verified"
+- **CLAUDE.md** (2026-03-23): "Milestone 1 is closed on canonical root-hosted master"
+- **PLAYWRIGHT_FAILURE_LOG.md**: M1 closed with commit 14e8e95, 7/7 edge workflows PASS
+- **Resolution needed:** INDEX.md must be updated with a 2026-03-23 audit note
+
+### Conflict 2: Undo/Redo implementation status (HIGH — functional gap)
+
+- **UI control ref §2**: Lists undo/redo as UI elements (#8-9) — TRUE
+- **UX checklist §13**: Claims undo/redo "participate in mutations" — PARTIALLY TRUE
+- **Feature inventory**: Marks undo/redo ❌ "NOT IMPLEMENTED" (EditorApp stubs) — TRUE for WS per-stroke
+- **Reality:** Workbench-level snapshot undo/redo (50-deep) IS wired and works. Whole-sheet per-stroke undo has stubs but is NOT connected. Anchor operations (PB-01/02/03) don't push history at all.
+
+### Conflict 3: PB-10/PB-13 blocker status (MEDIUM — stale-doc)
+
+- **Bug-gap-index Wave 0**: Lists PB-10 (runtime files) and PB-13 (Skin Dock stall) as M1 blockers
+- **Same doc, lower section**: Marks both as CLOSED (M1 closeout)
+- **Resolution:** Wave 0 precondition text is stale; the bugs are genuinely closed
+
+### Conflict 4: COMPLETE_UI_CONTROL_REFERENCE.md scope (MEDIUM — misread risk)
+
+- **Doc header**: "Append-only comprehensive reference" listing 189 elements
+- **Reality:** It is a control-level inventory (buttons, inputs, handlers), not a capability-truth doc. Presence of a control does not prove the workflow it belongs to is functional or verified.
+- **Resolution:** This doc needs a scope clarification note (added in this audit)
+
+### Conflict 5: Cell mismatch severity (LOW — resolved)
+
+- **Bug-gap-index Wave 0**: "Fix 50 L2 cell mismatches" as M1 blocker
+- **Failure log**: 5 remaining mismatches, all canvas-edge artifacts, explicitly NON-BLOCKING
+- **Resolution:** Already resolved; Wave 0 text is stale
+
+---
+
+## Part 6: Biggest Intended-But-Not-Proven Workflows
+
+Ranked by M2 acceptance importance:
+
+1. **PNG → source panel → manual assembly → grid → WS → export** (M2-B/C/D)
+   - Every individual step is WIRED. Zero end-to-end proof.
+   - This is THE critical M2 acceptance workflow.
+
+2. **Source panel full cycle** (draw box → commit → select → move → resize → delete)
+   - All modes WIRED. Zero verifier coverage for any source panel operation.
+   - 19 actions, 0 tested.
+
+3. **Whole-sheet correction** (focus → paint → eyedropper → erase → save)
+   - 6 tools WIRED. Per-stroke undo NOT connected. 3 tools NOT wired (Select, Oval, Text).
+   - The whole-sheet editor IS mounted and functional for basic painting, but no proof exists.
+
+4. **Context menu outcomes** (add sprite, add to row, set anchor, pad, delete)
+   - All handlers WIRED. DOM-only probed in coverage agent. No state assertions.
+   - Anchor operations have undo gaps (PB-01/02/03).
+
+5. **Grid stability after insertions** (add frame → move → delete → copy/paste)
+   - All 14 grid actions WIRED. Zero verifier coverage.
+
+6. **Semantic editing** (region lookup → targeted paint → save)
+   - Dictionaries exist (player-0100, attack-0001, plydie-0000). No verifier, no agent API.
+   - M2-E scope, lowest priority.
+
+---
+
+## Part 7: Recommended Next Acceptance/Debug Slice
+
+Based on this audit, the highest-value next work is:
+
+### Priority 1: Manual Assembly E2E (Slice 5)
+
+Build verifier Slice 5 to prove the critical M2 acceptance workflow:
+`Upload PNG → Find Sprites → Draw/commit box → Drag to grid → Focus WS → Paint correction → Save → Export → Runtime test`
+
+This is the single workflow that, if proven, demonstrates M2-B/C/D are functional. It exercises:
+- Source panel (S2, S7, S12)
+- Source-to-grid (D1)
+- Whole-sheet (W1, W2)
+- Lifecycle (L1, T3, T4)
+- Runtime (T7)
+
+### Priority 2: Source Panel Contract (Slice 2)
+
+The source panel has 19 actions with zero verifier coverage. A minimal contract verifier proving box CRUD (create, read, update, delete) + Find Sprites would cover the highest-risk gap.
+
+### Priority 3: Fix Anchor Undo Gaps (PB-01/02/03)
+
+3 code locations where `pushHistory()` is missing. Blocks undo verification for the entire source panel.
+
+---
+
+## Appendix: Doc Cross-Reference Map
+
+| Doc | Role in Canon | Freshness | Key Update Needed |
+|-----|---------------|-----------|-------------------|
+| CLAUDE.md | Entry point, milestone status | Current (2026-03-23) | None |
+| docs/INDEX.md | Navigation hub, milestone definitions | **STALE** on M1 status | Append M1 closure note |
+| PLAYWRIGHT_FAILURE_LOG.md | Reality/proof ground truth | Current (2026-03-23) | None |
+| docs/COMPLETE_UI_CONTROL_REFERENCE.md | Control-level inventory | Current (2026-03-08) | Append scope clarification |
+| docs/WORKBENCH_SOURCE_PANEL_UX_CHECKLIST.md | Source panel feature tracking | Current (2026-02-23) | Append proof-status note |
+| docs/plans/2026-03-04-web-rexpaint-editor/claude-workbench-ui-inventory.md | Historical UI inventory | Superseded by COMPLETE_UI_CONTROL_REFERENCE.md | Append supersession note |
+| docs/plans/2026-03-22-workbench-sar-table-blueprint.md | SAR action enumeration | Current (2026-03-22) | None |
+| docs/plans/2026-03-23-milestone-2-bug-gap-index.md | Bug/gap tracking | Current (2026-03-23) | None |
+| **This doc** | Canonical capability inventory | Created 2026-03-23 | — |

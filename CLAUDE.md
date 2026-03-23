@@ -9,6 +9,16 @@ Use this file as short-lived repo memory, not as proof over code.
 - Then read `docs/INDEX.md` and `docs/AGENT_PROTOCOL.md`.
 - Then read `docs/XP_EDITOR_ACCEPTANCE_CONTRACT.md`.
 
+## Document Authority Model
+
+This repo uses a 3-doc canonical authority model:
+
+1. `PLAYWRIGHT_FAILURE_LOG.md` — reality/failure/proof log
+2. `docs/plans/2026-03-23-workbench-canonical-spec.md` — normative requirements / roadmap / bug-priority / policy
+3. `docs/plans/2026-03-23-m2-capability-canon-inventory.md` — capability inventory / SAR canon
+
+All other docs are worksheets or reference. Worksheets must be retired after completion via `scripts/doc_lifecycle_stitch.sh`. See `AGENTS.md` § Document Authority Model for the full policy.
+
 ## Milestone Requirements
 
 Treat these as the explicit repo baselines.
@@ -60,6 +70,8 @@ Short version:
 - `PLAYWRIGHT_FAILURE_LOG.md` is the current log of record for M1 closeout and verifier fixes.
 - M1 edge-workflow closeout on `master` includes `partial_bundle_gating`, `action_tab_hydration`, and generated SAR seed passes.
 - Base-path verification found no `/xpedit`-specific regressions for the M1 edge-workflow lane.
+- M2-A structural PNG baseline is established (9/9 gate verdicts PASS on both hosting modes).
+- M2-B source-panel workflow: evidence exists (10/10 steps PASS on both hosting modes, PB-02 + Delete Box UX fixed) but runner and product fixes are **uncommitted**. Treat as provisional until committed and independently reverified.
 - `feat/base-path-support` has newer M2 verifier-foundation work, but it may still drift from canonical `master` on runner behavior and docs.
 - `window.__wb_debug.getState()` is the preferred verifier state surface; `_state()` fallback should be treated as a temporary exception, not the long-term contract.
 - Any doc claiming M1 is still open, or claiming the 9 P1 `getState()` gaps or hosted-test gaps are still unresolved on `feat/base-path-support`, should be re-audited before being trusted.

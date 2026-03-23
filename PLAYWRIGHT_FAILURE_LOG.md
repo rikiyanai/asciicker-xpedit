@@ -1490,3 +1490,358 @@ As of March 23, 2026, the M2-A structural PNG baseline passes as an acceptance-g
 slice on both canonical root-hosted and prefixed /xpedit workbench URLs. Results are identical
 across hosting modes for idle, attack, and death native-family fixtures, with all required
 G10/G11/G12 structural gates passing.
+
+---
+
+## M2-B Verifier Integrity Catch — 2026-03-23
+
+**Status:** PROVISIONAL — product bugs fixed and runner shows 10/10, but code is uncommitted
+
+This section records an integrity violation caught during the first `source_panel_workflow`
+attempt, followed by the correct resolution: fix the product, then rerun the unchanged test.
+
+### Product bugs surfaced by the runner
+
+1. **PB-02: draft-box operations silently overwrite the anchor**
+   - `setDraftBox()` at `workbench.js:4216-4220` mutated `state.anchorBox` on every
+     draw/resize/move/pad path.
+   - This broke the user-reachable workflow: draw box A → set anchor → draw box B →
+     pad to anchor. Drawing box B destroyed the anchor.
+   - **Fix:** Removed implicit anchor override from `setDraftBox()`. Anchor is now only
+     set via explicit user action ("Set as anchor" context menu).
+   - **Evidence:** `pad_anchor` step now PASSES — draft dims correctly match anchor dims.
+
+2. **Delete Box button fails to clear-all when lingering draft exists**
+   - `deleteSelectedSourceObjectsOrDraft()` at `workbench.js:5347-5377` treated a standalone
+     draft as a "specific deletion", returning `true` and preventing the clear-all path from
+     running even when committed boxes existed.
+   - User clicks "Delete Box" with 6 sprites on screen → only the invisible draft is deleted.
+   - **Fix:** Draft-only path now yields to clear-all when committed boxes or cuts exist.
+     A standalone draft (no boxes, no cuts) still gets specific deletion.
+   - **Evidence:** `clear_all` step now PASSES — all boxes cleared in one click.
+
+### Integrity violation caught (earlier in this session)
+
+The session initially attempted to rewrite the test sequence instead of fixing the product:
+
+- **pad_anchor workaround attempt:** change the recipe to use committed boxes instead of
+  the natural draft-based workflow. This avoided the actual PB-02 bug.
+- **clear_all workaround attempt:** add extra deselection steps to reach the clear-all branch
+  instead of proving the Delete Box behavior was wrong for the documented workflow.
+
+The user correctly blocked both workarounds and required product fixes instead.
+
+### Resolution sequence
+
+1. User blocked test-rewrite approach
+2. PB-02 fixed: removed `state.anchorBox` override from `setDraftBox()`
+3. Delete Box UX fixed: draft-only path yields to clear-all when boxes exist
+4. Original unchanged test rerun: 10/10 PASS on root-hosted
+5. Same test on /xpedit prefixed: 10/10 PASS
+6. Regression check: 82/82 Python tests pass, 0 new failures
+
+### Required rule (still enforced)
+
+- Do not rewrite an acceptance workflow merely to make a failing product behavior disappear.
+- If the workflow is documented and user-reachable, keep the test true to that workflow and
+  fix the product or explicitly downgrade/defer the workflow in canon docs.
+- Treat any future attempt to route around a documented product bug by reshaping the recipe as
+  a verifier-integrity failure, not a normal test adjustment.
+
+---
+
+## M2-B Source-Panel Workflow — 2026-03-23
+
+**Status:** PROVISIONAL — evidence produced from uncommitted code (runner untracked, product fixes uncommitted). Not acceptance-grade until committed and independently reverified.
+
+### Runner
+
+`scripts/xp_fidelity_test/run_source_panel_workflow_test.mjs`
+
+Built on `verifier_lib.mjs`. Base-path-aware via `--url` flag. Structured JSON output to
+`--out-dir`. Uses only user-reachable product actions (no debug API writes).
+
+### Acceptance workflow (10 steps)
+
+| Step | Action | SAR IDs | Assertion |
+|------|--------|---------|-----------|
+| 1 | Upload PNG (`cat_sheet.png` via `#wbFile` + `#wbUpload`) | U1 | `sourceImageLoaded === true` |
+| 2 | Switch to draw mode (`#drawBoxBtn`) | S1 | `sourceMode === "draw_box"` |
+| 3 | Draw box A on source canvas (drag) | S3 | `drawCurrent !== null` |
+| 4 | Commit as sprite (right-click → `#srcCtxAddSprite`) | C1 | `extractedBoxes` increases, `drawCurrent === null` |
+| 5 | Select committed box (switch to select + click) | S2, S5 | `sourceSelection.length > 0` |
+| 6 | Set as anchor (right-click → `#srcCtxSetAnchor`) | C3 | `anchorBox !== null` |
+| 7 | Draw box B + pad to anchor (right-click → `#srcCtxPadAnchor`) | S3, C4 | Draft dims match anchor dims |
+| 8 | Find sprites (`#extractBtn`) | S9 | `extractedBoxes > 0` |
+| 9 | Clear all (`#deleteBoxBtn`) | S17 | `extractedBoxes === 0`, `drawCurrent === null` |
+| 10 | Isolation invariant | — | Grid/layer/geometry unchanged by source-panel ops |
+
+### Product bugs fixed to pass
+
+| Bug | Location | Fix |
+|-----|----------|-----|
+| PB-02 (anchor override) | `workbench.js:4216-4220` | Removed implicit `anchorBox` mutation from `setDraftBox()` |
+| Delete Box UX | `workbench.js:5347-5381` | Draft-only deletion yields to clear-all when committed boxes exist |
+
+### Root-hosted evidence
+
+```
+node run_source_panel_workflow_test.mjs --url http://127.0.0.1:5071/workbench --out-dir output/source_panel_workflow_root_v3
+Hosting mode: root
+Steps: 10/10 passed
+Overall: PASS
+```
+
+Report: `output/source_panel_workflow_root_v3/report.json`
+State snapshots: `output/source_panel_workflow_root_v3/state_snapshots.json`
+
+### /xpedit prefixed evidence
+
+```
+node run_source_panel_workflow_test.mjs --url http://127.0.0.1:5072/xpedit/workbench --out-dir output/source_panel_workflow_prefixed
+Hosting mode: prefixed
+Steps: 10/10 passed
+Overall: PASS
+```
+
+Report: `output/source_panel_workflow_prefixed/report.json`
+State snapshots: `output/source_panel_workflow_prefixed/state_snapshots.json`
+
+### Regression check
+
+- `pytest tests/ --ignore=tests/e2e`: 82 passed, 0 failures
+- `tests/e2e/test_browser_flow.py`: 1 pre-existing failure (422 on `/api/run`, unrelated)
+- Source-panel isolation invariant: grid, layers, geometry unchanged throughout all 10 steps
+
+### `_state()` usage in this runner
+
+None. The runner uses only `getState()` (which includes P1 and P2 fields) via
+`verifier_lib.mjs:captureState()`. The `captureState` function reads `_state()` for
+`actionStates` only, which is not asserted on in the source-panel workflow.
+
+### Requirements satisfied
+
+- M2-R1: verifier covers source panel (second slice of full workbench)
+- M2-R2: SAR model — 10 actions mapped with pre/post state and invariants
+- M2-R5: structured per-step JSON evidence with state snapshots
+- M2-R6: acceptance lane passes identically at root and /xpedit
+
+### Remaining gaps for source-panel coverage
+
+| Gap | Classification |
+|-----|---------------|
+| S6 move box, S7 resize box | Diagnostic-only — not in acceptance slice |
+| S10/S11 row/col select modes | Diagnostic-only |
+| S14 vertical cut workflow | Diagnostic-only |
+| S15 horizontal cut | DEFERRED — not UI-wired |
+| S18/S19 undo/redo | DEFERRED — blocked by PB-01/PB-03 (anchor set/clear lacks pushHistory) |
+| C2 add to row | Deferred to source-to-grid slice (M2-C) |
+| C5-C9 grid-bridging context menu | Deferred to source-to-grid slice (M2-C) |
+
+### Provisional status note
+
+As of March 23, 2026, the M2-B source-panel runner produced 10/10 PASS evidence on both
+root-hosted and /xpedit URLs. Two product bugs (PB-02 anchor override, Delete Box UX) were
+fixed. However, the runner (`run_source_panel_workflow_test.mjs`) is untracked and the product
+fixes (`web/workbench.js`) are uncommitted. This evidence is a historical record of what
+happened in a dirty worktree, not an acceptance closeout. Acceptance-grade status requires
+committed code and independent reverification.
+
+---
+
+# Doc Lifecycle: Authority Model Established
+
+**Date:** 2026-03-23
+**Branch:** master @ b5034b5
+
+The repo now uses a 3-doc canonical authority model:
+
+1. `PLAYWRIGHT_FAILURE_LOG.md` — reality/failure/proof log (this file)
+2. `docs/plans/2026-03-23-workbench-canonical-spec.md` — normative requirements / roadmap / policy
+3. `docs/plans/2026-03-23-m2-capability-canon-inventory.md` — capability inventory / SAR canon
+
+All other docs are classified as structural contracts, reference, worksheets, or archive. Worksheets are retired via `scripts/doc_lifecycle_stitch.sh` into `docs/WORKBENCH_DOCS_ARCHIVE.md`.
+
+Policy is enforced in: `AGENTS.md`, `CLAUDE.md`, `CODEX.md`, `docs/INDEX.md`.
+
+Full worksheet migration is deferred — this entry records the establishment of the model and tooling only.
+
+---
+
+## PROCESS FAILURE: API-Driven Runners Conflated With UI Acceptance — 2026-03-23
+
+**Status:** OPEN — systemic process failure, not a single-instance bug
+
+### What happened
+
+The M2-A structural baseline runner (`run_structural_baseline_test.mjs`) was built using
+direct `fetch()` API calls for every step: bundle create, PNG upload, action-grid apply, and
+export. The M2-B closeout section in this log then described M2-A as an "acceptance-grade
+verifier slice." This conflates API-contract testing with UI acceptance testing.
+
+The repo's own rules explicitly forbid this:
+
+- **AGENTS.md:29** — "acceptance evidence comes from user-reachable actions only"
+- **AGENTS.md:46** — "the verifier executes predefined contract-driven workflow sequences"
+- **AGENT_PROTOCOL.md:305** — "Acceptance evidence must come from [the canonical verifier]
+  path. No other script, harness, or manual procedure may be cited as acceptance evidence"
+- **AGENT_PROTOCOL.md:310** — "Ad hoc Playwright scripts, browser-console probes,
+  `page.evaluate()` state mutations, `window.__wb_debug` calls, and one-off test files are
+  permitted for implementation diagnosis only"
+- **AGENT_PROTOCOL.md:327** — "If the canonical verifier cannot express a required workflow
+  [...] that is a failure in the verifier, not permission to bypass it"
+- **AGENT_PROTOCOL.md:347** — "acceptance mode: emits only user-reachable actions through
+  the shipped [...] surface"
+- **workbench-canonical-spec.md:67** — "The canonical verifier path is the only source of
+  acceptance evidence"
+- **workbench-canonical-spec.md:71-73** — "Acceptance mode: user-reachable actions through
+  the shipped whole-sheet editor surface only [...] Ad hoc scripts, page.evaluate() probes,
+  and window.__wb_debug calls are diagnostic-only — never acceptance evidence"
+
+### Correct classification
+
+| Runner | Method | Correct classification |
+|--------|--------|----------------------|
+| M2-A structural baseline | `fetch()` API calls only | **Structural contract proof** (allowed by `PNG_STRUCTURAL_BASELINE_CONTRACT.md` which explicitly defines the API-backed path) — NOT UI acceptance |
+| M2-B source-panel workflow | DOM clicks + canvas drags | **UI-driven** — eligible for acceptance if committed and reverified |
+| M1 fidelity runners | XP import via file input + debug API paint | **Mixed** — XP load is UI, cell painting is diagnostic. M1 closeout accepted this limitation. |
+| M1 edge-workflow | Tab clicks + button clicks + DOM waits | **UI-driven** — acceptance-eligible |
+
+### Why M2-A is still valid (but not as UI proof)
+
+`docs/PNG_STRUCTURAL_BASELINE_CONTRACT.md` explicitly defines a server/API-backed structural
+safety path. M2-A validates that contract: PNG upload → bundle → action-grid → structural
+gates G10/G11/G12. This is a **structural/runtime safety baseline**, not a UI workflow test.
+
+M2-A CANNOT be cited as evidence that:
+- The template selector UI works
+- The upload button wires correctly
+- The analyze → run pipeline UI sequences correctly
+- The export button triggers with correct bundle ID
+- Tab switching hydrates correctly for each action
+- The user can see and interact with results at each step
+
+### What must change
+
+1. **M2-A classification corrected:** structural contract proof only, not UI acceptance
+2. **All future M2 slices** (source-to-grid, manual assembly, whole-sheet correction, bundle
+   end-to-end) MUST be UI-driven: real button clicks, real canvas interactions, real DOM waits
+3. **If the verifier cannot express a UI workflow:** log it as a verifier gap, fix the
+   verifier, then run through the fixed verifier. Do NOT substitute `fetch()` calls.
+4. **No runner may call `fetch()` or `page.evaluate(async => fetch(...))` in acceptance mode.**
+   API calls are diagnostic/structural-contract only.
+5. **Existing M2-A closeout language corrected:** "acceptance-grade" downgraded to
+   "structural-contract-grade" in all docs that reference it.
+
+### Root cause
+
+The session that built M2-A optimized for getting gate verdicts to pass rather than proving
+the UI path works. The `fetch()` approach was faster to implement and more reliable than
+driving the full UI. This is exactly the pattern AGENT_PROTOCOL.md §13b-13c was written to
+prevent: "writing an ad hoc script that tests the workflow outside the verifier [...] citing
+that ad hoc script as acceptance evidence."
+
+### Enforcement
+
+Any future runner that uses `fetch()`, `page.evaluate(async => fetch(...))`, or
+`window.__wb_debug` write methods in code labeled "acceptance" is a process violation.
+The ONLY exception is `PNG_STRUCTURAL_BASELINE_CONTRACT.md`'s explicitly defined API path
+for structural safety gates.
+
+---
+
+## Doc Lifecycle: M2-B Uncommitted-Code Caveat — 2026-03-23
+
+**Status:** CAVEAT
+
+The M2-B source-panel acceptance entries above (lines 1496-1647) record evidence produced from
+uncommitted code. The runner (`scripts/xp_fidelity_test/run_source_panel_workflow_test.mjs`) is
+still untracked and the product fixes (`web/workbench.js` PB-02 + Delete Box UX) are uncommitted.
+
+This means the M2-B evidence is **not independently verifiable on committed master**. Until the
+runner and product fixes are committed and the test is rerun on committed code, the M2-B closeout
+claim should be treated as **provisional, not acceptance-grade**.
+
+The structural record (what happened, what was caught, what was fixed) remains valid as history.
+The acceptance-grade classification does not hold until the code is committed.
+
+---
+
+## CRITICAL: M2-A Structural Baseline Is API-Only — Not UI-Driven — 2026-03-23
+
+**Status:** OPEN — acceptance classification downgraded
+
+### Finding
+
+The M2-A structural baseline runner (`run_structural_baseline_test.mjs`) uses **zero UI
+interactions**. Every step is a direct `fetch()` call to the API from within `page.evaluate()`:
+
+| Step | Runner Method | UI Equivalent (NOT USED) |
+|------|--------------|--------------------------|
+| Bundle create | `fetch('/api/workbench/bundle/create')` | Template selector UI → "Create Bundle" |
+| PNG upload | `fetch('/api/upload', { body: FormData })` | `#wbFile` file input → `#wbUpload` button |
+| Action-grid apply | `fetch('/api/workbench/action-grid/apply')` | Analyze → Run pipeline UI |
+| Export bundle | `fetch('/api/workbench/export-bundle')` | Export button in bundle toolbar |
+
+### Impact
+
+M2-A proves the **API contract** works (endpoints accept correct payloads, return correct
+responses, structural gates pass). It does NOT prove:
+
+- The template selector UI populates and creates bundles correctly
+- The upload button wires to the correct endpoint with correct FormData
+- The analyze → run pipeline UI sequences correctly
+- The export button triggers the export endpoint with the correct bundle ID
+- Tab switching between actions hydrates the workbench correctly for each action
+- The user can see and interact with results at each step
+
+### What this means for M2 acceptance
+
+The M2-A structural baseline remains valid as **API-contract proof** and **structural-gate
+proof**. It should NOT be cited as proof that the bundle workflow UI works end-to-end.
+
+A separate UI-driven bundle workflow runner is required for true acceptance evidence. This
+runner must use the same actions a real user would: click template, click upload, click analyze,
+click run, switch tabs, click export, click test skin.
+
+### Also affected: M1 fidelity runners
+
+The M1 fidelity runners use a mix of UI and debug API:
+
+- XP import: UI-driven (`page.setInputFiles` + button click)
+- Cell painting in acceptance mode: debug API (`__wb_debug` paint methods), not mouse
+  clicks on the whole-sheet canvas
+- Recipe replay: debug API coordinate injection, not user mouse gestures
+
+M1 acceptance was closed with this known limitation (the fidelity verifier tests cell-level
+correctness, not the mouse-driven paint path). This is acceptable for M1 scope because the
+whole-sheet editor's paint tools ARE proven to work via manual testing and the fidelity
+comparison proves the data path is correct.
+
+For M2, the full manual-assembly workflow (PNG → source → grid → WS → export → test skin)
+must be UI-driven to qualify as acceptance evidence.
+
+### Runners that ARE fully UI-driven
+
+| Runner | UI-driven? |
+|--------|-----------|
+| M2-B source-panel workflow (`run_source_panel_workflow_test.mjs`) | **YES** — all interactions via DOM clicks and canvas drags |
+| M1 edge-workflow (`run_edge_workflow_test.mjs`) | **YES** — tab clicks, button clicks, DOM waits |
+
+### Required next action
+
+Build a UI-driven bundle workflow runner that drives the full template → upload → analyze →
+run → tab-switch → export → test-skin path through actual button clicks. This is prerequisite
+for honest M2 acceptance claims on the bundle pipeline.
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-23-doc-authority-model.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-23-doc-authority-model`
+**Reason:** implementation complete, deliverables committed
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+

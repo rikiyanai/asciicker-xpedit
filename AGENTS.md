@@ -56,4 +56,26 @@ Short version:
 
 - Do not build new M2 work on top of drifted verifier code or stale planning docs.
 - If `master` and `feat/base-path-support` disagree on verifier semantics, treat that as a blocker and reconcile it before adding new slices.
+## Document Authority Model
+
+This repo uses a 3-doc canonical authority model. Only these docs are authority for active execution state:
+
+| # | Doc | Role |
+|---|-----|------|
+| 1 | `PLAYWRIGHT_FAILURE_LOG.md` | Reality/failure/proof log |
+| 2 | `docs/plans/2026-03-23-workbench-canonical-spec.md` | Normative requirements / roadmap / bug-priority / policy |
+| 3 | `docs/plans/2026-03-23-m2-capability-canon-inventory.md` | Capability inventory / truth-table / SAR canon |
+
+All other docs are one of:
+- **Structural Contract** — stable normative contracts (update only on milestone boundary)
+- **Reference** — stable reference material (does not claim active state)
+- **Worksheet** — temporary session docs; must be retired via `scripts/doc_lifecycle_stitch.sh` after completion/supersession
+- **Archive** — retired worksheets in `docs/WORKBENCH_DOCS_ARCHIVE.md`
+
+Rules:
+- Agents must not treat worksheets as authority. Check canonical docs first.
+- Completed or superseded worksheets must be stitched into the archive.
+- The stitch script refuses to archive canonical or structural contract docs.
+- Do not create new authority docs. If a canonical doc is insufficient, update it in-place.
+
 <!-- codex-conductor:end -->

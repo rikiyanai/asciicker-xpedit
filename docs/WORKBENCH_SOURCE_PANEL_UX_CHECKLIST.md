@@ -14,6 +14,8 @@ Status vocabulary:
 - `VERIFIED`
 - `DEFERRED`
 
+> **2026-03-23 update:** M2-B source-panel runner (`run_source_panel_workflow_test.mjs`) produced 10/10 PASS evidence for: draw mode switch, draw box, commit as sprite, select box, set anchor, pad to anchor, find sprites, and clear all. PB-02 (setDraftBox anchor override) fixed. Delete Box clear-all UX fixed. **CAVEAT: runner and product fixes are uncommitted. Treat as provisional, not acceptance-grade, until committed and independently reverified.** Items below marked IMPLEMENTED have code-audit evidence only.
+
 ---
 
 ## 1) Source Box Editing (Editor-Like Behavior)
@@ -338,3 +340,21 @@ Status: `IMPLEMENTED`
 
 Notes:
 - Current implementation shifts visual frame contents in-place (destructive edit) and relies on undo/redo for reset.
+
+---
+
+## 2026-03-23 Audit Note: Proof Status and Canon Alignment
+
+> **All 20 items in this checklist are marked IMPLEMENTED, but none are VERIFIED on committed code.**
+>
+> As of this audit (master @ b5034b5), code inspection confirms all 20 source-panel features have wired handlers in `workbench.js`. However, zero source-panel operations have acceptance-grade verifier proof on committed code. The IMPLEMENTED status in this doc means "code exists and is wired," not "tested and proven."
+>
+> An M2-B source-panel runner produced 10/10 PASS evidence from uncommitted code (see line 17 caveat above and `PLAYWRIGHT_FAILURE_LOG.md`). That evidence is provisional — not acceptance-grade until the runner and product fixes are committed and independently reverified.
+>
+> Known bugs affecting this checklist:
+> - **PB-01/02/03:** Three anchor operations do not call `pushHistory()`, making them non-undoable. This affects items §5 (Anchor Box) and §13 (Undo/Redo Participation).
+> - **§13 Undo/Redo:** Workbench-level snapshot undo (50-deep) IS wired. Whole-sheet per-stroke undo has stubs but is NOT connected end-to-end.
+>
+> For per-action proof status, see:
+> - `docs/plans/2026-03-23-m2-capability-canon-inventory.md` — Family 3 (Source Panel, 19 actions) and Family 4 (Context Menu, 9 actions)
+> - `PLAYWRIGHT_FAILURE_LOG.md` — ground-truth verification evidence

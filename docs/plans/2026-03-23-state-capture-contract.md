@@ -110,6 +110,34 @@ Master's 8-phase wait (canonical — do not weaken):
 6. `#wsGlyphCode` visible (10s, swallowed)
 7. Final settle (1s)
 
+## Runner Architecture Decisions (2026-03-23 reconciliation)
+
+### M1 runners stay standalone
+`run_fidelity_test.mjs` and `run_bundle_fidelity_test.mjs` do not import
+`verifier_lib.mjs`. They use inline readiness patterns that differ slightly
+from the canonical contract (e.g., fidelity uses `networkidle`, bundle uses
+`domcontentloaded` + `runtimePreflight.checked`). **Do not refactor these.**
+M1 is closed; changing proven acceptance infrastructure risks regression.
+
+### Edge-workflow runner stays standalone for M1 scope
+`run_edge_workflow_test.mjs` has an inline `captureState()` that already
+follows this contract (getState-first, _state fallback for actionStates).
+Its switch_action_tab readiness matches the 8-phase canonical sequence above.
+Extracting to verifier_lib is optional for M1 scope, required for M2 reuse.
+
+### verifier_lib.mjs is mandatory for all new M2 slices
+New verifier slices (PNG structural baseline, source-panel workflow, grid
+assembly, whole-sheet integration) MUST import from `verifier_lib.mjs`:
+- `parseArgs` / `resolveWorkbenchUrl` / `resolveRoute` for base-path support
+- `launchBrowser` / `openWorkbench` for consistent readiness
+- `captureState` for contract-compliant state reading
+- `createReport` / `fail` / `writeReport` for structured evidence
+
+### actionStates remains _state()-only
+`actionStates` is the sole field requiring `_state()` fallback. It will stay
+this way until a curated version is added to `getState()`. The curated version
+should expose per-action `{ status, sessionId }` only (not full session state).
+
 ## When to Add Fields to getState()
 
 Add a field to `getState()` when:

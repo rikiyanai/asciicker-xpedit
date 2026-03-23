@@ -80,7 +80,7 @@ Short version:
 - M1 edge-workflow closeout on `master` includes `partial_bundle_gating`, `action_tab_hydration`, and generated SAR seed passes.
 - Base-path verification found no `/xpedit`-specific regressions for the M1 edge-workflow lane.
 - M2-A structural PNG baseline: **structural-contract proof only** (API-driven, not UI-driven). Valid per `PNG_STRUCTURAL_BASELINE_CONTRACT.md`. Does NOT prove the bundle UI workflow. See PLAYWRIGHT_FAILURE_LOG.md process failure entry.
-- M2-B source-panel workflow: evidence exists (10/10 steps PASS on both hosting modes, PB-02 + Delete Box UX fixed) but runner and product fixes are **uncommitted**. Treat as provisional until committed and independently reverified. This runner IS UI-driven (DOM clicks + canvas drags).
+- M2-B source-panel workflow: **committed proof** at `5c67ef2`. 10/10 PASS on both hosting modes on committed code. UI-driven actions with read-only diagnostic observation layer. PB-02 + Delete Box UX fixed.
 - `feat/base-path-support` has newer M2 verifier-foundation work, but it may still drift from canonical `master` on runner behavior and docs.
 - `window.__wb_debug.getState()` is the preferred verifier state surface; `_state()` fallback should be treated as a temporary exception, not the long-term contract.
 - Any doc claiming M1 is still open, or claiming the 9 P1 `getState()` gaps or hosted-test gaps are still unresolved on `feat/base-path-support`, should be re-audited before being trusted.

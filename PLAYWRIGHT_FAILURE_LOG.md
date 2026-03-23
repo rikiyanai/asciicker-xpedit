@@ -1497,7 +1497,7 @@ bundle workflow (template selector, upload button, analyze/run UI, export button
 
 ## M2-B Verifier Integrity Catch — 2026-03-23
 
-**Status:** PROVISIONAL — product bugs fixed and runner shows 10/10, but code is uncommitted
+**Status:** RESOLVED — product bugs fixed, runner committed at `5c67ef2`, 10/10 PASS on committed code (both hosting modes)
 
 This section records an integrity violation caught during the first `source_panel_workflow`
 attempt, followed by the correct resolution: fix the product, then rerun the unchanged test.
@@ -1554,7 +1554,7 @@ The user correctly blocked both workarounds and required product fixes instead.
 
 ## M2-B Source-Panel Workflow — 2026-03-23
 
-**Status:** PROVISIONAL — evidence produced from uncommitted code (runner untracked, product fixes uncommitted). Not acceptance-grade until committed and independently reverified.
+**Status:** COMMITTED PROOF — runner and product fixes committed at `5c67ef2`. Rerun on committed code: 10/10 PASS root-hosted, 10/10 PASS /xpedit prefixed. Classification: UI-driven actions with read-only diagnostic observation layer.
 
 ### Runner
 
@@ -1642,12 +1642,11 @@ None. The runner uses only `getState()` (which includes P1 and P2 fields) via
 
 ### Provisional status note
 
-As of March 23, 2026, the M2-B source-panel runner produced 10/10 PASS evidence on both
-root-hosted and /xpedit URLs. Two product bugs (PB-02 anchor override, Delete Box UX) were
-fixed. However, the runner (`run_source_panel_workflow_test.mjs`) is untracked and the product
-fixes (`web/workbench.js`) are uncommitted. This evidence is a historical record of what
-happened in a dirty worktree, not an acceptance closeout. Acceptance-grade status requires
-committed code and independent reverification.
+As of March 23, 2026, the M2-B source-panel runner and product fixes are committed at `5c67ef2`.
+Committed-code reruns: 10/10 PASS root-hosted, 10/10 PASS /xpedit prefixed. Two product bugs
+(PB-02 anchor override, Delete Box UX) were fixed. Classification: UI-driven actions (DOM clicks,
+canvas drags, file input, context menu) with read-only diagnostic observation layer (getState()
+via captureState()). Zero fetch() calls, zero debug API writes.
 
 ---
 
@@ -1754,18 +1753,17 @@ for structural safety gates.
 
 ## Doc Lifecycle: M2-B Uncommitted-Code Caveat — 2026-03-23
 
-**Status:** CAVEAT
+**Status:** RESOLVED
 
-The M2-B source-panel acceptance entries above (lines 1496-1647) record evidence produced from
-uncommitted code. The runner (`scripts/xp_fidelity_test/run_source_panel_workflow_test.mjs`) is
-still untracked and the product fixes (`web/workbench.js` PB-02 + Delete Box UX) are uncommitted.
+The M2-B source-panel runner and product fixes were committed at `5c67ef2`. Committed-code
+reruns passed 10/10 on both root-hosted and /xpedit prefixed hosting modes. The provisional
+caveat is lifted. M2-B is now committed proof.
 
-This means the M2-B evidence is **not independently verifiable on committed master**. Until the
-runner and product fixes are committed and the test is rerun on committed code, the M2-B closeout
-claim should be treated as **provisional, not acceptance-grade**.
-
-The structural record (what happened, what was caught, what was fixed) remains valid as history.
-The acceptance-grade classification does not hold until the code is committed.
+Evidence:
+- Commit: `5c67ef2`
+- Root rerun: `output/source_panel_workflow_root_committed/report.json` — 10/10 PASS
+- Prefixed rerun: `output/source_panel_workflow_prefixed_committed/report.json` — 10/10 PASS
+- Classification: UI-driven actions with read-only diagnostic observation layer
 
 ---
 

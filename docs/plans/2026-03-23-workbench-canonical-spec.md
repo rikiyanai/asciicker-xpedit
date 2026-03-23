@@ -53,7 +53,7 @@ Execute in dependency order. M2-B and M2-C may run in parallel after M2-A.
 
 **Last reviewed:** 2026-03-23
 
-1. **M2-B source panel assembly** — uncommitted evidence exists (10/10 PASS) but runner + product fixes need to be committed and independently reverified before acceptance; prerequisite for the PNG→source→grid→WS→export end-to-end workflow
+1. **M2-B source panel assembly** — committed proof (`5c67ef2`), 10/10 PASS on committed code at both root and /xpedit. UI-driven actions with read-only diagnostic observation layer. Prerequisite for the PNG→source→grid→WS→export end-to-end workflow.
 2. **M2-C whole-sheet editor verification** — tools are wired but unproven; parallel with M2-B
 3. **PB-01/02/03 undo gaps** in source panel anchor ops — small fixes that affect M2-D completeness
 4. **PB-06 SelectTool wiring** — blocked M2-C.2 feature, needed for whole-sheet editor parity

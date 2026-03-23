@@ -39,6 +39,14 @@ const outDir = getArg('--out-dir');
 const ACTION_KEYS = ['idle', 'attack', 'death'];
 const ACTION_LABELS = { idle: /Idle \/ Walk/i, attack: /^Attack/i, death: /^Death/i };
 
+// --preload idle=/path/to/exported.xp  — skip replay, upload pre-built XP instead.
+// The preloaded XP is still verified against the truth table for cell fidelity.
+const preloadXps = {};
+for (const key of ACTION_KEYS) {
+  const val = getArg(`--preload-${key}`);
+  if (val) preloadXps[key] = val;
+}
+
 const actionInputs = {};
 for (const key of ACTION_KEYS) {
   const truth = getArg(`--${key}-truth`);
@@ -631,8 +639,46 @@ async function main() {
         fail(actionKey, 'layers', `Layer count: expected ${expectedLayers}, got ${summary.session.layer_count}`);
       }
 
-      // Execute whole-sheet recipe
-      if (actionReport.geometry_pass) {
+      // ── Preload or replay ──
+      if (preloadXps[actionKey]) {
+        // Preload path: upload a pre-built XP file instead of replaying the
+        // full recipe.  This lets us split a long run into shorter segments
+        // that don't outlive the dev server.  The preloaded XP is still
+        // verified against the truth table after export.
+        const preloadPath = path.resolve(repoRoot, preloadXps[actionKey]);
+        console.error(`[3:${actionKey}] PRELOAD: importing ${path.basename(preloadPath)} (skipping ${(recipe.actions || []).length}-action replay)...`);
+        const uploadOk = await page.evaluate(async (xpPath) => {
+          try {
+            const resp = await fetch('/api/workbench/upload-xp', {
+              method: 'POST',
+              body: await (async () => {
+                const r = await fetch(xpPath);
+                return r.ok ? r.blob() : null;
+              })(),
+            });
+            return resp?.ok || false;
+          } catch { return false; }
+        }, `/api/workbench/export-xp-file?path=${encodeURIComponent(preloadPath)}`);
+        // Use the XP import UI path instead — set file input and click import.
+        await page.setInputFiles('#xpImportFile', preloadPath);
+        await page.click('#xpImportBtn');
+        // Wait for import to hydrate the session with correct geometry.
+        await page.waitForFunction(({ expW, expH }) => {
+          const sessionText = String(document.getElementById('sessionOut')?.textContent || '').trim();
+          const metaText = String(document.getElementById('metaOut')?.textContent || '').trim();
+          if (!sessionText || !metaText) return false;
+          try {
+            const s = JSON.parse(sessionText);
+            const m = JSON.parse(metaText);
+            return s.grid_cols === expW && s.grid_rows === expH && m.angles !== undefined;
+          } catch (_e) { return false; }
+        }, { expW: expectedGeom.width, expH: expectedGeom.height }, { timeout: 30000 });
+        actionReport.execute_pass = true;
+        actionReport.preloaded = true;
+        console.error(`[3:${actionKey}] PRELOAD: session hydrated, saving...`);
+        await page.evaluate(() => window.__wb_debug.flushSave());
+      } else if (actionReport.geometry_pass) {
+        // Full replay path.
         console.error(`[3:${actionKey}] Executing ${recipeMode} recipe (${(recipe.actions || []).length} actions)...`);
         // Suppress autosaves AND legacy frame grid/preview renders during
         // recipe replay.  The save storm and DOM element churn (676K canvas

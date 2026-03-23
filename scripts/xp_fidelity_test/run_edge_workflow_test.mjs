@@ -18,6 +18,9 @@ const holdOpen = argv.includes('--hold');
 const url = getArg('--url', DEFAULT_WORKBENCH_URL);
 const outDir = getArg('--out-dir');
 const recipeFilter = getArg('--recipe');
+const seedArg = getArg('--seed');
+const genCountArg = parseInt(getArg('--gen-count', '3'), 10);
+const genLengthArg = parseInt(getArg('--gen-length', '6'), 10);
 
 if (!outDir) {
   console.error('Missing --out-dir');
@@ -63,6 +66,10 @@ async function captureState(page, label) {
       wbStatus: text('wbStatus'),
       webbuildState: text('webbuildState'),
       wholeSheetMounted: !!q('wholeSheetCanvas'),
+      historyDepth: geo?.historyDepth ?? 0,
+      futureDepth: geo?.futureDepth ?? 0,
+      activeLayer: raw?.activeLayer ?? 0,
+      sessionDirty: !!raw?.sessionDirty,
       geometry: {
         gridCols: raw?.gridCols ?? null,
         gridRows: raw?.gridRows ?? null,
@@ -164,6 +171,26 @@ const ACTIONS = {
         ? window.__wb_debug.getWebbuildDebugState() : null;
       return !!(s && s.runtimePreflight && s.runtimePreflight.checked === true);
     }, null, { timeout: 30000 });
+  },
+
+  async undo(page, _params) {
+    const btn = page.locator('#undoBtn');
+    if (await btn.isDisabled()) throw new Error('Undo button is disabled');
+    await btn.click();
+    await page.waitForTimeout(500);
+  },
+
+  async redo(page, _params) {
+    const btn = page.locator('#redoBtn');
+    if (await btn.isDisabled()) throw new Error('Redo button is disabled');
+    await btn.click();
+    await page.waitForTimeout(500);
+  },
+
+  async switch_active_layer(page, params) {
+    const layerIndex = params.layer ?? 0;
+    await page.selectOption('#layerSelect', String(layerIndex));
+    await page.waitForTimeout(300);
   },
 };
 
@@ -509,19 +536,361 @@ const RECIPES = {
 };
 
 // ---------------------------------------------------------------------------
-// G. main
+// G. Seedable PRNG (mulberry32)
+// ---------------------------------------------------------------------------
+
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function rngChoice(rng, arr) {
+  return arr[Math.floor(rng() * arr.length)];
+}
+
+// ---------------------------------------------------------------------------
+// H. SAR State Model + Vocabulary
+// ---------------------------------------------------------------------------
+
+function initialSimState() {
+  return {
+    templateApplied: false,
+    bundleId: null,
+    activeActionKey: null,
+    actionStatuses: {},
+    historyDepth: 0,
+    futureDepth: 0,
+    sessionDirty: false,
+    wholeSheetMounted: false,
+    activeLayer: 0,
+    sessionId: null,
+  };
+}
+
+const SAR_VOCABULARY = [
+  {
+    name: 'apply_template',
+    weight: 1,
+    precondition: (sim) => !sim.templateApplied,
+    params: (_sim, _rng) => ({ template: 'player_native_full' }),
+    transition: (sim) => {
+      sim.templateApplied = true;
+      sim.bundleId = 'truthy';
+      sim.activeActionKey = 'idle';
+      sim.actionStatuses = { idle: 'blank', attack: 'blank', death: 'blank' };
+      sim.wholeSheetMounted = true;
+      sim.sessionId = 'truthy';
+      sim.historyDepth = 0;
+      sim.futureDepth = 0;
+      sim.activeLayer = 2;
+    },
+    assertions: () => [
+      { field: 'bundleId', op: 'truthy', message: 'Bundle must exist after template apply' },
+      { field: 'activeActionKey', op: 'eq', value: 'idle', message: 'First action must be idle' },
+      { field: 'wholeSheetMounted', op: 'truthy', message: 'WS editor must be mounted' },
+      { field: 'bundleStatus', op: 'contains', value: '0/3', message: 'Bundle must show 0/3' },
+    ],
+  },
+  {
+    name: 'switch_action_tab',
+    weight: 3,
+    precondition: (sim) => !!sim.bundleId,
+    params: (sim, rng) => {
+      const others = ['idle', 'attack', 'death'].filter(a => a !== sim.activeActionKey);
+      return { action: rngChoice(rng, others) };
+    },
+    transition: (sim, params) => {
+      sim.activeActionKey = params.action;
+      sim.wholeSheetMounted = true;
+      sim.historyDepth = 0;
+      sim.futureDepth = 0;
+      sim.activeLayer = 2;
+    },
+    assertions: (_sim, params) => {
+      const g = EXPECTED_GEOMETRY[params.action];
+      const result = [
+        { field: 'activeActionKey', op: 'eq', value: params.action, message: `Active action must be ${params.action}` },
+        { field: 'wholeSheetMounted', op: 'truthy', message: 'WS editor must be mounted' },
+        { field: 'sessionId', op: 'truthy', message: 'Session must exist' },
+      ];
+      if (g) {
+        result.push(
+          { field: 'geometry.gridCols', op: 'eq', value: g.gridCols, message: `${params.action} gridCols` },
+          { field: 'geometry.gridRows', op: 'eq', value: g.gridRows, message: `${params.action} gridRows` },
+          { field: 'geometry.angles', op: 'eq', value: g.angles, message: `${params.action} angles` },
+        );
+      }
+      return result;
+    },
+  },
+  {
+    name: 'save_action',
+    weight: 2,
+    precondition: (sim) => !!sim.sessionId,
+    params: () => ({}),
+    transition: (sim) => { sim.sessionDirty = false; },
+    assertions: (sim) => {
+      const result = [
+        { field: 'wholeSheetMounted', op: 'truthy', message: 'WS must remain mounted after save' },
+        { field: 'sessionId', op: 'truthy', message: 'Session must still exist after save' },
+      ];
+      // Save on blank content must NOT advance action status
+      if (sim.activeActionKey && sim.actionStatuses[sim.activeActionKey] === 'blank') {
+        result.push({
+          field: `actionStates.${sim.activeActionKey}.status`,
+          op: 'eq',
+          value: 'blank',
+          message: `${sim.activeActionKey} must stay blank after save on blank content`,
+        });
+      }
+      return result;
+    },
+  },
+  {
+    name: 'export_action',
+    weight: 1,
+    precondition: (sim) => !!sim.sessionId,
+    params: () => ({}),
+    transition: (sim) => { sim.sessionDirty = false; },
+    assertions: () => [
+      { field: 'wholeSheetMounted', op: 'truthy', message: 'WS must remain mounted after export' },
+      { field: 'sessionId', op: 'truthy', message: 'Session must still exist after export' },
+    ],
+  },
+  {
+    name: 'new_xp',
+    weight: 2,
+    precondition: (sim) => sim.templateApplied,
+    params: () => ({}),
+    transition: (sim) => {
+      sim.historyDepth = 0;
+      sim.futureDepth = 0;
+      sim.sessionDirty = false;
+      sim.wholeSheetMounted = true;
+      sim.activeLayer = 2;
+      if (sim.activeActionKey && sim.actionStatuses[sim.activeActionKey]) {
+        sim.actionStatuses[sim.activeActionKey] = 'blank';
+      }
+    },
+    assertions: () => [
+      { field: 'wholeSheetMounted', op: 'truthy', message: 'WS must be mounted after New XP' },
+      { field: 'sessionId', op: 'truthy', message: 'New session must exist' },
+      { field: 'historyDepth', op: 'eq', value: 0, message: 'History must be cleared after New XP' },
+      { field: 'futureDepth', op: 'eq', value: 0, message: 'Future must be cleared after New XP' },
+    ],
+  },
+  {
+    name: 'refresh_page',
+    weight: 1,
+    precondition: (sim) => sim.templateApplied,
+    params: () => ({}),
+    transition: (sim) => {
+      // Full page reload — bundle/session context not preserved in URL.
+      // Conservative: reset sim to initial state.
+      sim.templateApplied = false;
+      sim.bundleId = null;
+      sim.activeActionKey = null;
+      sim.actionStatuses = {};
+      sim.wholeSheetMounted = false;
+      sim.sessionId = null;
+      sim.historyDepth = 0;
+      sim.futureDepth = 0;
+      sim.activeLayer = 0;
+    },
+    assertions: () => [
+      // After refresh, page must be functional but bundle context is lost.
+      // Only assert the page loaded successfully (preflight wait already confirms this).
+      { field: 'buttons.save.exists', op: 'truthy', message: 'Save button must exist after refresh' },
+    ],
+  },
+  {
+    name: 'test_this_skin',
+    weight: 1,
+    precondition: (sim) => sim.templateApplied,
+    params: () => ({}),
+    transition: () => { /* no state change — button may be disabled */ },
+    assertions: (sim) => {
+      const allReady = sim.actionStatuses &&
+        Object.values(sim.actionStatuses).every(s => s === 'saved' || s === 'converted');
+      if (!allReady) {
+        return [
+          { field: 'buttons.testThisSkin', op: 'disabled', message: 'Test This Skin must be disabled when bundle incomplete' },
+          { field: 'wholeSheetMounted', op: 'truthy', message: 'WS must remain mounted (no corruption)' },
+        ];
+      }
+      return [{ field: 'wholeSheetMounted', op: 'truthy', message: 'WS must remain mounted' }];
+    },
+  },
+  {
+    name: 'undo',
+    weight: 2,
+    precondition: (sim) => sim.historyDepth > 0,
+    params: () => ({}),
+    transition: (sim) => {
+      sim.historyDepth = Math.max(0, sim.historyDepth - 1);
+      sim.futureDepth += 1;
+    },
+    assertions: () => [
+      { field: 'wholeSheetMounted', op: 'truthy', message: 'WS must be mounted after undo' },
+    ],
+  },
+  {
+    name: 'redo',
+    weight: 2,
+    precondition: (sim) => sim.futureDepth > 0,
+    params: () => ({}),
+    transition: (sim) => {
+      sim.futureDepth = Math.max(0, sim.futureDepth - 1);
+      sim.historyDepth += 1;
+    },
+    assertions: () => [
+      { field: 'wholeSheetMounted', op: 'truthy', message: 'WS must be mounted after redo' },
+    ],
+  },
+  {
+    name: 'switch_active_layer',
+    weight: 2,
+    precondition: (sim) => sim.wholeSheetMounted,
+    params: (sim, rng) => {
+      const maxLayer = sim.activeActionKey === 'death' ? 2 : 3;
+      let target;
+      do {
+        target = Math.floor(rng() * (maxLayer + 1));
+      } while (target === sim.activeLayer && maxLayer > 0);
+      return { layer: target };
+    },
+    transition: (sim, params) => { sim.activeLayer = params.layer; },
+    assertions: (_sim, params) => [
+      { field: 'activeLayer', op: 'eq', value: params.layer, message: `Active layer must be ${params.layer}` },
+      { field: 'wholeSheetMounted', op: 'truthy', message: 'WS must be mounted' },
+    ],
+  },
+];
+
+// ---------------------------------------------------------------------------
+// I. Sequence Generator
+// ---------------------------------------------------------------------------
+
+function generateSarSequence(seed, length) {
+  const rng = mulberry32(seed);
+  const sim = initialSimState();
+  const steps = [];
+
+  // Step 0: always apply template to bootstrap
+  const templateEntry = SAR_VOCABULARY.find(a => a.name === 'apply_template');
+  const tParams = templateEntry.params(sim, rng);
+  const tAssertions = templateEntry.assertions(sim, tParams);
+  templateEntry.transition(sim, tParams);
+  steps.push({
+    action: 'apply_template',
+    params: tParams,
+    preconditions_used: ['bootstrap'],
+    expected_assertions: tAssertions,
+  });
+
+  // Steps 1..length: weighted choice from eligible vocabulary
+  for (let i = 1; i <= length; i++) {
+    const eligible = SAR_VOCABULARY.filter(a => a.precondition(sim));
+    if (eligible.length === 0) break;
+
+    const totalWeight = eligible.reduce((sum, a) => sum + (a.weight || 1), 0);
+    let roll = rng() * totalWeight;
+    let chosen = eligible[0];
+    for (const a of eligible) {
+      roll -= (a.weight || 1);
+      if (roll <= 0) { chosen = a; break; }
+    }
+
+    const params = chosen.params(sim, rng);
+    const assertions = chosen.assertions(sim, params);
+    const preconditions_used = [];
+    // Record which preconditions were checked
+    if (chosen.name === 'switch_action_tab') preconditions_used.push('bundleId truthy');
+    else if (chosen.name === 'undo') preconditions_used.push(`historyDepth=${sim.historyDepth}`);
+    else if (chosen.name === 'redo') preconditions_used.push(`futureDepth=${sim.futureDepth}`);
+    else if (chosen.name === 'switch_active_layer') preconditions_used.push('wholeSheetMounted');
+    else preconditions_used.push(`${chosen.name} eligible`);
+
+    chosen.transition(sim, params);
+    steps.push({
+      action: chosen.name,
+      params,
+      preconditions_used,
+      expected_assertions: assertions,
+    });
+  }
+
+  return { type: 'generated_sar_sequence', seed, length: steps.length, steps };
+}
+
+// ---------------------------------------------------------------------------
+// J. Generated SAR Recipe Runner
+// ---------------------------------------------------------------------------
+
+async function runGeneratedSarRecipes(browser, workbenchUrl, reportOutDir, seeds, seqLength, holdPage) {
+  const allResults = [];
+
+  for (const seed of seeds) {
+    const generated = generateSarSequence(seed, seqLength);
+
+    // Save generated recipe artifact BEFORE execution
+    const artifactPath = path.join(reportOutDir, `generated-sar-seed${seed}-recipe.json`);
+    fs.writeFileSync(artifactPath, JSON.stringify(generated, null, 2));
+    console.error(`\n=== Generated SAR: seed=${seed}, ${generated.steps.length} steps ===`);
+    console.error(`  Recipe artifact: ${artifactPath}`);
+
+    // Convert to runRecipe-compatible format
+    const recipe = {
+      name: `generated_sar_seed_${seed}`,
+      description: `Generated SAR sequence (seed=${seed}, ${generated.steps.length} steps)`,
+      steps: generated.steps.map(s => ({
+        action: s.action,
+        params: s.params,
+        assertions: s.expected_assertions,
+      })),
+    };
+
+    const page = await browser.newPage({ viewport: { width: 1500, height: 980 } });
+    try {
+      await page.goto(workbenchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.waitForTimeout(2000);
+      await page.waitForFunction(() => {
+        const s = window.__wb_debug && typeof window.__wb_debug.getWebbuildDebugState === 'function'
+          ? window.__wb_debug.getWebbuildDebugState() : null;
+        return !!(s && s.runtimePreflight && s.runtimePreflight.checked === true);
+      }, null, { timeout: 30000 });
+
+      const result = await runRecipe(page, recipe, reportOutDir);
+      allResults.push(result);
+
+      // Save per-seed execution result
+      const resultPath = path.join(reportOutDir, `generated-sar-seed${seed}-result.json`);
+      fs.writeFileSync(resultPath, JSON.stringify(result, null, 2));
+    } finally {
+      if (!holdPage) await page.close();
+    }
+  }
+
+  return allResults;
+}
+
+// ---------------------------------------------------------------------------
+// K. main
 // ---------------------------------------------------------------------------
 
 async function main() {
-  if (recipeFilter && !RECIPES[recipeFilter]) {
+  const isGenerated = recipeFilter === 'generated_sar_sequences';
+  const availableRecipes = Object.keys(RECIPES).concat('generated_sar_sequences');
+
+  if (recipeFilter && !RECIPES[recipeFilter] && !isGenerated) {
     console.error(`Unknown recipe: ${recipeFilter}`);
-    console.error(`Available recipes: ${Object.keys(RECIPES).join(', ') || '(none)'}`);
+    console.error(`Available recipes: ${availableRecipes.join(', ')}`);
     process.exit(1);
   }
-
-  const recipesToRun = recipeFilter
-    ? { [recipeFilter]: RECIPES[recipeFilter] }
-    : RECIPES;
 
   fs.mkdirSync(outDir, { recursive: true });
 
@@ -529,27 +898,44 @@ async function main() {
   const allResults = [];
 
   try {
-    for (const [name, recipe] of Object.entries(recipesToRun)) {
-      console.error(`\n=== Recipe: ${name} ===`);
-      const page = await browser.newPage({
-        viewport: { width: 1500, height: 980 },
-      });
+    // Run deterministic recipes (unless specifically requesting generated only)
+    if (!isGenerated) {
+      const recipesToRun = recipeFilter
+        ? { [recipeFilter]: RECIPES[recipeFilter] }
+        : RECIPES;
 
-      try {
-        // Navigate and wait for runtime preflight
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-        await page.waitForTimeout(2000);
-        await page.waitForFunction(() => {
-          const s = window.__wb_debug && typeof window.__wb_debug.getWebbuildDebugState === 'function'
-            ? window.__wb_debug.getWebbuildDebugState() : null;
-          return !!(s && s.runtimePreflight && s.runtimePreflight.checked === true);
-        }, null, { timeout: 30000 });
+      for (const [name, recipe] of Object.entries(recipesToRun)) {
+        console.error(`\n=== Recipe: ${name} ===`);
+        const page = await browser.newPage({
+          viewport: { width: 1500, height: 980 },
+        });
 
-        const result = await runRecipe(page, recipe, outDir);
-        allResults.push(result);
-      } finally {
-        if (!holdOpen) await page.close();
+        try {
+          await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+          await page.waitForTimeout(2000);
+          await page.waitForFunction(() => {
+            const s = window.__wb_debug && typeof window.__wb_debug.getWebbuildDebugState === 'function'
+              ? window.__wb_debug.getWebbuildDebugState() : null;
+            return !!(s && s.runtimePreflight && s.runtimePreflight.checked === true);
+          }, null, { timeout: 30000 });
+
+          const result = await runRecipe(page, recipe, outDir);
+          allResults.push(result);
+        } finally {
+          if (!holdOpen) await page.close();
+        }
       }
+    }
+
+    // Run generated SAR sequences
+    if (isGenerated || !recipeFilter) {
+      const seeds = seedArg
+        ? [parseInt(seedArg, 10)]
+        : Array.from({ length: genCountArg }, (_, i) => i + 1);
+      const genResults = await runGeneratedSarRecipes(
+        browser, url, outDir, seeds, genLengthArg, holdOpen,
+      );
+      allResults.push(...genResults);
     }
   } finally {
     if (!holdOpen) await browser.close();

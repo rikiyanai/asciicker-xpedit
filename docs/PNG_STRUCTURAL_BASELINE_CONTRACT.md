@@ -120,8 +120,8 @@ A conforming non-regression test must verify:
 | Structural gates G10-G12 | EXISTS | `src/pipeline_v2/gates.py:41-82` |
 | `_run_structural_gates()` | EXISTS | `src/pipeline_v2/service.py:2770` |
 | Gates G7-G9 in code | EXISTS | `src/pipeline_v2/gates.py:10-38` — not yet called |
-| Automated PNG-to-bundle test | **MISSING** | No test exercises full PNG→bundle→gate path |
-| Known-good PNG fixtures (per family) | **PARTIAL** | Only `tests/fixtures/known_good/cat_sheet.png` exists |
+| Automated PNG-to-bundle test | EXISTS | `scripts/xp_fidelity_test/run_structural_baseline_test.mjs` — M2-A acceptance runner on verifier_lib.mjs |
+| Known-good PNG fixtures (per family) | EXISTS | `tests/fixtures/baseline/player-idle.png`, `attack.png`, `death.png` |
 | Skin Dock runtime smoke test | **MISSING** | Manual Playwright only |
 
 ## Enforcement

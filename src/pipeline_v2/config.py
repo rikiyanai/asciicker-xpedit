@@ -1,8 +1,27 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def normalize_base_path(raw: str) -> str:
+    """Normalize PIPELINE_BASE_PATH.
+
+    Rules:
+    - Empty / unset / whitespace-only / "/" → "" (root-hosted)
+    - Non-empty → ensure leading slash, strip trailing slash
+    - Example: "asciicker-XPEdit" → "/asciicker-XPEdit"
+    - Example: "/asciicker-XPEdit/" → "/asciicker-XPEdit"
+    """
+    s = raw.strip().strip("/")
+    if not s:
+        return ""
+    return "/" + s
+
+
+BASE_PATH: str = normalize_base_path(os.environ.get("PIPELINE_BASE_PATH", ""))
 DATA_DIR = ROOT / "data"
 UPLOAD_DIR = DATA_DIR / "uploads"
 JOBS_DIR = DATA_DIR / "jobs"

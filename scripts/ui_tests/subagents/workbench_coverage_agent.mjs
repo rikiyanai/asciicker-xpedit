@@ -4,6 +4,7 @@ import path from 'node:path';
 import { BaseSubagent } from './base_subagent.mjs';
 import { BrowserSkill } from '../core/browser_skill.mjs';
 import { ensureDir } from '../core/artifacts.mjs';
+import { resolveRoute } from '../core/url_helpers.mjs';
 import { WorkbenchDockLoadWatchdogAgent } from './workbench_agents.mjs';
 
 function sleep(ms) {
@@ -591,7 +592,7 @@ export class WorkbenchUICoverageAgent extends BaseSubagent {
     const pngPath = ctxPng || await defaultWorkbenchPngPath(process.cwd());
     this.step('coverage_start', { baseUrl, pngPath: pngPath || null });
 
-    await skill.open_url(new URL('/workbench', baseUrl).toString(), { screenshotLabel: 'workbench_ui_coverage_open' });
+    await skill.open_url(resolveRoute(baseUrl, '/workbench'), { screenshotLabel: 'workbench_ui_coverage_open' });
     await page.waitForSelector('#wbUpload', { state: 'visible', timeout: 30000 });
 
     await this.interactTopBar(page, skill);

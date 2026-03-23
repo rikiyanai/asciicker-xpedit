@@ -833,7 +833,7 @@ git commit -m "feat: add generated SAR edge-workflow recipes"
 
 ---
 
-## Task 5: Update README
+## Task 6: Update README
 
 **Files:**
 - Modify: `scripts/xp_fidelity_test/README.md`

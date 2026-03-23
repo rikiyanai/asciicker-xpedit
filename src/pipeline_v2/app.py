@@ -6,9 +6,9 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from flask import Flask, Response, jsonify, redirect, request, send_from_directory, send_file
+from flask import Blueprint, Flask, Response, jsonify, redirect, request, send_from_directory, send_file
 
-from .config import ensure_dirs, ROOT, EXPORT_DIR, ENABLED_FAMILIES, BUG_REPORTS_DIR
+from .config import ensure_dirs, ROOT, EXPORT_DIR, ENABLED_FAMILIES, BASE_PATH, BUG_REPORTS_DIR
 from .models import ApiError, RunConfig, parse_frames_csv
 
 
@@ -80,13 +80,23 @@ def _v(path: str) -> str:
 def _serve_web_html(file_name: str):
     p = (WEB_DIR / file_name).resolve()
     html = p.read_text(encoding="utf-8")
-    html = html.replace('href="/styles.css"', f'href="{_v("/styles.css")}"')
-    html = html.replace('src="/wizard.js"', f'src="{_v("/wizard.js")}"')
-    html = html.replace('src="/workbench.js"', f'src="{_v("/workbench.js")}"')
+    # Prefix root-relative asset paths with BASE_PATH
+    html = html.replace('href="/styles.css"', f'href="{_v(BASE_PATH + "/styles.css")}"')
+    html = html.replace('href="/rexpaint-editor/styles.css"', f'href="{_v(BASE_PATH + "/rexpaint-editor/styles.css")}"')
+    html = html.replace('src="/workbench.js"', f'src="{_v(BASE_PATH + "/workbench.js")}"')
+    html = html.replace('src="/wizard.js"', f'src="{_v(BASE_PATH + "/wizard.js")}"')
+    html = html.replace('src="/whole-sheet-init.js"', f'src="{_v(BASE_PATH + "/whole-sheet-init.js")}"')
+    # Relative path — no base-path prefix needed
     html = html.replace('src="./termpp_skin_lab.js"', f'src="{_v("./termpp_skin_lab.js")}"')
-    boot_script = f'<script>window.__WB_SERVER_BOOT_NONCE = "{SERVER_BOOT_NONCE}";</script>'
+    # Prefix in-page navigation links
+    html = html.replace('href="/workbench"', f'href="{BASE_PATH}/workbench"')
+    # Inject base path and boot nonce into <head>
+    injected = (
+        f'<script>window.__WB_BASE_PATH = "{BASE_PATH}";</script>\n'
+        f'  <script>window.__WB_SERVER_BOOT_NONCE = "{SERVER_BOOT_NONCE}";</script>'
+    )
     if "</head>" in html:
-        html = html.replace("</head>", f"  {boot_script}\n</head>", 1)
+        html = html.replace("</head>", f"  {injected}\n</head>", 1)
     return _no_cache(Response(html, mimetype="text/html"))
 
 
@@ -200,53 +210,54 @@ def _save_bug_report(payload: dict, req_id: str) -> dict:
 def create_app() -> Flask:
     ensure_dirs()
     app = Flask(__name__)
+    bp = Blueprint("main", __name__)
 
-    @app.route("/healthz")
+    @bp.route("/healthz")
     def healthz():
         return "ok", 200
 
-    @app.route("/")
+    @bp.route("/")
     def index_page():
-        return redirect("/workbench", code=302)
+        return redirect(f"{BASE_PATH}/workbench", code=302)
 
     # Legacy/deprecated UI preserved temporarily for fallback/manual comparison.
-    @app.route("/wizard")
+    @bp.route("/wizard")
     def wizard_page():
         return _serve_web_html("wizard.html")
 
-    @app.route("/workbench")
+    @bp.route("/workbench")
     def workbench_page():
         return _serve_web_html("workbench.html")
 
-    @app.route("/termpp-skin-lab")
+    @bp.route("/termpp-skin-lab")
     def termpp_skin_lab_page():
         return _serve_web_html("termpp_skin_lab.html")
 
-    @app.route("/<path:filename>")
+    @bp.route("/<path:filename>")
     def web_assets(filename: str):
         return _no_cache(send_from_directory(WEB_DIR, filename))
 
-    @app.route("/termpp-web")
+    @bp.route("/termpp-web")
     def termpp_web_index_alias():
         return _serve_runtime_asset(STATIC_WEB_DIR, "index.html", no_cache=True)
 
-    @app.route("/termpp-web/<path:filename>")
+    @bp.route("/termpp-web/<path:filename>")
     def termpp_web_assets(filename: str):
         return _serve_runtime_asset(STATIC_WEB_DIR, filename, no_cache=True)
 
-    @app.route("/termpp-web-flat")
+    @bp.route("/termpp-web-flat")
     def termpp_web_flat_index_alias():
         return _serve_runtime_asset(STATIC_FLAT_WEB_DIR, "index.html", no_cache=True)
 
-    @app.route("/termpp-web-flat/<path:filename>")
+    @bp.route("/termpp-web-flat/<path:filename>")
     def termpp_web_flat_assets(filename: str):
         return _serve_runtime_asset(STATIC_FLAT_WEB_DIR, filename, no_cache=True)
 
-    @app.get("/api/workbench/runtime-preflight")
+    @bp.get("/api/workbench/runtime-preflight")
     def api_wb_runtime_preflight():
         return jsonify(_runtime_preflight_payload()), 200
 
-    @app.post("/api/workbench/report-bug")
+    @bp.post("/api/workbench/report-bug")
     def api_wb_report_bug():
         req_id = str(uuid.uuid4())
         try:
@@ -264,13 +275,13 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
-    @app.get("/api/workbench/templates")
+    @bp.get("/api/workbench/templates")
     def api_wb_templates():
         reg = load_template_registry()
         reg["enabled_families"] = sorted(ENABLED_FAMILIES)
         return jsonify(reg), 200
 
-    @app.post("/api/workbench/bundle/create")
+    @bp.post("/api/workbench/bundle/create")
     def api_wb_bundle_create():
         req_id = str(uuid.uuid4())
         try:
@@ -282,7 +293,7 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
-    @app.post("/api/workbench/action-grid/apply")
+    @bp.post("/api/workbench/action-grid/apply")
     def api_wb_action_grid_apply():
         req_id = str(uuid.uuid4())
         try:
@@ -300,7 +311,7 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
-    @app.post("/api/workbench/bundle/action-status")
+    @bp.post("/api/workbench/bundle/action-status")
     def api_wb_bundle_action_status():
         req_id = str(uuid.uuid4())
         try:
@@ -318,7 +329,7 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
-    @app.post("/api/workbench/export-bundle")
+    @bp.post("/api/workbench/export-bundle")
     def api_wb_export_bundle():
         req_id = str(uuid.uuid4())
         try:
@@ -330,7 +341,7 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
-    @app.post("/api/workbench/web-skin-bundle-payload")
+    @bp.post("/api/workbench/web-skin-bundle-payload")
     def api_wb_web_skin_bundle_payload():
         req_id = str(uuid.uuid4())
         try:
@@ -342,7 +353,7 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
-    @app.post("/api/upload")
+    @bp.post("/api/upload")
     def api_upload():
         req_id = str(uuid.uuid4())
         try:
@@ -351,7 +362,7 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
-    @app.post("/api/analyze")
+    @bp.post("/api/analyze")
     def api_analyze():
         req_id = str(uuid.uuid4())
         try:
@@ -361,7 +372,7 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
-    @app.post("/api/run")
+    @bp.post("/api/run")
     def api_run():
         req_id = str(uuid.uuid4())
         try:
@@ -388,7 +399,7 @@ def create_app() -> Flask:
                 "request_id": req_id,
             }), 422
 
-    @app.get("/api/status/<job_id>")
+    @bp.get("/api/status/<job_id>")
     def api_status(job_id: str):
         req_id = str(uuid.uuid4())
         try:
@@ -396,7 +407,7 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
-    @app.post("/api/workbench/load-from-job")
+    @bp.post("/api/workbench/load-from-job")
     def api_wb_load():
         req_id = str(uuid.uuid4())
         try:
@@ -408,7 +419,7 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
-    @app.post("/api/workbench/load-session")
+    @bp.post("/api/workbench/load-session")
     def api_wb_load_session():
         req_id = str(uuid.uuid4())
         try:
@@ -420,7 +431,7 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
-    @app.post("/api/workbench/create-blank-session")
+    @bp.post("/api/workbench/create-blank-session")
     def api_wb_create_blank_session():
         req_id = str(uuid.uuid4())
         try:
@@ -435,7 +446,7 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
-    @app.post("/api/workbench/export-xp")
+    @bp.post("/api/workbench/export-xp")
     def api_wb_export():
         req_id = str(uuid.uuid4())
         try:
@@ -447,7 +458,7 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
-    @app.post("/api/workbench/upload-xp")
+    @bp.post("/api/workbench/upload-xp")
     def api_wb_upload_xp():
         req_id = str(uuid.uuid4())
         try:
@@ -465,7 +476,7 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
-    @app.get("/api/workbench/download-xp")
+    @bp.get("/api/workbench/download-xp")
     def api_wb_download_xp():
         req_id = str(uuid.uuid4())
         try:
@@ -482,7 +493,7 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
-    @app.post("/api/workbench/xp-tool-command")
+    @bp.post("/api/workbench/xp-tool-command")
     def api_wb_xp_tool_command():
         req_id = str(uuid.uuid4())
         try:
@@ -494,7 +505,7 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
-    @app.post("/api/workbench/open-in-xp-tool")
+    @bp.post("/api/workbench/open-in-xp-tool")
     def api_wb_open_in_xp_tool():
         req_id = str(uuid.uuid4())
         try:
@@ -508,7 +519,7 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
-    @app.post("/api/workbench/termpp-skin-command")
+    @bp.post("/api/workbench/termpp-skin-command")
     def api_wb_termpp_skin_command():
         req_id = str(uuid.uuid4())
         try:
@@ -521,7 +532,7 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
-    @app.post("/api/workbench/open-termpp-skin")
+    @bp.post("/api/workbench/open-termpp-skin")
     def api_wb_open_termpp_skin():
         req_id = str(uuid.uuid4())
         try:
@@ -536,7 +547,7 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
-    @app.post("/api/workbench/web-skin-payload")
+    @bp.post("/api/workbench/web-skin-payload")
     def api_wb_web_skin_payload():
         req_id = str(uuid.uuid4())
         try:
@@ -556,7 +567,7 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
-    @app.post("/api/workbench/termpp-stream/start")
+    @bp.post("/api/workbench/termpp-stream/start")
     def api_wb_termpp_stream_start():
         req_id = str(uuid.uuid4())
         try:
@@ -575,7 +586,7 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
-    @app.post("/api/workbench/termpp-stream/stop")
+    @bp.post("/api/workbench/termpp-stream/stop")
     def api_wb_termpp_stream_stop():
         req_id = str(uuid.uuid4())
         try:
@@ -587,7 +598,7 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
-    @app.get("/api/workbench/termpp-stream/status/<stream_id>")
+    @bp.get("/api/workbench/termpp-stream/status/<stream_id>")
     def api_wb_termpp_stream_status(stream_id: str):
         req_id = str(uuid.uuid4())
         try:
@@ -595,7 +606,7 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
-    @app.get("/api/workbench/termpp-stream/frame/<stream_id>")
+    @bp.get("/api/workbench/termpp-stream/frame/<stream_id>")
     def api_wb_termpp_stream_frame(stream_id: str):
         req_id = str(uuid.uuid4())
         try:
@@ -604,7 +615,7 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
-    @app.post("/api/workbench/save-session")
+    @bp.post("/api/workbench/save-session")
     def api_wb_save():
         req_id = str(uuid.uuid4())
         try:
@@ -616,7 +627,7 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
-    @app.post("/api/workbench/run-verification")
+    @bp.post("/api/workbench/run-verification")
     def api_wb_run_verification():
         req_id = str(uuid.uuid4())
         try:
@@ -641,6 +652,8 @@ def create_app() -> Flask:
             ), 200
         except ApiError as e:
             return _err(e)
+
+    app.register_blueprint(bp, url_prefix=BASE_PATH)
 
     @app.errorhandler(500)
     def api_500(_e):

@@ -41,21 +41,23 @@ async function captureState(page, label) {
       return { exists: true, disabled: !!el.disabled, text: String(el.textContent || '').trim() };
     };
 
-    // Raw app state via _state() — the only current path to bundle/template/action fields
-    const raw = (window.__wb_debug && typeof window.__wb_debug._state === 'function')
-      ? window.__wb_debug._state() : null;
-
-    // Structured geometry via getState()
+    // Curated state via getState() — includes P1 fields (bundleId, activeActionKey,
+    // templateSetKey, gridCols, gridRows, activeLayer, visibleLayers, layerCount,
+    // sessionDirty) as of commit f246828. Primary source per state-capture contract.
     const geo = (window.__wb_debug && typeof window.__wb_debug.getState === 'function')
       ? window.__wb_debug.getState() : null;
+
+    // Raw state via _state() — still needed for actionStates (not yet curated)
+    const raw = (window.__wb_debug && typeof window.__wb_debug._state === 'function')
+      ? window.__wb_debug._state() : null;
 
     return {
       label: lbl,
       timestamp: Date.now(),
-      templateSetKey: raw?.templateSetKey ?? null,
-      bundleId: raw?.bundleId ?? null,
-      activeActionKey: raw?.activeActionKey ?? null,
-      sessionId: raw?.sessionId ?? null,
+      templateSetKey: geo?.templateSetKey ?? null,
+      bundleId: geo?.bundleId ?? null,
+      activeActionKey: geo?.activeActionKey ?? null,
+      sessionId: geo?.sessionId ?? null,
       actionStates: raw?.actionStates ? Object.fromEntries(
         Object.entries(raw.actionStates).map(([k, v]) => [k, {
           status: v?.status ?? null,
@@ -68,11 +70,11 @@ async function captureState(page, label) {
       wholeSheetMounted: !!q('wholeSheetCanvas'),
       historyDepth: geo?.historyDepth ?? 0,
       futureDepth: geo?.futureDepth ?? 0,
-      activeLayer: raw?.activeLayer ?? 0,
-      sessionDirty: !!raw?.sessionDirty,
+      activeLayer: geo?.activeLayer ?? 0,
+      sessionDirty: geo?.sessionDirty ?? false,
       geometry: {
-        gridCols: raw?.gridCols ?? null,
-        gridRows: raw?.gridRows ?? null,
+        gridCols: geo?.gridCols ?? null,
+        gridRows: geo?.gridRows ?? null,
         frameWChars: geo?.frameWChars ?? null,
         frameHChars: geo?.frameHChars ?? null,
         angles: geo?.angles ?? null,

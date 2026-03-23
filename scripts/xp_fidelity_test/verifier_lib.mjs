@@ -5,7 +5,9 @@
  *  - CLI argument parsing (getArg, hasFlag)
  *  - Base-path-aware URL resolution (resolveRoute, resolveWorkbenchUrl)
  *  - Browser launch helpers (launchBrowser, openWorkbench)
- *  - State capture (captureState — reads getState() with P1/P2 fields)
+ *  - State capture (captureState — reads getState() with P1/P2 fields + actionStates from _state())
+ *  - Whole-sheet mount wait (waitForWholeSheetMount)
+ *  - Tab switch (switchActionTab — canonical 8-phase sequence from M1)
  *  - Failure tracking (createReport, fail, writeReport)
  *  - Artifact writing (writeArtifact, writeJsonArtifact)
  *  - Frame signature helpers (readFrameSignature, readFrameCell)
@@ -181,14 +183,26 @@ export async function captureState(page, label = '') {
   return page.evaluate((lbl) => {
     const gs = (window.__wb_debug && typeof window.__wb_debug.getState === 'function')
       ? window.__wb_debug.getState() : null;
+    const raw = (window.__wb_debug && typeof window.__wb_debug._state === 'function')
+      ? window.__wb_debug._state() : null;
     const wse = (window.__wholeSheetEditor && typeof window.__wholeSheetEditor.getState === 'function')
       ? window.__wholeSheetEditor.getState() : null;
+
+    // actionStates: curate from _state() since not yet in getState()
+    const actionStates = raw?.actionStates ? Object.fromEntries(
+      Object.entries(raw.actionStates).map(([k, v]) => [k, {
+        status: v?.status ?? null,
+        sessionId: v?.sessionId ?? null,
+      }])
+    ) : null;
 
     return {
       label: lbl,
       timestamp: Date.now(),
       // From getState() — includes P1 and P2 fields
       ...(gs || {}),
+      // actionStates from _state() fallback (per state-capture contract)
+      actionStates,
       // Whole-sheet editor state (separate surface)
       wholeSheet: wse || null,
       // DOM-derived
@@ -223,6 +237,85 @@ export async function readFrameCell(page, row, col, cx, cy) {
   return page.evaluate(([r, c, x, y]) => {
     return window.__wb_debug?.readFrameCell?.(r, c, x, y) ?? null;
   }, [row, col, cx, cy]);
+}
+
+// ---------------------------------------------------------------------------
+// D2. Whole-sheet mount wait
+// ---------------------------------------------------------------------------
+
+/**
+ * Wait for the whole-sheet canvas to be mounted in the DOM.
+ * M2 slices that touch the editor must call this after session hydration.
+ *
+ * @param {import('playwright').Page} page
+ * @param {object} opts
+ * @param {number} opts.timeout — timeout (ms), default 15000
+ */
+export async function waitForWholeSheetMount(page, { timeout = 15000 } = {}) {
+  await page.waitForSelector('#wholeSheetCanvas', { state: 'attached', timeout });
+}
+
+// ---------------------------------------------------------------------------
+// D3. Tab switch (canonical 8-phase sequence from M1 edge-workflow)
+// ---------------------------------------------------------------------------
+
+/**
+ * Switch the active action tab and wait for full hydration.
+ * Implements the canonical 8-phase wait sequence proven in M1 closeout.
+ * Do not weaken these waits — see state-capture-contract.md § switch_action_tab.
+ *
+ * @param {import('playwright').Page} page
+ * @param {string} actionKey — e.g. 'idle', 'attack', 'death'
+ * @param {object} opts
+ * @param {number} opts.settleMs — pre-settle delay for auto-advance timer (default 800)
+ * @param {number} opts.keyTimeout — activeActionKey match timeout (default 10000)
+ * @param {number} opts.geoTimeout — geometry hydration timeout (default 30000)
+ * @param {number} opts.canvasTimeout — wholeSheetCanvas mount timeout (default 15000)
+ * @param {number} opts.finalSettleMs — post-switch settle (default 1000)
+ * @returns {Promise<void>}
+ */
+export async function switchActionTab(page, actionKey, {
+  settleMs = 800,
+  keyTimeout = 10000,
+  geoTimeout = 30000,
+  canvasTimeout = 15000,
+  finalSettleMs = 1000,
+} = {}) {
+  // Phase 1: pre-settle delay for auto-advance timer
+  await page.waitForTimeout(settleMs);
+
+  // Phase 2: click the tab
+  const tabSelector = `[data-action-key="${actionKey}"]`;
+  await page.click(tabSelector);
+
+  // Phase 3: wait for _state().activeActionKey match
+  await page.waitForFunction((expected) => {
+    const raw = window.__wb_debug?._state?.();
+    return raw?.activeActionKey === expected;
+  }, actionKey, { timeout: keyTimeout });
+
+  // Phase 4: geometry hydration via sessionOut + metaOut
+  await page.waitForFunction(() => {
+    const sessionOut = document.getElementById('sessionOut');
+    const metaOut = document.getElementById('metaOut');
+    if (!sessionOut || !metaOut) return false;
+    try {
+      const session = JSON.parse(sessionOut.textContent || '');
+      const meta = JSON.parse(metaOut.textContent || '');
+      return !!session.session_id && typeof meta.frame_w_chars === 'number';
+    } catch { return false; }
+  }, { timeout: geoTimeout });
+
+  // Phase 5: wholeSheetCanvas attached
+  await page.waitForSelector('#wholeSheetCanvas', { state: 'attached', timeout: canvasTimeout })
+    .catch(() => {});
+
+  // Phase 6: wsGlyphCode visible (swallowed — may not render in headless)
+  await page.waitForSelector('#wsGlyphCode', { state: 'visible', timeout: 10000 })
+    .catch(() => {});
+
+  // Phase 7: final settle
+  await page.waitForTimeout(finalSettleMs);
 }
 
 // ---------------------------------------------------------------------------

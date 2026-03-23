@@ -42,27 +42,27 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..');
 // Configuration
 // ---------------------------------------------------------------------------
 
+// All 3 families live inside `player_native_full` template set as actions
+const TEMPLATE_SET = 'player_native_full';
+
 const FAMILIES = {
   idle: {
     fixture: 'tests/fixtures/baseline/player-idle.png',
-    templateSet: 'player_native_full',
     actionKey: 'idle',
     expectedDims: { cols: 126, rows: 80 },
-    expectedLayers: 3,
+    expectedLayers: 4,
   },
   attack: {
     fixture: 'tests/fixtures/baseline/attack.png',
-    templateSet: 'attack_native',
     actionKey: 'attack',
     expectedDims: { cols: 144, rows: 80 },
-    expectedLayers: 3,
+    expectedLayers: 4,
   },
   death: {
     fixture: 'tests/fixtures/baseline/death.png',
-    templateSet: 'plydie_native',
     actionKey: 'death',
     expectedDims: { cols: 110, rows: 88 },
-    expectedLayers: 3,
+    expectedLayers: 4,
   },
 };
 
@@ -87,17 +87,90 @@ async function main() {
     process.exit(1);
   }
 
+  // Step 1: Create ONE bundle (all families are actions within the same template set)
+  let bundleId;
+  try {
+    const bundleUrl = resolveRoute(workbenchUrl, '/api/workbench/bundle/create');
+    const resp = await page.evaluate(async ({ url, templateSetKey }) => {
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template_set_key: templateSetKey }),
+      });
+      return { status: r.status, body: await r.json() };
+    }, { url: bundleUrl, templateSetKey: TEMPLATE_SET });
+
+    if (resp.status > 201 || !resp.body?.bundle_id) {
+      fail('bundle_create', `Bundle create failed: status=${resp.status}, body=${JSON.stringify(resp.body)}`);
+      report.overall_pass = false;
+      writeReport(outDir, 'report.json', report);
+      await browser.close();
+      process.exit(1);
+    }
+    bundleId = resp.body.bundle_id;
+    console.log(`Bundle created: ${bundleId}`);
+  } catch (err) {
+    fail('bundle_create', `Bundle create error: ${err.message}`);
+    report.overall_pass = false;
+    writeReport(outDir, 'report.json', report);
+    await browser.close();
+    process.exit(1);
+  }
+
+  // Step 2: Upload PNG + apply action-grid for each family
   const results = {};
   let allPass = true;
 
   for (const [familyName, familyCfg] of Object.entries(families)) {
     console.log(`\n=== Testing family: ${familyName} ===`);
-    const familyResult = await testFamily(page, workbenchUrl, familyName, familyCfg, outDir, fail);
+    const familyResult = await testFamily(page, workbenchUrl, familyName, familyCfg, bundleId, outDir, fail);
     results[familyName] = familyResult;
     if (!familyResult.pass) allPass = false;
   }
 
+  // Step 3: Export full bundle and validate gates
+  console.log(`\n=== Exporting bundle ===`);
+  try {
+    const exportUrl = resolveRoute(workbenchUrl, '/api/workbench/export-bundle');
+    const resp = await page.evaluate(async ({ url, bid }) => {
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bundle_id: bid }),
+      });
+      return { status: r.status, body: await r.json() };
+    }, { url: exportUrl, bid: bundleId });
+
+    if (resp.status !== 200) {
+      fail('export', `Export failed: status=${resp.status}, body=${JSON.stringify(resp.body)}`);
+      allPass = false;
+    } else {
+      // Validate per-action gates
+      const gateReports = resp.body?.gate_reports || {};
+      for (const [familyName, familyCfg] of Object.entries(families)) {
+        const actionGates = gateReports[familyCfg.actionKey] || [];
+        const findGate = (name) => actionGates.find(g => g.gate === name);
+        const g10 = findGate('G10')?.verdict === 'PASS' || findGate('G10')?.verdict === 'THRESHOLD_MET';
+        const g11 = findGate('G11')?.verdict === 'PASS' || findGate('G11')?.verdict === 'THRESHOLD_MET';
+        const g12 = findGate('G12')?.verdict === 'PASS' || findGate('G12')?.verdict === 'THRESHOLD_MET';
+        const gatesPass = g10 && g11 && g12;
+        results[familyName].gates = { G10: g10, G11: g11, G12: g12, all_pass: gatesPass, raw: actionGates };
+        if (!gatesPass) {
+          fail('structural_gates', `Gates failed for ${familyName}: G10=${g10}, G11=${g11}, G12=${g12}`);
+          results[familyName].pass = false;
+          allPass = false;
+        }
+        console.log(`  ${familyName}: G10=${g10 ? 'PASS' : 'FAIL'}, G11=${g11 ? 'PASS' : 'FAIL'}, G12=${g12 ? 'PASS' : 'FAIL'}`);
+      }
+      writeJsonArtifact(outDir, 'export_response.json', resp.body);
+    }
+  } catch (err) {
+    fail('export', `Export error: ${err.message}`);
+    allPass = false;
+  }
+
   report.families = results;
+  report.bundle_id = bundleId;
   report.overall_pass = allPass;
   report.families_tested = Object.keys(results).length;
   report.families_passed = Object.values(results).filter(r => r.pass).length;
@@ -119,10 +192,10 @@ async function main() {
 // Per-family test
 // ---------------------------------------------------------------------------
 
-async function testFamily(page, workbenchUrl, familyName, cfg, outDir, fail) {
+async function testFamily(page, workbenchUrl, familyName, cfg, bundleId, outDir, fail) {
   const result = {
     family: familyName,
-    pass: false,
+    pass: true, // assume pass until a step fails
     steps: {},
   };
 
@@ -130,25 +203,12 @@ async function testFamily(page, workbenchUrl, familyName, cfg, outDir, fail) {
   if (!fs.existsSync(fixturePath)) {
     fail('fixture', `Missing fixture: ${cfg.fixture}`);
     result.steps.fixture = { pass: false, error: 'fixture file not found' };
+    result.pass = false;
     return result;
   }
   result.steps.fixture = { pass: true, path: cfg.fixture };
 
-  // Step 1: Navigate to workbench (fresh for each family)
-  try {
-    await page.goto(workbenchUrl, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForFunction(() =>
-      window.__wb_debug && typeof window.__wb_debug.getState === 'function',
-      { timeout: 15000 }
-    );
-    result.steps.navigate = { pass: true };
-  } catch (err) {
-    fail('navigate', `Failed to load workbench: ${err.message}`);
-    result.steps.navigate = { pass: false, error: err.message };
-    return result;
-  }
-
-  // Step 2: Upload PNG via API (direct POST, more reliable than UI file input)
+  // Upload PNG via API
   let uploadResult;
   try {
     const apiBase = resolveRoute(workbenchUrl, '/api/upload');
@@ -164,166 +224,56 @@ async function testFamily(page, workbenchUrl, familyName, cfg, outDir, fail) {
       filename: path.basename(fixturePath),
     });
 
-    if (resp.status !== 200 || !resp.body?.job_id) {
-      fail('upload', `Upload failed: status=${resp.status}`);
+    if (resp.status > 201 || !resp.body?.upload_id) {
+      fail('upload', `Upload failed for ${familyName}: status=${resp.status}`);
       result.steps.upload = { pass: false, response: resp };
+      result.pass = false;
       return result;
     }
     uploadResult = resp.body;
-    result.steps.upload = { pass: true, job_id: uploadResult.job_id };
+    result.steps.upload = { pass: true, upload_id: uploadResult.upload_id };
   } catch (err) {
-    fail('upload', `Upload error: ${err.message}`);
+    fail('upload', `Upload error for ${familyName}: ${err.message}`);
     result.steps.upload = { pass: false, error: err.message };
+    result.pass = false;
     return result;
   }
 
-  // Step 3: Create bundle from template
-  let bundleResult;
-  try {
-    const bundleUrl = resolveRoute(workbenchUrl, '/api/workbench/bundle/create');
-    const resp = await page.evaluate(async ({ url, templateSet }) => {
-      const r = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ template_set: templateSet }),
-      });
-      return { status: r.status, body: await r.json() };
-    }, { url: bundleUrl, templateSet: cfg.templateSet });
-
-    if (resp.status !== 200 || !resp.body?.bundle_id) {
-      fail('bundle_create', `Bundle create failed: status=${resp.status}`);
-      result.steps.bundle_create = { pass: false, response: resp };
-      return result;
-    }
-    bundleResult = resp.body;
-    result.steps.bundle_create = { pass: true, bundle_id: bundleResult.bundle_id };
-  } catch (err) {
-    fail('bundle_create', `Bundle create error: ${err.message}`);
-    result.steps.bundle_create = { pass: false, error: err.message };
-    return result;
-  }
-
-  // Step 4: Apply action-grid (uses the upload job to generate XP for this action)
-  let actionGridResult;
+  // Apply action-grid
   try {
     const actionGridUrl = resolveRoute(workbenchUrl, '/api/workbench/action-grid/apply');
-    const resp = await page.evaluate(async ({ url, bundleId, actionKey, jobId }) => {
+    const resp = await page.evaluate(async ({ url, bid, actionKey, sourcePath }) => {
       const r = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          bundle_id: bundleId,
+          bundle_id: bid,
           action_key: actionKey,
-          job_id: jobId,
-          native_compat: false,
+          source_path: sourcePath,
         }),
       });
       return { status: r.status, body: await r.json() };
     }, {
       url: actionGridUrl,
-      bundleId: bundleResult.bundle_id,
+      bid: bundleId,
       actionKey: cfg.actionKey,
-      jobId: uploadResult.job_id,
+      sourcePath: uploadResult.source_path,
     });
 
     if (resp.status !== 200) {
-      fail('action_grid', `Action-grid apply failed: status=${resp.status}`);
+      fail('action_grid', `Action-grid failed for ${familyName}: status=${resp.status}`);
       result.steps.action_grid = { pass: false, response: resp };
+      result.pass = false;
       return result;
     }
-    actionGridResult = resp.body;
-    result.steps.action_grid = { pass: true, session_id: actionGridResult?.session_id };
+    result.steps.action_grid = { pass: true, session_id: resp.body?.session_id };
+    console.log(`  ${familyName}: upload + action-grid OK`);
   } catch (err) {
-    fail('action_grid', `Action-grid apply error: ${err.message}`);
+    fail('action_grid', `Action-grid error for ${familyName}: ${err.message}`);
     result.steps.action_grid = { pass: false, error: err.message };
+    result.pass = false;
     return result;
   }
-
-  // Step 5: Export bundle and validate structural gates
-  let exportResult;
-  try {
-    const exportUrl = resolveRoute(workbenchUrl, '/api/workbench/export-bundle');
-    const resp = await page.evaluate(async ({ url, bundleId }) => {
-      const r = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bundle_id: bundleId }),
-      });
-      return { status: r.status, body: await r.json() };
-    }, { url: exportUrl, bundleId: bundleResult.bundle_id });
-
-    exportResult = resp.body;
-    result.steps.export = {
-      pass: resp.status === 200,
-      status: resp.status,
-      gates: exportResult?.structural_gates || exportResult?.gates || null,
-      bundle_id: bundleResult.bundle_id,
-    };
-
-    if (resp.status !== 200) {
-      fail('export', `Export failed: status=${resp.status}, body=${JSON.stringify(exportResult)}`);
-      return result;
-    }
-  } catch (err) {
-    fail('export', `Export error: ${err.message}`);
-    result.steps.export = { pass: false, error: err.message };
-    return result;
-  }
-
-  // Step 6: Validate gate results
-  const gates = exportResult?.structural_gates || exportResult?.gates || {};
-  const gateChecks = {};
-
-  // G10: dimension match
-  gateChecks.G10 = {
-    expected: `${cfg.expectedDims.cols}x${cfg.expectedDims.rows}`,
-    result: gates?.G10 || 'not reported',
-    pass: gates?.G10 === 'PASS' || gates?.G10?.status === 'PASS',
-  };
-
-  // G11: layer count
-  gateChecks.G11 = {
-    expected: cfg.expectedLayers,
-    result: gates?.G11 || 'not reported',
-    pass: gates?.G11 === 'PASS' || gates?.G11?.status === 'PASS',
-  };
-
-  // G12: L0 metadata
-  gateChecks.G12 = {
-    result: gates?.G12 || 'not reported',
-    pass: gates?.G12 === 'PASS' || gates?.G12?.status === 'PASS',
-  };
-
-  result.steps.gates = gateChecks;
-
-  // Acceptance: G10 + G11 + G12 must all pass
-  const acceptanceGatesPass = gateChecks.G10.pass && gateChecks.G11.pass && gateChecks.G12.pass;
-
-  if (!acceptanceGatesPass) {
-    fail('structural_gates', `Gates failed for ${familyName}: G10=${gateChecks.G10.pass}, G11=${gateChecks.G11.pass}, G12=${gateChecks.G12.pass}`);
-  }
-
-  // Step 7: Capture final state
-  try {
-    const finalState = await captureState(page, `${familyName}_final`);
-    result.steps.final_state = { captured: true };
-    writeJsonArtifact(outDir, `${familyName}_final_state.json`, finalState);
-  } catch (err) {
-    result.steps.final_state = { captured: false, error: err.message };
-  }
-
-  // Screenshot
-  try {
-    await screenshot(page, outDir, `${familyName}_after_export`);
-  } catch (_) {}
-
-  result.pass = acceptanceGatesPass;
-  result.acceptance_gates = { G10: gateChecks.G10.pass, G11: gateChecks.G11.pass, G12: gateChecks.G12.pass };
-
-  console.log(`  Family ${familyName}: ${result.pass ? 'PASS' : 'FAIL'}`);
-  console.log(`    G10 (dims): ${gateChecks.G10.pass ? 'PASS' : 'FAIL'} — expected ${gateChecks.G10.expected}`);
-  console.log(`    G11 (layers): ${gateChecks.G11.pass ? 'PASS' : 'FAIL'} — expected ${gateChecks.G11.expected}`);
-  console.log(`    G12 (metadata): ${gateChecks.G12.pass ? 'PASS' : 'FAIL'}`);
 
   return result;
 }

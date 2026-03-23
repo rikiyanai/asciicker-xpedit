@@ -31,14 +31,14 @@
 
 | ID | Title | Scope | Severity | Status | Evidence |
 |----|-------|-------|----------|--------|----------|
-| VB-01 | `getState()` missing 9 P1 fields | both | HIGH | OPEN | `workbench.js:7103-7125` — missing `bundleId`, `activeActionKey`, `templateSetKey`, `activeLayer`, `visibleLayers`, `layerCount`, `sessionDirty`, `gridCols`, `gridRows` |
-| VB-02 | `getState()` missing 2 P2 fields | both | MEDIUM | OPEN | Missing `sourceCutsV`, `sourceCanvasZoom` |
+| VB-01 | `getState()` missing 9 P1 fields | both | ~~HIGH~~ | CLOSED (`f246828`) | All 9 P1 fields added: `bundleId`, `activeActionKey`, `templateSetKey`, `activeLayer`, `visibleLayers`, `layerCount`, `sessionDirty`, `gridCols`, `gridRows` |
+| VB-02 | `getState()` missing 2 P2 fields | both | ~~MEDIUM~~ | CLOSED (`f246828`) | Both P2 fields added: `sourceCutsV`, `sourceCanvasZoom` |
 | VB-03 | `_state()` leaks full mutable state by reference | both | MEDIUM | OPEN (design debt) | `workbench.js:7193` — returns raw `state` object, ~80+ fields, mutable |
 | VB-04 | 0 of 5 M2 verifier slices implemented | both | HIGH | OPEN | Slices 1-5 designed in `2026-03-21-milestone-2-png-verifier-design.md`, none built |
 | VB-05 | No shared verifier infrastructure extracted | both | HIGH | OPEN | `selectors.mjs`, `verifier_lib.mjs`, `action_registry.json`, `recipe_schema.json` all needed per design |
-| VB-06 | `test_contracts.py` hardcoded to root "/" | base-path | MEDIUM | OPEN | 4 tests use bare `/api/upload`, `/api/analyze`, `/api/run` |
-| VB-07 | `test_workbench_flow.py` hardcoded to root "/" | base-path | MEDIUM | OPEN | 14+ bare root-relative paths |
-| VB-08 | `test_analyze_run_compat.py` hardcoded to root "/" | base-path | MEDIUM | OPEN | 6 tests use bare `/api/*` paths |
+| VB-06 | `test_contracts.py` hardcoded to root "/" | base-path | ~~MEDIUM~~ | CLOSED (`7d3b186`) | `hosted_client` fixture parameterizes root + /xpedit; 80/80 pass |
+| VB-07 | `test_workbench_flow.py` hardcoded to root "/" | base-path | ~~MEDIUM~~ | CLOSED (`7d3b186`) | `hosted_client` fixture parameterizes root + /xpedit |
+| VB-08 | `test_analyze_run_compat.py` hardcoded to root "/" | base-path | ~~MEDIUM~~ | CLOSED (`7d3b186`) | `hosted_client` fixture parameterizes root + /xpedit |
 | VB-09 | `full-workflow-with-game.spec.js` hardcoded URL | base-path | LOW | OPEN | Hardcoded `http://localhost:5071/workbench` |
 | VB-10 | `all_black.png` fixture exists but no test references it | both | LOW | OPEN | `tests/fixtures/known_bad/all_black.png` — orphaned |
 | VB-11 | 42 of 48 debug API functions unused by automated tests | both | INFO | OPEN (design gap) | Only `getState`, `frameSignature`, `readFrameCell`, `suppressAutoSave`, `suppressRender`, `flushSave` used |

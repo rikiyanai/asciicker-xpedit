@@ -34,11 +34,11 @@ M1 is **not yet closed**. Remaining blockers (all on canonical `master`, not bas
 |-------|--------|----------|
 | JS fetch calls (`workbench.js`) | CLEAN | All 26+ fetches use `bp()` — `workbench.js:10` |
 | WS font URL (`whole-sheet-init.js`) | CLEAN | Uses `_BP` prefix — `whole-sheet-init.js:21-22` |
-| HTML asset tags (`workbench.html`) | **4 BROKEN paths** | Lines 7, 8, 425, 426 — root-relative `<link>`/`<script>` tags |
+| HTML asset tags (`workbench.html`) | **CLEAN** (rewritten by `_serve_web_html()` at `app.py:79-99`) | Stale-doc debt only — server-side rewrite handles all 4 paths |
 | Flask route handling (`app.py`) | CLEAN | `BASE_PATH` config in `config.py:normalize_base_path()` |
 | M1 edge-workflow verifier | CLOSED for base-path lane | No `/xpedit`-specific regressions remain |
 | UI test framework | CLEAN | `resolveRoute()` + `--base-url` in `scripts/ui_tests/` |
-| Python API tests | **ROOT-ONLY** | `test_contracts.py`, `test_workbench_flow.py`, `test_analyze_run_compat.py` hardcoded to `/` |
+| Python API tests | **BOTH** (root + /xpedit) | `hosted_client` fixture in `conftest.py` parameterizes all 3 test files (`7d3b186`) |
 
 ### What "M2 Planning for the Base-Path Version" Means
 
@@ -47,7 +47,7 @@ This plan defines the verifier architecture and bug resolution sequence needed f
 2. Use `resolveRoute()` or equivalent for all navigation
 3. Produce route-tagged artifacts so results are traceable to the hosting mode
 
-This is not about implementing base-path support in the product (largely done in JS; 4 HTML paths remain). It is about making the **verifier** base-path-native so that every future M2 feature is automatically tested under both hosting modes.
+This is not about implementing base-path support in the product (already complete — JS uses `bp()`/`_BP`, HTML rewritten server-side). It is about making the **verifier** base-path-native so that every future M2 feature is automatically tested under both hosting modes.
 
 ---
 
@@ -61,15 +61,18 @@ Summary counts:
 | Classification | Open | Fixed | Deferred | Total |
 |---------------|------|-------|----------|-------|
 | Product bug | 8 | 0 | 5 | 13 (PB-04 reclassified as stale-doc) |
-| Verifier bug/gap | 11 | 0 | 0 | 11 |
+| Verifier bug/gap | 6 | 5 | 0 | 11 |
 | Debug API gap | 3 | 0 | 0 | 3 |
 | Docs/planning gap | 5 | 0 | 0 | 5 |
-| **Total** | **28** | **0** | **5** | **33** |
+| **Total** | **22** | **5** | **5** | **32** |
 
-Critical items requiring immediate attention:
+**Resolved on this branch (2026-03-23):**
+- ~~VB-01~~ (`getState()` P1 fields) — CLOSED at `f246828`
+- ~~VB-02~~ (`getState()` P2 fields) — CLOSED at `f246828`
+- ~~VB-06/07/08~~ (Python test base-path parameterization) — CLOSED at `7d3b186`
+
+**Critical items still requiring attention:**
 - **PB-10** (runtime files missing) — blocks all Skin Dock testing
-- **VB-01** (`getState()` missing 9 P1 fields) — blocks verifier slice implementation
-- ~~PB-04~~ (4 HTML root-relative paths) — **STALE-DOC**: `_serve_web_html()` at `app.py:79-99` already rewrites all 4 paths with `BASE_PATH` prefix at serve time
 - **PB-12** (50 cell mismatches) — blocks M1 closure
 
 ---
@@ -242,16 +245,20 @@ Must resolve before M2 execution begins. These are NOT base-path issues.
 
 Build the shared infrastructure all 5 slices depend on.
 
-| Task | Files to Create/Modify | Why Next |
-|------|----------------------|----------|
-| Add 9 P1 fields to `getState()` | `web/workbench.js:7103-7125` | VB-01 — blocks all M2 verifier slices |
-| Add 2 P2 fields to `getState()` | `web/workbench.js:7103-7125` | VB-02 — source panel verifier needs these |
-| Extract shared selectors module | `scripts/xp_fidelity_test/selectors.mjs` (NEW) | VB-05 — DRY selector management |
-| Extract shared verifier library | `scripts/xp_fidelity_test/verifier_lib.mjs` (NEW) | VB-05 — state capture, assertion, artifact writing |
-| Create action registry JSON | `scripts/xp_fidelity_test/action_registry.json` (NEW) | VB-05 — canonical action→selector→state mapping |
-| Create recipe schema JSON | `scripts/xp_fidelity_test/recipe_schema.json` (NEW) | VB-05 — schema for SAR test recipes |
-| Parameterize Python API tests for base-path | `tests/test_contracts.py`, `tests/test_workbench_flow.py`, `tests/test_analyze_run_compat.py` | VB-06/07/08 — add `normalize_base_path` fixture |
-| Add `resolveRoute()` to fidelity runners | `scripts/xp_fidelity_test/run_fidelity_test.mjs` (+ bundle, edge) | Route-aware for both hosting modes |
+| Task | Files to Create/Modify | Status |
+|------|----------------------|--------|
+| ~~Add 9 P1 fields to `getState()`~~ | `web/workbench.js:7103-7125` | **DONE** (`f246828`) |
+| ~~Add 2 P2 fields to `getState()`~~ | `web/workbench.js:7103-7125` | **DONE** (`f246828`) |
+| Extract shared selectors module | `scripts/xp_fidelity_test/selectors.mjs` (NEW) | NOT STARTED |
+| ~~Extract shared verifier library~~ | `scripts/xp_fidelity_test/verifier_lib.mjs` (NEW) | **DONE** (`7d3b186`) — needs readiness hardening |
+| Create action registry JSON | `scripts/xp_fidelity_test/action_registry.json` (NEW) | NOT STARTED |
+| Create recipe schema JSON | `scripts/xp_fidelity_test/recipe_schema.json` (NEW) | NOT STARTED |
+| ~~Parameterize Python API tests for base-path~~ | `tests/conftest.py`, `tests/test_contracts.py`, `tests/test_workbench_flow.py`, `tests/test_analyze_run_compat.py` | **DONE** (`7d3b186`) — 80/80 pass |
+| Add `resolveRoute()` to fidelity runners | `scripts/xp_fidelity_test/run_fidelity_test.mjs` (+ bundle, edge) | NOT STARTED |
+| **Reconcile edge-workflow with canonical master** | `scripts/xp_fidelity_test/run_edge_workflow_test.mjs` | **NEW** — branch dropped ~360 lines including generated SAR, stronger waits |
+| **Reconcile bundle-fidelity with canonical master** | `scripts/xp_fidelity_test/run_bundle_fidelity_test.mjs` | **NEW** — branch dropped metaOut dual-gate, bbox caching, preload path |
+| **Harden verifier_lib.mjs readiness** | `scripts/xp_fidelity_test/verifier_lib.mjs` | **NEW** — replace fixed sleep with M1-grade readiness wait |
+| **Document shared state-capture contract** | `docs/plans/` (new) | **NEW** — getState() vs _state() sourcing policy |
 
 ### Wave 2: Structural PNG Baseline Gates (Slice 1)
 

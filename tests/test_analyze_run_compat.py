@@ -106,6 +106,7 @@ def test_analyze_suggestion_is_run_compatible(client, tmp_path: Path, w: int, h:
         "frames": ",".join(str(x) for x in analyze_data["suggested_frames"]),
         "source_projs": suggested_source_projs,
         "render_resolution": suggested_render_resolution,
+        "native_compat": False,
     }
     run_resp = client.post("/api/run", data=json.dumps(run_payload), content_type="application/json")
     assert run_resp.status_code == 200, run_resp.get_json()
@@ -231,6 +232,7 @@ def test_analyze_suggestion_is_run_compatible_hosted(hosted_client, tmp_path: Pa
         "frames": ",".join(str(x) for x in analyze_data["suggested_frames"]),
         "source_projs": suggested_source_projs,
         "render_resolution": suggested_render_resolution,
+        "native_compat": False,
     }
     run_resp = client.post(f"{prefix}/api/run", data=json.dumps(run_payload), content_type="application/json")
     assert run_resp.status_code == 200, run_resp.get_json()

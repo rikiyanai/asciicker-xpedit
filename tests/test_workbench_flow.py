@@ -20,6 +20,7 @@ def test_run_to_workbench_to_export(client):
         "frames": "8",
         "source_projs": 1,
         "render_resolution": 24,
+        "native_compat": False,
     }
     run_resp = client.post("/api/run", data=json.dumps(run_payload), content_type="application/json")
     assert run_resp.status_code == 200
@@ -185,6 +186,7 @@ def test_run_to_workbench_to_export_hosted(hosted_client):
         "frames": "8",
         "source_projs": 1,
         "render_resolution": 24,
+        "native_compat": False,
     }
     run_resp = client.post(f"{prefix}/api/run", data=json.dumps(run_payload), content_type="application/json")
     assert run_resp.status_code == 200

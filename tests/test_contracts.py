@@ -44,6 +44,7 @@ def test_run_contract(client):
         "frames": "8",
         "source_projs": 1,
         "render_resolution": 24,
+        "native_compat": False,
     }
     resp = client.post("/api/run", data=json.dumps(payload), content_type="application/json")
     assert resp.status_code == 200
@@ -100,6 +101,7 @@ def test_run_contract_hosted(hosted_client):
         "frames": "8",
         "source_projs": 1,
         "render_resolution": 24,
+        "native_compat": False,
     }
     resp = client.post(f"{prefix}/api/run", data=json.dumps(payload), content_type="application/json")
     assert resp.status_code == 200

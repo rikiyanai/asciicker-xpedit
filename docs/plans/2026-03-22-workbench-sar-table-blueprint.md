@@ -13,6 +13,10 @@ Depends on:
 
 This document is the exhaustive State-Action-Response (SAR) blueprint for the full shipped workbench. It enumerates every observable state domain, every user-reachable action, and every expected response/invariant. It maps each SAR slice to the Milestone 1 and Milestone 2 verifier families and identifies gaps in the current debug/state exposure API.
 
+This blueprint is also the canonical input to future generated verifier sequences. The long-term
+edge-case verifier should be able to choose bounded randomized actions from this table, derive the
+expected SAR assertions for each step, and emit a reproducible recipe + seed artifact.
+
 This is a planning/documentation artifact. It does not modify any code.
 
 ---

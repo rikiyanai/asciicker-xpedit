@@ -2,7 +2,7 @@
 
 **Goal:** Add a second verifier lane (`edge_workflow`) to the canonical `scripts/xp_fidelity_test/` family that checks workflow state transitions and gating honesty — without touching `full_recreation` semantics.
 
-**Architecture:** Sibling runner (`run_edge_workflow_test.mjs`) alongside existing `run_bundle_fidelity_test.mjs`. Shares Playwright launch and page-navigation patterns but has its own action DSL, state snapshot function, and invariant checker. Recipes are hardcoded named objects (not generated from truth tables). Shell entry point `run_edge_workflow.sh` wraps invocation.
+**Architecture:** Sibling runner (`run_edge_workflow_test.mjs`) alongside existing `run_bundle_fidelity_test.mjs`. Shares Playwright launch and page-navigation patterns but has its own action DSL, state snapshot function, and invariant checker. V1 uses hardcoded named recipes. V2 must promote those same action/state rules into a bounded randomized SAR-sequence generator for the full Milestone 1 workbench subset. Shell entry point `run_edge_workflow.sh` wraps invocation.
 
 **Tech Stack:** Playwright (JS/ESM), Node.js, shell wrapper
 
@@ -26,6 +26,11 @@ A sibling runner is the cleanest path. It does **not** touch:
 - `run_fidelity_test.mjs`
 - `recipe_generator.py`
 - `truth_table.py`
+
+This implementation plan is therefore split into:
+
+- **v1:** deterministic named recipes for known blocker classes
+- **v2:** generated SAR sequences for irrational but user-reachable action chains
 
 ## Files Overview
 
@@ -82,6 +87,7 @@ These are the oracle values for geometry assertions in the **Milestone 1 bundle-
 | 1 | State snapshot shape + action DSL skeleton + shell wrapper runnable | `refactor: add edge-case verifier state snapshots` |
 | 2 | Recipe family 1 (partial_bundle_gating) passes/fails with structured output | `feat: add partial bundle gating verifier recipes` |
 | 3 | Recipe family 2 (action_tab_hydration) passes/fails with structured output | `feat: add action-tab hydration verifier recipes` |
+| 4 | Generated SAR edge sequences run from bounded action vocabulary with reproducible seeds | `feat: add generated SAR edge-workflow recipes` |
 
 ---
 
@@ -293,6 +299,21 @@ const ACTIONS = {
   },
 };
 ```
+
+The v1 action DSL is intentionally small. For v2 generated SAR sequences, extend it with at least:
+
+- `undo`
+- `redo`
+- `switch_active_layer`
+- `upload_png`
+- `convert_action`
+
+These are required to cover the real blocker class of irrational user flows such as:
+
+- upload -> `New XP`
+- edit -> undo -> redo -> redo attempt
+- switch layer -> edit -> action-tab switch
+- import/replace -> `New XP`
 
 ### C. Recipe executor with invariant checks
 
@@ -749,7 +770,70 @@ git commit -m "feat: add action-tab hydration verifier recipes"
 
 ---
 
-## Task 5: Update README
+## Task 5: Implement bounded generated SAR edge sequences
+
+After v1 deterministic recipes are stable, add a generated-sequence layer that turns the
+Milestone 1 workbench SAR subset into reproducible randomized workflows.
+
+### Scope
+
+- bounded sequence length, not open-ended fuzzing
+- fixed action vocabulary
+- seedable generation
+- per-step expected responses derived from SAR rules
+
+### Required action vocabulary
+
+- `apply_template`
+- `switch_action_tab`
+- `upload_png`
+- `convert_action`
+- `save_action`
+- `export_action`
+- `new_xp`
+- `refresh_page`
+- `test_this_skin`
+- `undo`
+- `redo`
+- `switch_active_layer`
+
+### Generator rules
+
+The generator must:
+
+1. choose only user-reachable actions
+2. respect action preconditions when building the sequence
+3. derive the expected SAR assertions for each chosen step
+4. write the generated recipe and seed into the output artifact for replay
+
+Example target flows:
+
+- upload PNG -> `New XP`
+- upload PNG -> convert -> `New XP`
+- edit -> undo -> redo -> redo attempt
+- switch active layer -> edit -> undo -> switch action tab
+- partial bundle progress -> refresh -> `Test This Skin`
+
+### Deliverable shape
+
+- `--recipe generated_sar_sequences`
+- optional `--seed <n>`
+- output includes:
+  - seed
+  - generated action list
+  - per-step expected assertions
+  - failure step with pre/post state
+
+### Commit
+
+```bash
+git add scripts/xp_fidelity_test/run_edge_workflow_test.mjs scripts/xp_fidelity_test/README.md
+git commit -m "feat: add generated SAR edge-workflow recipes"
+```
+
+---
+
+## Task 6: Update README
 
 **Files:**
 - Modify: `scripts/xp_fidelity_test/README.md`

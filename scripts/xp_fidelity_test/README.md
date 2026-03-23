@@ -78,13 +78,33 @@ See `docs/AGENT_PROTOCOL.md` Section 13 and
 Tests workflow state transitions and gating honesty. Does not replace
 `full_recreation` or bundle fidelity testing.
 
+Two modes:
+
+- **v1 deterministic recipes**: named recipes for known blocker classes
+- **v2 generated SAR sequences**: bounded randomized action chains for irrational
+  but user-reachable flows (new_xp, layer switches, refresh recovery, tab cycling,
+  repeated save/export, mixed partial-bundle actions)
+
 ### What it tests
+
+**Deterministic recipes (v1):**
 
 - Bundle readiness gating honesty at partial states (0/3, after 1 save)
 - `Test This Skin` blocked state honesty — no silent freeze at invalid states
 - Action-tab session hydration with exact geometry verification per action
 - Session ID stability (same action = same session) and uniqueness (different actions = different sessions)
 - Whole-sheet editor mounting after tab switches
+
+**Generated SAR sequences (v2):**
+
+- Bounded random action sequences from a 10-action vocabulary
+- Precondition-gated: only legal actions chosen per simulated state
+- Seedable and deterministic: `--seed <n>` reproduces the exact sequence
+- Per-step SAR assertions derived from the workbench state model
+- Covers: tab switching, layer switching, new_xp, save/export on blank,
+  refresh recovery (with re-apply), test_this_skin gating
+- Undo/redo in vocabulary but only eligible when history exists (requires
+  cell editing actions not yet in the generated vocabulary)
 
 ### Geometry oracle
 
@@ -100,16 +120,44 @@ Expected geometry per action is derived from `config/template_registry.json`
 ### Usage
 
 ```bash
-# All edge-case recipes
+# All recipes (deterministic + generated)
 bash scripts/xp_fidelity_test/run_edge_workflow.sh --headed
 
-# Specific recipe
+# Deterministic recipes only
 bash scripts/xp_fidelity_test/run_edge_workflow.sh --recipe partial_bundle_gating --headed
 bash scripts/xp_fidelity_test/run_edge_workflow.sh --recipe action_tab_hydration
 
-# Custom URL
-bash scripts/xp_fidelity_test/run_edge_workflow.sh --url http://localhost:5071/workbench
+# Generated SAR sequences only (default: 3 seeds, 6 steps each)
+bash scripts/xp_fidelity_test/run_edge_workflow.sh --recipe generated_sar_sequences
+
+# Generated with specific seed (reproducible)
+bash scripts/xp_fidelity_test/run_edge_workflow.sh --recipe generated_sar_sequences --seed 42
+
+# Generated with custom count and length
+bash scripts/xp_fidelity_test/run_edge_workflow.sh --recipe generated_sar_sequences --gen-count 5 --gen-length 8
+
+# Custom URL (for base-path testing when PIPELINE_BASE_PATH support lands)
+bash scripts/xp_fidelity_test/run_edge_workflow.sh --url http://127.0.0.1:5073/xpedit/workbench
+WORKBENCH_URL=http://127.0.0.1:5073/xpedit/workbench bash scripts/xp_fidelity_test/run_edge_workflow.sh
 ```
+
+### Generated SAR artifacts
+
+Each generated seed emits two files to the output directory:
+
+- `generated-sar-seed<N>-recipe.json` — the generated sequence (seed, steps, preconditions, expected assertions). Written BEFORE execution for reproducibility.
+- `generated-sar-seed<N>-result.json` — execution result with pre/post state snapshots and assertion pass/fail per step.
+
+### Base-path compatibility
+
+The generated edge-workflow verifier appears base-path-ready in its current URL
+handling and DOM-driven action path; full proof still requires rerunning against
+a real prefixed deployment.
+
+As of 2026-03-22, `PIPELINE_BASE_PATH` support is not yet implemented in the
+product server. CP3 validates verifier readiness only — prefixed-product behavior
+cannot be tested until the product serves a base-path workbench. When it does,
+the same seeds can be re-run with `--url` pointing at the prefixed URL.
 
 ### Report shape
 
@@ -124,6 +172,8 @@ The `edge-workflow-result.json` includes:
 Each step records pre/post state including:
 - `templateSetKey`, `bundleId`, `activeActionKey`, `sessionId`, `actionStates`
 - `bundleStatus`, `wbStatus`, `webbuildState` (DOM text)
+- `historyDepth`, `futureDepth` (undo/redo stack sizes)
+- `activeLayer`, `sessionDirty`
 - `geometry` (gridCols, gridRows, frameWChars, frameHChars, angles, anims, projs)
 - `buttons` (save, exportXp, newXp, testThisSkin — exists + disabled + text)
 - `wholeSheetMounted`

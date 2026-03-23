@@ -41,9 +41,9 @@ async function captureState(page, label) {
       return { exists: true, disabled: !!el.disabled, text: String(el.textContent || '').trim() };
     };
 
-    // Curated state via getState() — now includes P1 fields (bundleId, activeActionKey,
+    // Curated state via getState() — includes P1 fields (bundleId, activeActionKey,
     // templateSetKey, gridCols, gridRows, activeLayer, visibleLayers, layerCount,
-    // sessionDirty) as of commit f246828.
+    // sessionDirty) as of commit f246828. Primary source per state-capture contract.
     const geo = (window.__wb_debug && typeof window.__wb_debug.getState === 'function')
       ? window.__wb_debug.getState() : null;
 

@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import time
 import uuid
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 
 from flask import Blueprint, Flask, Response, jsonify, redirect, request, send_from_directory, send_file
 
-from .config import ensure_dirs, ROOT, EXPORT_DIR, ENABLED_FAMILIES, BASE_PATH
+from .config import ensure_dirs, ROOT, EXPORT_DIR, ENABLED_FAMILIES, BASE_PATH, BUG_REPORTS_DIR
 from .models import ApiError, RunConfig, parse_frames_csv
 
 
@@ -185,6 +186,27 @@ def _runtime_preflight_payload() -> dict:
     }
 
 
+def _save_bug_report(payload: dict, req_id: str) -> dict:
+    ts = datetime.now(UTC)
+    report_id = f"bug-{ts.strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:8]}"
+    report_dir = BUG_REPORTS_DIR / report_id
+    report_dir.mkdir(parents=True, exist_ok=True)
+    report_path = report_dir / "report.json"
+    doc = {
+        "report_id": report_id,
+        "request_id": req_id,
+        "created_at": ts.isoformat().replace("+00:00", "Z"),
+        "server_boot_nonce": SERVER_BOOT_NONCE,
+        "payload": payload,
+    }
+    report_path.write_text(json.dumps(doc, indent=2, sort_keys=True), encoding="utf-8")
+    return {
+        "ok": True,
+        "report_id": report_id,
+        "report_path": str(report_path.resolve()),
+    }
+
+
 def create_app() -> Flask:
     ensure_dirs()
     app = Flask(__name__)
@@ -234,6 +256,24 @@ def create_app() -> Flask:
     @bp.get("/api/workbench/runtime-preflight")
     def api_wb_runtime_preflight():
         return jsonify(_runtime_preflight_payload()), 200
+
+    @bp.post("/api/workbench/report-bug")
+    def api_wb_report_bug():
+        req_id = str(uuid.uuid4())
+        try:
+            payload = request.get_json(silent=True) or {}
+            category = str(payload.get("category", "")).strip()
+            severity = str(payload.get("severity", "")).strip()
+            description = str(payload.get("description", "")).strip()
+            if not category:
+                raise ApiError("category is required", "missing_category", "workbench", req_id, 400)
+            if not severity:
+                raise ApiError("severity is required", "missing_severity", "workbench", req_id, 400)
+            if not description:
+                raise ApiError("description is required", "missing_description", "workbench", req_id, 400)
+            return jsonify(_save_bug_report(payload, req_id)), 201
+        except ApiError as e:
+            return _err(e)
 
     @bp.get("/api/workbench/templates")
     def api_wb_templates():

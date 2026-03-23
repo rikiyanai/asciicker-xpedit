@@ -3,6 +3,7 @@ import path from 'node:path';
 import { createRunDir, ensureDir, writeJson } from '../core/artifacts.mjs';
 import { launchChromium } from '../core/playwright_loader.mjs';
 import { ensureFlaskWorkbenchServer, stopServer } from '../core/server_control.mjs';
+import { resolveRoute } from '../core/url_helpers.mjs';
 import { NavigationAgent } from '../subagents/navigation_agent.mjs';
 import {
   WorkbenchSmokeAgent,
@@ -21,9 +22,12 @@ import { WorkbenchUICoverageAgent } from '../subagents/workbench_coverage_agent.
 function defaultBaseUrl() {
   const raw = String(process.env.WORKBENCH_URL || 'http://127.0.0.1:5071/workbench');
   try {
-    return new URL(raw).origin;
+    const u = new URL(raw);
+    if (!u.pathname || u.pathname === '/') u.pathname = '/workbench';
+    u.search = '';
+    return u.toString();
   } catch {
-    return 'http://127.0.0.1:5071';
+    return 'http://127.0.0.1:5071/workbench';
   }
 }
 
@@ -302,7 +306,7 @@ async function main() {
   const runDir = await createRunDir(opts.command.replace(/[:]/g, '-'));
   let serverHandle = null;
   if (!opts.noServerStart) {
-    serverHandle = await ensureFlaskWorkbenchServer({ baseUrl: new URL('/workbench', opts.baseUrl).toString(), cwd: process.cwd(), timeoutMs: 30000 });
+    serverHandle = await ensureFlaskWorkbenchServer({ baseUrl: resolveRoute(opts.baseUrl, '/workbench'), cwd: process.cwd(), timeoutMs: 30000 });
   }
   let summary;
   const startedAt = Date.now();

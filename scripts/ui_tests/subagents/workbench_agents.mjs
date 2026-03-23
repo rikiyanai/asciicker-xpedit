@@ -3,6 +3,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 
 import { BaseSubagent } from './base_subagent.mjs';
+import { resolveRoute } from '../core/url_helpers.mjs';
 import { BrowserSkill } from '../core/browser_skill.mjs';
 import { ensureDir } from '../core/artifacts.mjs';
 
@@ -72,7 +73,7 @@ export class WorkbenchSmokeAgent extends BaseSubagent {
     await ensureDir(artifactDir);
     const skill = new BrowserSkill(page, { artifactDir });
     this.step('open_workbench');
-    await skill.open_url(new URL('/workbench', baseUrl).toString(), { screenshotLabel: 'workbench_open' });
+    await skill.open_url(resolveRoute(baseUrl, '/workbench'), { screenshotLabel: 'workbench_open' });
     await skill.wait_for({ selector: '#wbUpload', state: 'visible' }, { screenshotLabel: 'wb_upload_visible' });
     await skill.wait_for({ selector: '#wbAnalyze', state: 'visible' }, { screenshotLabel: 'wb_analyze_visible' });
     await skill.wait_for({ selector: '#wbRun', state: 'visible' }, { screenshotLabel: 'wb_run_visible' });
@@ -94,7 +95,7 @@ export class WorkbenchSkinDockE2EAgent extends BaseSubagent {
     await ensureDir(artifactDir);
     if (!pngPath) return { pass: false, error_summary: 'pngPath is required for WorkbenchSkinDockE2EAgent' };
     const script = path.join(process.cwd(), 'scripts', 'workbench_png_to_skin_test_playwright.mjs');
-    const args = [script, '--url', new URL('/workbench', baseUrl).toString(), '--png', pngPath, '--timeout-sec', String(timeoutSec), '--move-sec', String(moveSec)];
+    const args = [script, '--url', resolveRoute(baseUrl, '/workbench'), '--png', pngPath, '--timeout-sec', String(timeoutSec), '--move-sec', String(moveSec)];
     if (headed) args.push('--headed');
     this.step('spawn_e2e_script', { script, args: args.slice(1) });
     const proc = spawn('node', args, { cwd: process.cwd(), env: { ...process.env } });
@@ -245,7 +246,7 @@ export class WorkbenchAnalyzeOverrideRecoveryAgent extends BaseSubagent {
     if (!pngPath) return { pass: false, error_summary: 'pngPath is required (or known_good fixture missing)' };
 
     this.step('open_workbench');
-    await skill.open_url(new URL('/workbench', baseUrl).toString(), { screenshotLabel: 'analyze_override_open' });
+    await skill.open_url(resolveRoute(baseUrl, '/workbench'), { screenshotLabel: 'analyze_override_open' });
 
     this.step('upload');
     await page.setInputFiles('#wbFile', pngPath);
@@ -374,7 +375,7 @@ export class WorkbenchSourceGridDragDropAgent extends BaseSubagent {
     if (!pngPath) return { pass: false, error_summary: 'pngPath is required (or known_good fixture missing)' };
 
     this.step('open_workbench');
-    await skill.open_url(new URL('/workbench', baseUrl).toString(), { screenshotLabel: 'source_grid_dragdrop_open' });
+    await skill.open_url(resolveRoute(baseUrl, '/workbench'), { screenshotLabel: 'source_grid_dragdrop_open' });
 
     this.step('upload_analyze_convert', { pngPath });
     await wbUploadAnalyzeConvert({ page, skill, pngPath });
@@ -492,7 +493,7 @@ export class WorkbenchAnalyzeFailureRecoveryAgent extends BaseSubagent {
     const pngPath = ctxPng || await pickDefaultFixturePng(process.cwd());
     if (!pngPath) return { pass: false, error_summary: 'pngPath is required (or known_good fixture missing)' };
 
-    await skill.open_url(new URL('/workbench', baseUrl).toString(), { screenshotLabel: 'analyze_fail_recover_open' });
+    await skill.open_url(resolveRoute(baseUrl, '/workbench'), { screenshotLabel: 'analyze_fail_recover_open' });
     await wbUploadAnalyzeConvertSetupOnly(page, skill, pngPath);
 
     const suggested = await page.evaluate(() => ({
@@ -567,7 +568,7 @@ export class WorkbenchGridSelectionRequirementsAgent extends BaseSubagent {
     const pngPath = ctxPng || await pickDefaultFixturePng(process.cwd());
     if (!pngPath) return { pass: false, error_summary: 'pngPath is required (or known_good fixture missing)' };
 
-    await skill.open_url(new URL('/workbench', baseUrl).toString(), { screenshotLabel: 'grid_requirements_open' });
+    await skill.open_url(resolveRoute(baseUrl, '/workbench'), { screenshotLabel: 'grid_requirements_open' });
     await wbUploadAnalyzeConvert({ page, skill, pngPath });
 
     const state0 = await page.evaluate(() => window.__wb_debug?.getState?.() || null);
@@ -700,7 +701,7 @@ export class WorkbenchLayoutLegacyAuditAgent extends BaseSubagent {
     const pngPath = ctxPng || await pickDefaultFixturePng(process.cwd());
     if (!pngPath) return { pass: false, error_summary: 'pngPath is required (or known_good fixture missing)' };
 
-    await skill.open_url(new URL('/workbench', baseUrl).toString(), { screenshotLabel: 'layout_legacy_audit_open' });
+    await skill.open_url(resolveRoute(baseUrl, '/workbench'), { screenshotLabel: 'layout_legacy_audit_open' });
     await wbUploadAnalyzeConvert({ page, skill, pngPath });
 
     const audit = await page.evaluate(() => {
@@ -840,7 +841,7 @@ export class WorkbenchXpEditorSemanticAgent extends BaseSubagent {
     const pngPath = ctxPng || await pickDefaultFixturePng(process.cwd());
     if (!pngPath) return { pass: false, error_summary: 'pngPath is required (or known_good fixture missing)' };
 
-    await skill.open_url(new URL('/workbench', baseUrl).toString(), { screenshotLabel: 'xp_semantic_open' });
+    await skill.open_url(resolveRoute(baseUrl, '/workbench'), { screenshotLabel: 'xp_semantic_open' });
     await wbUploadAnalyzeConvert({ page, skill, pngPath });
     await page.click('#gridPanel .frame-cell[data-row="0"][data-col="0"]');
     await page.click('#openInspectorBtn');
@@ -1316,7 +1317,7 @@ export class WorkbenchSourceAddToRowSequenceAgent extends BaseSubagent {
     const pngPath = ctxPng || await pickDefaultFixturePng(process.cwd());
     if (!pngPath) return { pass: false, error_summary: 'pngPath is required (or known_good fixture missing)' };
 
-    await skill.open_url(new URL('/workbench', baseUrl).toString(), { screenshotLabel: 'source_row_seq_open' });
+    await skill.open_url(resolveRoute(baseUrl, '/workbench'), { screenshotLabel: 'source_row_seq_open' });
     await wbUploadAnalyzeConvert({ page, skill, pngPath });
 
     // Pick target row by selecting the first frame in row 0.

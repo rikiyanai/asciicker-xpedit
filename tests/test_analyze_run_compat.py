@@ -7,9 +7,9 @@ import pytest
 from PIL import Image, ImageDraw
 
 
-def _upload(client, path: Path):
+def _upload(client, path: Path, prefix: str = ""):
     with path.open("rb") as f:
-        return client.post("/api/upload", data={"file": (f, path.name)}, content_type="multipart/form-data")
+        return client.post(f"{prefix}/api/upload", data={"file": (f, path.name)}, content_type="multipart/form-data")
 
 
 def _write_fixture(path: Path, w: int, h: int) -> None:
@@ -195,3 +195,42 @@ def test_analyze_keeps_source_projs_1_without_split_hint(client, tmp_path: Path)
     hint = ((data.get("diagnostics") or {}).get("grid_hint") or {})
     assert bool(hint.get("projection_split_hint")) is False
     assert int(data["suggested_source_projs"]) == 1
+
+
+# --- Base-path-parameterized test (root + /xpedit) ---
+
+
+@pytest.mark.parametrize(
+    "w,h",
+    [
+        (315, 200),
+        (34, 24),
+    ],
+)
+def test_analyze_suggestion_is_run_compatible_hosted(hosted_client, tmp_path: Path, w: int, h: int):
+    """Same as test_analyze_suggestion_is_run_compatible but parameterized over hosting mode."""
+    client, prefix = hosted_client
+    fixture = tmp_path / f"compat_{w}x{h}.png"
+    _write_fixture(fixture, w, h)
+
+    up = _upload(client, fixture, prefix).get_json()
+    analyze_resp = client.post(
+        f"{prefix}/api/analyze",
+        data=json.dumps({"source_path": up["source_path"]}),
+        content_type="application/json",
+    )
+    assert analyze_resp.status_code == 200
+    analyze_data = analyze_resp.get_json()
+    suggested_source_projs = int(analyze_data.get("suggested_source_projs", 1))
+    suggested_render_resolution = int(analyze_data.get("suggested_render_resolution", 12))
+
+    run_payload = {
+        "source_path": up["source_path"],
+        "name": f"compat_{w}x{h}",
+        "angles": int(analyze_data["suggested_angles"]),
+        "frames": ",".join(str(x) for x in analyze_data["suggested_frames"]),
+        "source_projs": suggested_source_projs,
+        "render_resolution": suggested_render_resolution,
+    }
+    run_resp = client.post(f"{prefix}/api/run", data=json.dumps(run_payload), content_type="application/json")
+    assert run_resp.status_code == 200, run_resp.get_json()

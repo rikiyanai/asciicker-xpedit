@@ -4,9 +4,9 @@ import json
 from pathlib import Path
 
 
-def _upload(client, path: Path):
+def _upload(client, path: Path, prefix: str = ""):
     with path.open("rb") as f:
-        return client.post("/api/upload", data={"file": (f, path.name)}, content_type="multipart/form-data")
+        return client.post(f"{prefix}/api/upload", data={"file": (f, path.name)}, content_type="multipart/form-data")
 
 
 def test_run_to_workbench_to_export(client):
@@ -167,3 +167,51 @@ def test_run_to_workbench_to_export(client):
     assert "missing_files" in runtime_preflight
     assert "invalid_files" in runtime_preflight
     assert "maps_found" in runtime_preflight
+
+
+# --- Base-path-parameterized test (root + /xpedit) ---
+
+
+def test_run_to_workbench_to_export_hosted(hosted_client):
+    """Same flow as test_run_to_workbench_to_export but parameterized over hosting mode."""
+    client, prefix = hosted_client
+    fixture = Path(__file__).parent / "fixtures" / "known_good" / "cat_sheet.png"
+    up = _upload(client, fixture, prefix).get_json()
+
+    run_payload = {
+        "source_path": up["source_path"],
+        "name": "cat",
+        "angles": 1,
+        "frames": "8",
+        "source_projs": 1,
+        "render_resolution": 24,
+    }
+    run_resp = client.post(f"{prefix}/api/run", data=json.dumps(run_payload), content_type="application/json")
+    assert run_resp.status_code == 200
+    run_data = run_resp.get_json()
+
+    wb_resp = client.post(
+        f"{prefix}/api/workbench/load-from-job",
+        data=json.dumps({"job_id": run_data["job_id"]}),
+        content_type="application/json",
+    )
+    assert wb_resp.status_code == 201
+    wb_data = wb_resp.get_json()
+    assert wb_data["populated_cells"] > 0
+    assert wb_data["grid_cols"] > 0
+    assert wb_data["grid_rows"] > 0
+
+    export_resp = client.post(
+        f"{prefix}/api/workbench/export-xp",
+        data=json.dumps({"session_id": wb_data["session_id"]}),
+        content_type="application/json",
+    )
+    assert export_resp.status_code == 200
+    export_data = export_resp.get_json()
+    assert Path(export_data["xp_path"]).exists()
+    assert export_data["checksum"]
+
+    runtime_preflight_resp = client.get(f"{prefix}/api/workbench/runtime-preflight")
+    assert runtime_preflight_resp.status_code == 200
+    runtime_preflight = runtime_preflight_resp.get_json()
+    assert isinstance(runtime_preflight.get("ok"), bool)

@@ -11,8 +11,9 @@ This checklist is the single source of truth for launch/no-launch decisions.
 - [ ] Save/export/test authoring loop works end-to-end without workarounds
 - [ ] Milestone 1 closeout recorded in `docs/INDEX.md`
 - [ ] Manual MVP launch does not depend on verifier scripts being present on the host
+- [ ] A visible in-product pre-alpha bug-report path exists and captures enough context to make user reports actionable
 
-**Current status:** M1 closeout patches landed (`aed6e40`, `14d99d6`), awaiting final green decision and manual runtime confirmation.
+**Current status:** M1 formally CLOSED on canonical root-hosted workbench (2026-03-23, commit `14e8e95`). Edge-workflow verifier 7/7 PASS. Fixes: EV-001 (bundle gating), EV-002 (blank-save), EV-003 (tab-switch race). Base-path clean. Canvas-edge mismatches classified non-blocking. Manual runtime confirmation still needed before launch.
 
 ## Gate 2: Deploy Package Builds
 

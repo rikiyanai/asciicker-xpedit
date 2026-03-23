@@ -1346,3 +1346,90 @@ rather than product defects.
 - Session ID stability: same action = same session across visits
 - Session ID uniqueness: different actions = different sessions
 - Whole-sheet editor mounted after every switch
+
+---
+
+## Verifier Drift Catch — 2026-03-23
+
+**Status:** OPEN / ARCHITECTURE AUDIT REQUIRED
+
+This catch records drift found after M1 closeout while preparing Milestone 2 work.
+The issue is not a newly discovered product defect. The issue is that verifier code,
+shared verifier infrastructure, and planning docs are no longer moving in lockstep
+across `master` and `feat/base-path-support`.
+
+### Explicit milestone baselines
+
+**Milestone 1 pass requirements**
+
+- canonical root-hosted workbench passes the `full_recreation` verifier lane for the
+  Milestone 1 bundle-native workflow
+- edge-case workflow verifier passes for the defined bundle/session/gating/hydration flows
+- acceptance evidence comes from user-reachable actions only
+- save/export/test loop works for the full bundle workflow
+- resulting full bundle works in Skin Dock/runtime
+- base-path verification shows no `/xpedit`-specific regressions
+- any residual failures are explicitly classified as verifier-only artifacts or accepted
+  non-blocking residuals
+
+Short version:
+
+- M1 pass = full-recreation passes + edge-case passes + user-reachable acceptance path +
+  full bundle works in Skin Dock/runtime + no unresolved prefix-only regressions
+
+**Milestone 2 pass requirements**
+
+- verifier models the entire shipped workbench, not just the whole-sheet XP editor
+- all user-reachable actions are mapped in a canonical SAR table, including buttons,
+  mode switches, source-panel actions, grid actions, whole-sheet actions, runtime
+  actions, and context-menu actions
+- SAR model defines starting state, allowed actions, required responses/invariants,
+  and valid next states for each workflow family
+- verifier executes predefined contract-driven workflow sequences representing what
+  the shipped workbench must be able to do
+- those sequences produce structured evidence analogous to M1's truth-table -> recipe
+  -> run model, but adapted for workflow-state correctness rather than only XP-cell fidelity
+- acceptance-critical M2 lanes pass on both root-hosted and prefixed/base-path hosting
+  without errors
+
+Short version:
+
+- M2 pass = the entire workbench is covered by a canonical SAR/action-response model and
+  the verifier can execute the required workflow sequences successfully on both
+  root-hosted and base-path hosting
+
+### Drift findings
+
+1. **Branch docs stale against current reality**
+   - `feat/base-path-support` M2 planning docs still claimed M1 was open and that the
+     9 P1 `getState()` fields plus hosted Python test coverage were still missing/open.
+   - These claims drifted behind actual branch/code reality and behind the canonical M1 closeout.
+
+2. **Edge-workflow runner drift across worktrees**
+   - `master` carries the stronger edge-workflow verifier behavior:
+     - generated SAR support
+     - stronger `switch_action_tab` hydration wait
+     - explicit fix for the tab-switch race used in M1 closeout
+   - `feat/base-path-support` had a weaker runner state at audit time:
+     - deterministic recipes only
+     - weaker wait on parseable `sessionOut`
+   - This is verifier-behavior drift, not a product bug.
+
+3. **Shared verifier core weaker than active M1 runners**
+   - `verifier_lib.mjs` exists as the new M2 shared core, but its page-open/readiness
+     helper is weaker than current M1 runner readiness semantics.
+   - Risk: future M2 slices could reintroduce load/readiness races if they adopt the
+     shared helper without reconciling it to the proven M1 waits.
+
+4. **Shared state-capture contract incomplete**
+   - `getState()` is now preferred, but some bundle-specific verifier needs still fall
+     back to `_state()` (notably `actionStates`).
+   - If this is not made explicit and unified, future slices will fork into mixed
+     capture strategies again.
+
+### Required guardrail
+
+- Do not continue M2 implementation on top of drifted verifier code or stale planning docs.
+- If `master` and `feat/base-path-support` differ on verifier waits, generated SAR coverage,
+  state capture, route handling, or acceptance claims, reconcile that first.
+- Treat verifier/doc drift as a blocker for Milestone 2 foundation work, not as a minor cleanup.

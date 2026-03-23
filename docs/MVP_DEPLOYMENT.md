@@ -110,6 +110,7 @@ For the first MVP launch:
 - the deployed host does **not** need the verifier scripts to function
 - the host only needs the shipped Milestone 1 user-facing workflow working end-to-end
 - verifier scripts remain offline QA / development tools, not production runtime dependencies
+- the shipped UI should include a visible pre-alpha bug-report path so early users can submit structured issues without relying on developer-only tooling
 
 That means a manual MVP launch can proceed once:
 

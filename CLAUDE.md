@@ -9,40 +9,75 @@ Use this file as short-lived repo memory, not as proof over code.
 - Then read `docs/INDEX.md` and `docs/AGENT_PROTOCOL.md`.
 - Then read `docs/XP_EDITOR_ACCEPTANCE_CONTRACT.md`.
 
+## Milestone Requirements
+
+Treat these as the explicit repo baselines.
+
+### Milestone 1 Pass
+
+Milestone 1 passes only when:
+
+- the canonical root-hosted workbench passes the `full_recreation` verifier lane for the bundle-native workflow
+- the edge-case workflow verifier passes for the defined bundle/session/gating/hydration flows
+- acceptance evidence comes from user-reachable actions only
+- the full save/export/test loop works
+- the full bundle works in Skin Dock/runtime
+- base-path verification shows no `/xpedit`-specific regressions
+- any residual failures are explicitly classified as verifier artifacts or accepted non-blocking residuals
+
+Short version:
+
+- M1 pass = full-recreation passes + edge-case passes + user-reachable acceptance path + full bundle works in Skin Dock/runtime + no unresolved prefix-only regressions
+
+### Milestone 2 Pass
+
+Milestone 2 passes only when the verifier and product cover the entire shipped workbench for PNG ingest/manual assembly, not just the whole-sheet XP editor.
+
+- all user-reachable actions are mapped in a canonical SAR table
+- that includes normal controls, mode switches, source-panel actions, grid actions, whole-sheet actions, runtime actions, and context-menu actions
+- the SAR model defines starting state, allowed actions, required responses/invariants, and valid next states for each workflow family
+- the verifier executes predefined contract-driven workflow sequences representing what the shipped workbench must be able to do
+- those sequences produce structured evidence similar in spirit to M1's truth-table -> recipe -> run flow, but driven by workflow-state correctness rather than only XP-cell fidelity
+- acceptance-critical M2 lanes pass on both root-hosted and prefixed/base-path hosting without errors
+
+Short version:
+
+- M2 pass = the entire workbench is covered by a canonical SAR/action-response model and the verifier can execute the required workflow sequences successfully on both root-hosted and base-path hosting
+
+### Drift Guardrail
+
+- Do not continue M2 implementation on top of drifted verifier code or stale planning docs.
+- If `master` and `feat/base-path-support` differ on verifier waits, generated SAR coverage, state capture, or route handling, reconcile that first.
+
 ## Current Milestone
 
-- The current milestone is **REXPaint parity first**, not "functioning somehow first" and not UX polish after a narrowed substitute.
-- "Done" for this milestone means the shipped workbench can load, edit, and export real multi-frame XP files with correct geometry through a **whole-sheet, user-reachable XP editor surface** that matches the real REXPaint interaction model closely enough to count as parity, and that exported XP loads in the Skin Dock runtime.
-- The legacy frame-by-frame inspector in `web/workbench.js` is not the target editor model for parity. It is legacy behavior and may be used only as supporting/diagnostic context while the whole-sheet editor path is built.
-- Any harness that depends on the legacy frame inspector or API scaffolding is diagnostic only; it is not parity proof.
-- The previous blank-flow single-frame harness was deleted on 2026-03-15 because it flattened geometry, skipped layers, and misrepresented coverage. See `PLAYWRIGHT_FAILURE_LOG.md` for the deletion record and the later strict-diagnostic restore note.
-- UX/UI polish follows parity, but the editor model itself (whole-sheet REXPaint-style editing instead of frame-by-frame inspection) is part of parity, not post-parity polish.
+- Milestone 1 is closed on canonical root-hosted `master` as of 2026-03-23.
+- The current priority is Milestone 2 verifier architecture and practical PNG ingest/manual assembly on top of the closed M1 baseline.
+- The whole-sheet editor remains the primary correction surface, but M2 verification scope is the entire shipped workbench, not just the editor.
 
 ## Current High-Signal Truths
 
-- As of the 2026-03-13 audit, the shared worktree at `/Users/r/Downloads/asciicker-pipeline-v2` was on `master` at `5caeb07` and should be treated as `stale/unknown` for bundle-restore truth until re-audited.
-- Live workbench XP editing still runs through the legacy inspector in `web/workbench.js`; `EditorApp` is not embedded into shipped workbench on audited `master`.
-- The correct direction is to pivot away from the legacy frame inspector as the primary editor path and toward a whole-sheet XP editor aligned with the REXPaint UI docs, using the debug/legacy grid as navigation/preview support rather than the main editing model.
-- `EditorApp.undo()` / `redo()` are still TODO stubs in the audited codepath.
-- Current JS XP codec code uses 10-byte REXPaint cells; older docs/tests may still mention 7-byte cells.
-- `window.__wb_debug` is the live browser automation surface for the workbench inspector path.
-- `workbench_upload_xp()` geometry hardcoding was a blocking backend gap; after the 2026-03-15 B1 patch, geometry should be re-audited as L0-derived instead of assumed stale.
+- `PLAYWRIGHT_FAILURE_LOG.md` is the current log of record for M1 closeout and verifier fixes.
+- M1 edge-workflow closeout on `master` includes `partial_bundle_gating`, `action_tab_hydration`, and generated SAR seed passes.
+- Base-path verification found no `/xpedit`-specific regressions for the M1 edge-workflow lane.
+- `feat/base-path-support` has newer M2 verifier-foundation work, but it may still drift from canonical `master` on runner behavior and docs.
+- `window.__wb_debug.getState()` is the preferred verifier state surface; `_state()` fallback should be treated as a temporary exception, not the long-term contract.
+- Any doc claiming M1 is still open, or claiming the 9 P1 `getState()` gaps or hosted-test gaps are still unresolved on `feat/base-path-support`, should be re-audited before being trusted.
 
 ## Do Not Assume
 
-- Do not assume `master` contains the known-good bundle restore line.
-- Do not treat March 4-10 editor plan docs as shipped-state truth without checking current code.
-- Do not use editor test counts as verification evidence until the CommonJS/ESM runner mismatch is fixed.
+- Do not assume old plan status text is current.
+- Do not assume `feat/base-path-support` verifier behavior matches `master`; check the runner code directly.
+- Do not claim M2 verifier foundation is unified unless the shared library, runners, and docs actually agree.
+- Do not call any lane acceptance-grade unless it uses user-reachable actions and the contract explicitly allows that lane as acceptance evidence.
 - Do not reference sibling repos or external absolute paths for runtime/build/test fixes; self-containment is enforced by `scripts/self_containment_audit.py`.
-- Do not assume external folders like `asciicker-Y9-2` are available. All assets must be committed to this repo.
-- Do not call any test "XP fidelity" unless it loads real XP through the product path, validates all layers and metadata, and verifies Skin Dock runtime load.
 
 ## First Reads By Topic
 
 - XP editor acceptance contract: `docs/XP_EDITOR_ACCEPTANCE_CONTRACT.md`
-- Four-audit restart handoff: `docs/2026-03-15-CLAUDE-HANDOFF-FOUR-AUDITS-XP-EDITOR.md`
-- Hard-fail implementation plan: `docs/plans/2026-03-15-xp-editor-hard-fail-plan.md`
-- Editor/doc alignment: `docs/2026-03-13-CLAUDE-HANDOFF-EDITOR-DOC-ALIGNMENT.md`
-- Claim verification: `docs/research/ascii/2026-03-13-claim-verification.md`
-- Bundle/runtime restore history: `docs/2026-03-11-CLAUDE-HANDOFF-CURRENT-STATE.md`
-- Bundle animation types & expansion: `docs/research/ascii/2026-03-20-bundle-animation-types.md`
+- PNG structural baseline contract: `docs/PNG_STRUCTURAL_BASELINE_CONTRACT.md`
+- M2 practical plan: `docs/plans/2026-03-21-milestone-2-practical-png-ingest-plan.md`
+- M2 verifier design: `docs/plans/2026-03-21-milestone-2-png-verifier-design.md`
+- Workbench SAR model: `docs/plans/2026-03-22-workbench-verifier-sar-model.md`
+- Unified SAR blueprint: `docs/plans/2026-03-22-workbench-sar-table-blueprint.md`
+- Failure log / M1 closeout: `PLAYWRIGHT_FAILURE_LOG.md`

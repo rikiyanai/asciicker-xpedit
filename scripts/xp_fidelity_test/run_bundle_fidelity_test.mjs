@@ -816,16 +816,49 @@ async function main() {
     // Wait for all actions to show "ready" (or legacy "converted") in the
     // bundleStatus text.  The save-first workflow uses isBundleActionReadyStatus()
     // which accepts both "saved" and "converted".
+    // Log current bundle status before waiting, for diagnostics.
+    const preSkinStatus = await page.evaluate(() => {
+      const bs = String(document.getElementById('bundleStatus')?.textContent || '');
+      const st = window.__wb_debug?._state?.();
+      const actions = st?.actionStates || {};
+      const statuses = {};
+      for (const [k, v] of Object.entries(actions)) statuses[k] = v?.status;
+      return { bundleStatusText: bs, actionStatuses: statuses };
+    });
+    console.error(`[4] Bundle status before skin dock: ${JSON.stringify(preSkinStatus)}`);
+
     await page.waitForFunction(() => {
       const bs = String(document.getElementById('bundleStatus')?.textContent || '');
       return /3\/3 actions (converted|ready)/i.test(bs);
     }, null, { timeout: 15000 });
 
-    // Ensure Test Bundle Skin button is enabled
-    await page.waitForFunction(() => {
+    // Ensure Test Bundle Skin button is enabled.
+    // Log why the button is disabled if it doesn't become enabled quickly.
+    const btnEnabled = await page.waitForFunction(() => {
       const btn = document.getElementById('webbuildQuickTestBtn');
       return !!btn && !btn.disabled;
-    }, null, { timeout: 30000 });
+    }, null, { timeout: 10000 }).then(() => true).catch(() => false);
+    if (!btnEnabled) {
+      const btnState = await page.evaluate(() => {
+        const btn = document.getElementById('webbuildQuickTestBtn');
+        const st = window.__wb_debug?._state?.();
+        const pf = window.__wb_debug?.getWebbuildDebugState?.()?.runtimePreflight;
+        return {
+          exists: !!btn, disabled: btn?.disabled, title: btn?.title,
+          sessionId: !!st?.sessionId, actionBusy: !!st?.webbuild?.actionInFlight,
+          preflightOk: !!pf?.ok, preflightChecked: !!pf?.checked,
+        };
+      });
+      console.error(`[4] Button still disabled: ${JSON.stringify(btnState)}`);
+      // Try refreshing runtime preflight and waiting again
+      await page.evaluate(() => {
+        if (window.__wb_debug?.openWebbuild) window.__wb_debug.openWebbuild(false);
+      });
+      await page.waitForFunction(() => {
+        const btn = document.getElementById('webbuildQuickTestBtn');
+        return !!btn && !btn.disabled;
+      }, null, { timeout: 30000 });
+    }
 
     await page.screenshot({ path: path.join(outDir, 'bundle-05-before-skin-test.png'), fullPage: true });
     await page.click('#webbuildQuickTestBtn');

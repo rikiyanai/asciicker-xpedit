@@ -38,21 +38,22 @@ async function captureState(page, label) {
       return { exists: true, disabled: !!el.disabled, text: String(el.textContent || '').trim() };
     };
 
-    // Raw app state via _state() — the only current path to bundle/template/action fields
+    // Structured state via getState() — now includes P1 fields (bundleId, activeActionKey,
+    // templateSetKey, gridCols, gridRows, activeLayer, visibleLayers, layerCount, sessionDirty)
+    const gs = (window.__wb_debug && typeof window.__wb_debug.getState === 'function')
+      ? window.__wb_debug.getState() : null;
+
+    // actionStates still requires _state() — not yet in getState()
     const raw = (window.__wb_debug && typeof window.__wb_debug._state === 'function')
       ? window.__wb_debug._state() : null;
-
-    // Structured geometry via getState()
-    const geo = (window.__wb_debug && typeof window.__wb_debug.getState === 'function')
-      ? window.__wb_debug.getState() : null;
 
     return {
       label: lbl,
       timestamp: Date.now(),
-      templateSetKey: raw?.templateSetKey ?? null,
-      bundleId: raw?.bundleId ?? null,
-      activeActionKey: raw?.activeActionKey ?? null,
-      sessionId: raw?.sessionId ?? null,
+      templateSetKey: gs?.templateSetKey ?? null,
+      bundleId: gs?.bundleId ?? null,
+      activeActionKey: gs?.activeActionKey ?? null,
+      sessionId: gs?.sessionId ?? null,
       actionStates: raw?.actionStates ? Object.fromEntries(
         Object.entries(raw.actionStates).map(([k, v]) => [k, {
           status: v?.status ?? null,
@@ -64,13 +65,13 @@ async function captureState(page, label) {
       webbuildState: text('webbuildState'),
       wholeSheetMounted: !!q('wholeSheetCanvas'),
       geometry: {
-        gridCols: raw?.gridCols ?? null,
-        gridRows: raw?.gridRows ?? null,
-        frameWChars: geo?.frameWChars ?? null,
-        frameHChars: geo?.frameHChars ?? null,
-        angles: geo?.angles ?? null,
-        anims: geo?.anims ?? null,
-        projs: geo?.projs ?? null,
+        gridCols: gs?.gridCols ?? null,
+        gridRows: gs?.gridRows ?? null,
+        frameWChars: gs?.frameWChars ?? null,
+        frameHChars: gs?.frameHChars ?? null,
+        angles: gs?.angles ?? null,
+        anims: gs?.anims ?? null,
+        projs: gs?.projs ?? null,
       },
       buttons: {
         save: btnState('btnSave'),

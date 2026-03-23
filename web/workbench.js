@@ -7122,6 +7122,19 @@
       anchorBox: state.anchorBox ? { ...state.anchorBox } : null,
       historyDepth: state.history.length,
       futureDepth: state.future.length,
+      // P1 fields (M2 verifier prerequisite — VB-01)
+      bundleId: state.bundleId ? String(state.bundleId) : "",
+      activeActionKey: String(state.activeActionKey || ""),
+      templateSetKey: String(state.templateSetKey || ""),
+      activeLayer: typeof state.activeLayer === "number" ? state.activeLayer : 2,
+      visibleLayers: [...(state.visibleLayers instanceof Set ? state.visibleLayers : [])],
+      layerCount: Array.isArray(state.layers) ? state.layers.length : 0,
+      sessionDirty: !!state.sessionDirty,
+      gridCols: state.gridCols || 0,
+      gridRows: state.gridRows || 0,
+      // P2 fields (M2 source panel verifier — VB-02)
+      sourceCutsV: Array.isArray(state.sourceCutsV) ? state.sourceCutsV.length : 0,
+      sourceCanvasZoom: state.sourceCanvasZoom || 1,
     }),
     getWebbuildDebugState: () => {
       const frame = $("webbuildFrame");

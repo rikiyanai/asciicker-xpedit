@@ -1,10 +1,17 @@
 /**
  * Bundle authoring runner.
  *
+ * CLASSIFICATION: mixed — UI-driven actions with debug API state observation
+ * ACTION PATH:    Tab switching via DOM click, whole-sheet painting via canvas mouse events
+ * OBSERVATION:    State waits via __wb_debug._state() and __wb_debug.getState()
+ * ELIGIBLE FOR:   M1 historical evidence (closed under then-accepted model).
+ *                 NOT pure UI-driven acceptance going forward.
+ * CAVEAT:         Uses page.evaluate() + _state() for tab-switch readiness waits.
+ *                 Actions are UI-driven; observation layer is diagnostic.
+ *
  * Part of the canonical XP fidelity verifier family (scripts/xp_fidelity_test/).
  *
- * Orchestrates the full 3-action bundle authoring flow through the shipped
- * workbench UI:
+ * Orchestrates the full 3-action bundle authoring flow:
  *   1. Apply player_native_full template (creates blank sessions)
  *   2. For each action (idle, attack, death):
  *      - Switch to action tab
@@ -641,25 +648,13 @@ async function main() {
 
       // ── Preload or replay ──
       if (preloadXps[actionKey]) {
-        // Preload path: upload a pre-built XP file instead of replaying the
-        // full recipe.  This lets us split a long run into shorter segments
-        // that don't outlive the dev server.  The preloaded XP is still
-        // verified against the truth table after export.
+        // Preload path: import a pre-built XP via the UI import controls,
+        // then export via the UI Export XP button.  Fully UI-driven — no
+        // API calls, no __wb_debug state mutations.  The export handles
+        // save, session sync, and blank→converted promotion through the
+        // normal product code path.
         const preloadPath = path.resolve(repoRoot, preloadXps[actionKey]);
-        console.error(`[3:${actionKey}] PRELOAD: importing ${path.basename(preloadPath)} (skipping ${(recipe.actions || []).length}-action replay)...`);
-        const uploadOk = await page.evaluate(async (xpPath) => {
-          try {
-            const resp = await fetch('/api/workbench/upload-xp', {
-              method: 'POST',
-              body: await (async () => {
-                const r = await fetch(xpPath);
-                return r.ok ? r.blob() : null;
-              })(),
-            });
-            return resp?.ok || false;
-          } catch { return false; }
-        }, `/api/workbench/export-xp-file?path=${encodeURIComponent(preloadPath)}`);
-        // Use the XP import UI path instead — set file input and click import.
+        console.error(`[3:${actionKey}] PRELOAD: importing ${path.basename(preloadPath)} via UI (skipping ${(recipe.actions || []).length}-action replay)...`);
         await page.setInputFiles('#xpImportFile', preloadPath);
         await page.click('#xpImportBtn');
         // Wait for import to hydrate the session with correct geometry.
@@ -673,21 +668,11 @@ async function main() {
             return s.grid_cols === expW && s.grid_rows === expH && m.angles !== undefined;
           } catch (_e) { return false; }
         }, { expW: expectedGeom.width, expH: expectedGeom.height }, { timeout: 30000 });
-        // Sync the bundle action state to the newly imported session.
-        // The import created a new session_id; the bundle still tracks the
-        // old blank session.  Update the bundle's action state so export
-        // promotion and skin dock readiness work correctly.
-        await page.evaluate((ak) => {
-          const st = window.__wb_debug._state();
-          if (st && st.actionStates && st.actionStates[ak]) {
-            st.actionStates[ak].sessionId = st.sessionId;
-            st.actionStates[ak].session_id = st.sessionId;
-          }
-        }, actionKey);
         actionReport.execute_pass = true;
         actionReport.preloaded = true;
-        console.error(`[3:${actionKey}] PRELOAD: session hydrated, saving...`);
-        await page.evaluate(() => window.__wb_debug.flushSave());
+        console.error(`[3:${actionKey}] PRELOAD: session hydrated`);
+        // The export step below (shared with replay path) handles save +
+        // promotion via the normal UI Export XP button click.
       } else if (actionReport.geometry_pass) {
         // Full replay path.
         console.error(`[3:${actionKey}] Executing ${recipeMode} recipe (${(recipe.actions || []).length} actions)...`);

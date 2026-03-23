@@ -21,10 +21,10 @@
 | PB-07 | TextTool on disk but not wired | both | MEDIUM | OPEN (M2-C.4) | `web/rexpaint-editor/tools/text-tool.js` exists, not imported |
 | PB-08 | BROWSE mode button disabled/placeholder | both | LOW | DEFERRED | `workbench.js:593-597` — `disabled=true`, title "Browse mode (deferred)" |
 | PB-09 | New/Resize are stubs | both | LOW | DEFERRED | `workbench.js:794` — `_placeholder('New')`, Resize is comment-only |
-| PB-10 | Missing runtime files block "Test This Skin" | both | CRITICAL | OPEN | PLAYWRIGHT_FAILURE_LOG entry 2026-03-10, requires build script |
-| PB-11 | Whole-sheet layout mismatches REXPaint spec | canonical master | HIGH | OPEN | PLAYWRIGHT_FAILURE_LOG entry 2026-03-16 |
-| PB-12 | Cell fidelity misses in full_recreation Run 3 | canonical master | HIGH | OPEN | 50 total: 2+26+22 L2 mismatches. PLAYWRIGHT_FAILURE_LOG entry 2026-03-20 |
-| PB-13 | Skin Dock stuck at renderStage=2 (menu advance) | both | HIGH | OPEN | PLAYWRIGHT_FAILURE_LOG entry 2026-03-18, runtime blocker |
+| PB-10 | Missing runtime files block "Test This Skin" | both | ~~CRITICAL~~ | CLOSED (M1 closeout) | Runtime committed; EV-001 gating fix at `894ea9d`. PLAYWRIGHT_FAILURE_LOG M1 closeout. |
+| PB-11 | Whole-sheet layout mismatches REXPaint spec | canonical master | ~~HIGH~~ | CLOSED (M1 closeout) | Resolved by edge-workflow strengthening; 7/7 recipes PASS. PLAYWRIGHT_FAILURE_LOG M1 closeout. |
+| PB-12 | Cell fidelity misses in full_recreation Run 3 | canonical master | ~~HIGH~~ | NON-BLOCKING (M1 closeout) | Canvas-edge harness artifact, not product failure. Explicitly classified in PLAYWRIGHT_FAILURE_LOG:1313-1317. |
+| PB-13 | Skin Dock stuck at renderStage=2 (menu advance) | both | ~~HIGH~~ | CLOSED (M1 closeout) | `b1faac3` accepts ready status in skin dock verifier. PLAYWRIGHT_FAILURE_LOG M1 closeout. |
 | PB-14 | G7/G8/G9 gates exist but not called in export pipeline | both | MEDIUM | OPEN (decision needed) | `gates.py:10,19,32` — functions exist; `_run_structural_gates()` only calls G10/G11/G12 |
 
 ### Verifier Bugs / Gaps
@@ -57,7 +57,7 @@
 |----|-------|----------|--------|----------|
 | DP-01 | BASE_PATH_SUPPORT_CHECKLIST shows 0/8 items done | HIGH | STALE-DOC | Branch has `bp()` in JS + `_BP` in WS init; checklist predates these fixes |
 | DP-02 | PNG_STRUCTURAL_BASELINE_CONTRACT claims "no automated test" | MEDIUM | STALE-DOC if test_contracts counts | `test_contracts.py:test_upload_contract` validates dims+sha256, but contract may mean full pipeline test |
-| DP-03 | XP_EDITOR_ACCEPTANCE_CONTRACT M1 close requirements undated | LOW | OPEN | "Still open as of 2026-03-21" — needs status refresh |
+| DP-03 | XP_EDITOR_ACCEPTANCE_CONTRACT M1 close requirements undated | LOW | STALE-DOC | M1 closed 2026-03-23 per PLAYWRIGHT_FAILURE_LOG closeout. Contract dates need refresh. |
 | DP-04 | SAR blueprint cites 96 actions but verifier design only covers 50+ | MEDIUM | OPEN | Gap between SAR enumeration (comprehensive) and verifier DSL (partial) |
 | DP-05 | Support artifacts referenced but not all created | MEDIUM | OPEN | `m2-png-fixture-inventory.md` exists; `semantic-edit-test-matrix.md` not verified |
 
@@ -73,7 +73,7 @@
 | DEF-06 | Perfect automatic slicing | Explicitly excluded from M2 acceptance |
 | DEF-07 | Mount-family support | Explicitly excluded |
 | DEF-08 | Full XP-editor parity | Explicitly excluded |
-| DEF-09 | `action_tab_hydration` step-5 failure on root-hosted master | Canonical master issue, outside base-path scope |
+| DEF-09 | ~~`action_tab_hydration` step-5 failure~~ | CLOSED: resolved by 800ms settle + dual gate (`14e8e95`, `b3f2f06`). 7/7 edge-workflow PASS. |
 
 ---
 

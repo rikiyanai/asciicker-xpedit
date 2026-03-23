@@ -16,17 +16,17 @@
 
 ### M1 Status
 
-M1 is **not yet closed**. Remaining blockers (all on canonical `master`, not base-path-specific):
+M1 is **CLOSED** on canonical root-hosted workbench as of 2026-03-23 (commit `14e8e95` on master, merged into this branch at `417019b`).
 
-| Blocker | Status | Evidence |
-|---------|--------|----------|
-| `full_recreation` cell fidelity — 50 L2 mismatches (Run 3) | OPEN | PLAYWRIGHT_FAILURE_LOG 2026-03-20 |
-| Whole-sheet layout vs REXPaint spec mismatch | OPEN | PLAYWRIGHT_FAILURE_LOG 2026-03-16 |
-| Skin Dock renderStage=2 stall (menu advance) | OPEN | PLAYWRIGHT_FAILURE_LOG 2026-03-18 |
-| Missing runtime files block "Test This Skin" | CRITICAL | PLAYWRIGHT_FAILURE_LOG 2026-03-10 |
-| `action_tab_hydration` step-5 failure (root-hosted) | OPEN | Outside base-path scope — track separately |
+| Former Blocker | Resolution | Evidence |
+|----------------|-----------|----------|
+| `full_recreation` cell fidelity — 50 L2 mismatches | Non-blocking: canvas-edge harness artifact | PLAYWRIGHT_FAILURE_LOG.md M1 closeout (lines 1313-1317) |
+| Whole-sheet layout vs REXPaint spec mismatch | Resolved by edge-workflow fixes | PLAYWRIGHT_FAILURE_LOG.md M1 closeout |
+| Skin Dock renderStage=2 stall (menu advance) | Resolved: `b1faac3` accepts ready status | Master commit b1faac3 |
+| Missing runtime files block "Test This Skin" | Resolved: runtime committed + EV-001 gating fix | Master commit 894ea9d, EV-001 in closeout |
+| `action_tab_hydration` step-5 failure | Resolved: 800ms settle + dual gate | Master commits 14e8e95, b3f2f06 |
 
-**None of these are base-path regressions.** They exist on `master` and are M1-scope issues that must be resolved before M2 formally opens. This plan treats them as Wave 0 preconditions.
+**M1 edge-workflow verifier: 7/7 PASS** (partial_bundle_gating, action_tab_hydration, 5 generated SAR seeds). Base-path verification found no `/xpedit`-specific regressions. M2 may proceed.
 
 ### Base-Path Status
 
@@ -56,20 +56,32 @@ This is not about implementing base-path support in the product (already complet
 Full index with classifications, evidence, and severity in companion doc:
 **`docs/plans/2026-03-23-milestone-2-bug-gap-index.md` § 1**
 
-Summary counts:
+Summary counts (updated 2026-03-23 post-merge reconciliation):
 
-| Classification | Open | Fixed | Deferred | Total |
-|---------------|------|-------|----------|-------|
-| Product bug | 8 | 0 | 5 | 13 (PB-04 reclassified as stale-doc) |
-| Verifier bug/gap | 6 | 5 | 0 | 11 |
-| Debug API gap | 3 | 0 | 0 | 3 |
-| Docs/planning gap | 5 | 0 | 0 | 5 |
-| **Total** | **22** | **5** | **5** | **32** |
+| Classification | Open | Fixed/Closed | Non-Blocking | Deferred | Total |
+|---------------|------|-------------|-------------|----------|-------|
+| Product bug | 4 | 4 | 1 | 4 | 13 |
+| Verifier bug/gap | 4 | 5 | 0 | 0 | 9 (+2 info) |
+| Debug API gap | 3 | 0 | 0 | 0 | 3 |
+| Docs/planning gap | 2 | 0 | 0 | 0 | 2 (+3 stale-doc) |
+| **Total** | **13** | **9** | **1** | **4** | **27 (+5 info/stale)** |
 
 **Resolved on this branch (2026-03-23):**
 - ~~VB-01~~ (`getState()` P1 fields) — CLOSED at `f246828`
 - ~~VB-02~~ (`getState()` P2 fields) — CLOSED at `f246828`
 - ~~VB-06/07/08~~ (Python test base-path parameterization) — CLOSED at `7d3b186`
+
+**Resolved by master M1 closeout (merged at `417019b`):**
+- ~~PB-10~~ (runtime files) — CLOSED: runtime committed + EV-001 gating
+- ~~PB-11~~ (layout mismatch) — CLOSED: edge-workflow strengthening
+- ~~PB-12~~ (cell mismatches) — NON-BLOCKING: canvas-edge harness artifact
+- ~~PB-13~~ (Skin Dock stall) — CLOSED: `b1faac3` ready-status acceptance
+- ~~DEF-09~~ (tab hydration step-5) — CLOSED: 800ms settle + dual gate
+
+**Critical items remaining:**
+- **PB-14** (G7/G8/G9 gates not called) — decision needed
+- **VB-04** (0 of 5 M2 verifier slices) — M2 work
+- **VB-05** (selectors.mjs, action_registry.json not built) — M2 work
 
 **Critical items still requiring attention:**
 - **PB-10** (runtime files missing) — blocks all Skin Dock testing

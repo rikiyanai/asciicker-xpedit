@@ -565,27 +565,21 @@ async function main() {
       const tabLocator = page.locator('#bundleActionTabs button').filter({ hasText: ACTION_LABELS[actionKey] });
       await tabLocator.first().click();
 
-      // Wait for session load to complete.  Two guards:
-      // 1. sessionOut must show the expected geometry (grid_cols × grid_rows).
-      // 2. The internal state.sessionId must match the action's session ID.
-      // Both are set by hydrateLoadedSession inside the async loadSession call.
+      // Wait for session load to complete.  Require BOTH sessionOut AND metaOut
+      // to be populated with the expected geometry before proceeding.  Previous
+      // versions only checked sessionOut, causing a race where metaOut was still
+      // empty when readSummary ran.
       const expectedGeom = actionInputs[actionKey].truthTable;
       await page.waitForFunction(({ expW, expH }) => {
-        const text = String(document.getElementById('sessionOut')?.textContent || '').trim();
-        if (!text) return false;
+        const sessionText = String(document.getElementById('sessionOut')?.textContent || '').trim();
+        const metaText = String(document.getElementById('metaOut')?.textContent || '').trim();
+        if (!sessionText || !metaText) return false;
         try {
-          const s = JSON.parse(text);
-          return s.grid_cols === expW && s.grid_rows === expH;
+          const s = JSON.parse(sessionText);
+          const m = JSON.parse(metaText);
+          return s.grid_cols === expW && s.grid_rows === expH && m.angles !== undefined;
         } catch (_e) { return false; }
-      }, { expW: expectedGeom.width, expH: expectedGeom.height }, { timeout: 15000 });
-
-      // Additionally confirm state.sessionId updated (not stale from previous action)
-      await page.waitForFunction(({ expW }) => {
-        if (!window.__wb_debug || typeof window.__wb_debug.getWebbuildDebugState !== 'function') return true;
-        const dbg = window.__wb_debug.getWebbuildDebugState();
-        // Check that the grid cols match expected — the debug state reflects the hydrated session
-        return dbg?.session?.grid_cols === expW || true;
-      }, { expW: expectedGeom.width }, { timeout: 5000 }).catch(() => {});
+      }, { expW: expectedGeom.width, expH: expectedGeom.height }, { timeout: 30000 });
 
       // Wait for whole-sheet canvas to mount and editor controls to be available
       await page.waitForSelector('#wholeSheetCanvas', { state: 'attached', timeout: 15000 });

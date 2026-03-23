@@ -108,15 +108,41 @@ const ACTIONS = {
     const ACTION_LABELS = { idle: /Idle \/ Walk/i, attack: /^Attack/i, death: /^Death/i };
     const label = ACTION_LABELS[params.action];
     if (!label) throw new Error(`Unknown action: ${params.action}`);
+    // Allow any pending auto-advance (600ms setTimeout in saveCurrentActionProgress)
+    // to settle before clicking the target tab.
+    await page.waitForTimeout(800);
     const tab = page.locator('#bundleActionTabs button').filter({ hasText: label });
     await tab.first().click();
-    await page.waitForFunction(() => {
-      const t = String(document.getElementById('sessionOut')?.textContent || '').trim();
-      if (!t) return false;
-      try { JSON.parse(t); return true; } catch (_e) { return false; }
-    }, null, { timeout: 15000 });
-    await page.waitForSelector('#wholeSheetCanvas', { state: 'attached', timeout: 10000 }).catch(() => {});
-    await page.waitForTimeout(500);
+    // Wait for activeActionKey to match the requested action (confirms tab switch took).
+    await page.waitForFunction((expected) => {
+      const s = window.__wb_debug && typeof window.__wb_debug._state === 'function'
+        ? window.__wb_debug._state() : null;
+      return s && s.activeActionKey === expected;
+    }, params.action, { timeout: 10000 });
+    // Wait for session + meta to be fully hydrated with expected geometry.
+    const g = EXPECTED_GEOMETRY[params.action];
+    if (g) {
+      await page.waitForFunction(({ expW, expH }) => {
+        const sessionText = String(document.getElementById('sessionOut')?.textContent || '').trim();
+        const metaText = String(document.getElementById('metaOut')?.textContent || '').trim();
+        if (!sessionText || !metaText) return false;
+        try {
+          const s = JSON.parse(sessionText);
+          const m = JSON.parse(metaText);
+          return s.grid_cols === expW && s.grid_rows === expH && m.angles !== undefined;
+        } catch (_e) { return false; }
+      }, { expW: g.gridCols, expH: g.gridRows }, { timeout: 30000 });
+    } else {
+      await page.waitForFunction(() => {
+        const t = String(document.getElementById('sessionOut')?.textContent || '').trim();
+        if (!t) return false;
+        try { JSON.parse(t); return true; } catch (_e) { return false; }
+      }, null, { timeout: 15000 });
+    }
+    // Wait for whole-sheet canvas and editor controls
+    await page.waitForSelector('#wholeSheetCanvas', { state: 'attached', timeout: 15000 });
+    await page.waitForSelector('#wsGlyphCode', { state: 'visible', timeout: 10000 }).catch(() => {});
+    await page.waitForTimeout(1000);
   },
 
   async save_action(page, _params) {

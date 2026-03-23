@@ -109,6 +109,13 @@ So Milestone 2 is where the verifier becomes a true workbench-wide SAR system.
 
 A complete SAR map must cover the full shipped workbench, not just the whole-sheet editor.
 
+It also needs to be generator-friendly. The intended end state is not only a hand-written
+truth table of buttons, but a verifier input model that can:
+
+- choose bounded randomized sequences of user-reachable actions
+- derive expected state transitions from SAR rules
+- emit a reproducible "what should happen" script for the runner
+
 ### A. Global / session state
 
 - template set

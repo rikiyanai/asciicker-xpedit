@@ -78,6 +78,13 @@ See `docs/AGENT_PROTOCOL.md` Section 13 and
 Tests workflow state transitions and gating honesty. Does not replace
 `full_recreation` or bundle fidelity testing.
 
+Current state:
+
+- v1 supports deterministic named recipes for known blocker classes
+- next planned step is a bounded generated SAR-sequence lane for irrational but
+  user-reachable flows such as upload -> `New XP`, undo/redo chains, layer
+  switches, refresh, and mixed partial-bundle actions
+
 ### What it tests
 
 - Bundle readiness gating honesty at partial states (0/3, after 1 save)
@@ -85,6 +92,13 @@ Tests workflow state transitions and gating honesty. Does not replace
 - Action-tab session hydration with exact geometry verification per action
 - Session ID stability (same action = same session) and uniqueness (different actions = different sessions)
 - Whole-sheet editor mounting after tab switches
+
+Planned next coverage:
+
+- `New XP` / replace-session after edits or imports
+- undo / redo / redo-at-end behavior
+- active-layer switching during mixed editing flows
+- bounded randomized SAR sequences over the Milestone 1 workbench subset
 
 ### Geometry oracle
 

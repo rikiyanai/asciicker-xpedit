@@ -107,15 +107,62 @@ export async function launchBrowser({ headed = false, timeout = 30000 } = {}) {
 
 /**
  * Navigate to the workbench URL and wait for it to be ready.
+ *
+ * Readiness sequence (matches M1 fidelity runner semantics):
+ * 1. page.goto with networkidle (30s timeout)
+ * 2. Wait for __wb_debug.getState to be callable (JS initialized)
+ * 3. Wait for #xpImportFile attached (workbench DOM ready)
+ * 4. Optional: wait for session/meta hydration after XP import
+ *
  * @param {import('playwright').Page} page
  * @param {string} workbenchUrl
  * @param {object} opts
- * @param {number} opts.waitMs — extra wait after load (ms)
+ * @param {number} opts.gotoTimeout — page.goto timeout (ms), default 30000
+ * @param {number} opts.readyTimeout — readiness check timeout (ms), default 15000
  * @returns {Promise<void>}
  */
-export async function openWorkbench(page, workbenchUrl, { waitMs = 1500 } = {}) {
-  await page.goto(workbenchUrl, { waitUntil: 'networkidle' });
-  if (waitMs > 0) await page.waitForTimeout(waitMs);
+export async function openWorkbench(page, workbenchUrl, { gotoTimeout = 30000, readyTimeout = 15000 } = {}) {
+  await page.goto(workbenchUrl, { waitUntil: 'networkidle', timeout: gotoTimeout });
+  // Wait for workbench JS to initialize — __wb_debug.getState must be callable
+  await page.waitForFunction(() => {
+    return window.__wb_debug && typeof window.__wb_debug.getState === 'function';
+  }, { timeout: readyTimeout });
+  // Wait for workbench DOM to be interactive
+  await page.waitForSelector('#xpImportFile', { state: 'attached', timeout: readyTimeout }).catch(() => {});
+  await page.waitForSelector('#wbUpload', { state: 'attached', timeout: 5000 }).catch(() => {});
+}
+
+/**
+ * Wait for session + meta hydration after XP import or pipeline run.
+ * Matches the M1 fidelity runner's dual-gate pattern (sessionOut + metaOut).
+ *
+ * @param {import('playwright').Page} page
+ * @param {object} opts
+ * @param {number} opts.expectedCols — if set, wait for grid_cols to match
+ * @param {number} opts.expectedRows — if set, wait for grid_rows to match
+ * @param {number} opts.timeout — timeout (ms), default 30000
+ * @returns {Promise<void>}
+ */
+export async function waitForSessionHydration(page, { expectedCols, expectedRows, timeout = 30000 } = {}) {
+  await page.waitForFunction(({ expW, expH }) => {
+    const sessionOut = document.getElementById('sessionOut');
+    const metaOut = document.getElementById('metaOut');
+    if (!sessionOut || !metaOut) return false;
+    const sessionText = String(sessionOut.textContent || '').trim();
+    const metaText = String(metaOut.textContent || '').trim();
+    if (!sessionText || !metaText) return false;
+    try {
+      const session = JSON.parse(sessionText);
+      const meta = JSON.parse(metaText);
+      if (!session.session_id) return false;
+      if (typeof meta.frame_w_chars !== 'number' || typeof meta.frame_h_chars !== 'number') return false;
+      if (expW != null && session.grid_cols !== expW) return false;
+      if (expH != null && session.grid_rows !== expH) return false;
+      return true;
+    } catch (_err) {
+      return false;
+    }
+  }, { expW: expectedCols ?? null, expH: expectedRows ?? null }, { timeout });
 }
 
 // ---------------------------------------------------------------------------

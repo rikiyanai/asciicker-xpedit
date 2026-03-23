@@ -39,6 +39,14 @@ const outDir = getArg('--out-dir');
 const ACTION_KEYS = ['idle', 'attack', 'death'];
 const ACTION_LABELS = { idle: /Idle \/ Walk/i, attack: /^Attack/i, death: /^Death/i };
 
+// --preload idle=/path/to/exported.xp  — skip replay, upload pre-built XP instead.
+// The preloaded XP is still verified against the truth table for cell fidelity.
+const preloadXps = {};
+for (const key of ACTION_KEYS) {
+  const val = getArg(`--preload-${key}`);
+  if (val) preloadXps[key] = val;
+}
+
 const actionInputs = {};
 for (const key of ACTION_KEYS) {
   const truth = getArg(`--${key}-truth`);
@@ -114,10 +122,11 @@ function parseJsonText(text, label) {
 
 // ── Scroll + drag helpers (from run_fidelity_test.mjs) ──
 
+// Returns true if scrolling actually happened.
 async function centerCanvasRegion(page, leftPx, topPx, rightPx, bottomPx) {
-  await page.evaluate(({ left, top, right, bottom }) => {
+  return page.evaluate(({ left, top, right, bottom }) => {
     const scroll = document.getElementById('wholeSheetScroll');
-    if (!scroll) return;
+    if (!scroll) return false;
     const viewW = scroll.clientWidth;
     const viewH = scroll.clientHeight;
     const cx = (left + right) / 2;
@@ -131,27 +140,73 @@ async function centerCanvasRegion(page, leftPx, topPx, rightPx, bottomPx) {
     if (needX || needY) {
       scroll.scrollLeft = Math.max(0, cx - viewW / 2);
       scroll.scrollTop = Math.max(0, cy - viewH / 2);
+      return true;
     }
+    return false;
   }, { left: leftPx, top: topPx, right: rightPx, bottom: bottomPx });
 }
 
+// Per-selector bounding box cache.  Invalidated whenever a scroll happens.
+const _bboxCache = { selector: null, box: null };
+
+async function _getCanvasBox(page, selector, didScroll) {
+  if (!didScroll && _bboxCache.selector === selector && _bboxCache.box) {
+    return _bboxCache.box;
+  }
+  const box = await page.locator(selector).boundingBox();
+  if (!box) throw new Error(`canvas element not found: ${selector}`);
+  _bboxCache.selector = selector;
+  _bboxCache.box = box;
+  return box;
+}
+
+// Get the scroll container's viewport bounds for visibility checks.
+async function _getScrollBounds(page) {
+  return page.evaluate(() => {
+    const scroll = document.getElementById('wholeSheetScroll');
+    if (!scroll) return null;
+    const rect = scroll.getBoundingClientRect();
+    return { x: rect.left, y: rect.top, w: rect.width, h: rect.height };
+  });
+}
+
+// Verify viewport coordinates are inside the scroll container's visible area.
+// If not, force-scroll to center the target and refresh the bounding box.
+async function _ensureVisible(page, selector, canvasPx, canvasPy, vpX, vpY) {
+  const bounds = await _getScrollBounds(page);
+  if (!bounds) return { vpX, vpY, refreshed: false };
+  const margin = 4; // px inside the container edge
+  if (vpX >= bounds.x + margin && vpX <= bounds.x + bounds.w - margin &&
+      vpY >= bounds.y + margin && vpY <= bounds.y + bounds.h - margin) {
+    return { vpX, vpY, refreshed: false };
+  }
+  // Force-center the target and refresh the bounding box.
+  await page.evaluate(({ tx, ty }) => {
+    const scroll = document.getElementById('wholeSheetScroll');
+    if (!scroll) return;
+    scroll.scrollLeft = Math.max(0, tx - scroll.clientWidth / 2);
+    scroll.scrollTop = Math.max(0, ty - scroll.clientHeight / 2);
+  }, { tx: canvasPx, ty: canvasPy });
+  const box = await page.locator(selector).boundingBox();
+  if (!box) throw new Error(`canvas element not found after re-scroll: ${selector}`);
+  _bboxCache.selector = selector;
+  _bboxCache.box = box;
+  return { vpX: box.x + canvasPx, vpY: box.y + canvasPy, refreshed: true };
+}
+
 async function dragOnCanvas(page, selector, x1, y1, x2, y2, cellSize) {
-  // Center the drag region in the safe zone, then use raw mouse events
-  // with boundingBox() coordinates.  locator.hover({force}) scrolls the
-  // element into view internally which overrides our centering.
   const startPx = x1 * cellSize + cellSize / 2;
   const startPy = y1 * cellSize + cellSize / 2;
   const endPx = x2 * cellSize + cellSize / 2;
   const endPy = y2 * cellSize + cellSize / 2;
-  await centerCanvasRegion(
+  const didScroll = await centerCanvasRegion(
     page,
     Math.min(startPx, endPx),
     Math.min(startPy, endPy),
     Math.max(startPx, endPx),
     Math.max(startPy, endPy),
   );
-  const canvasBox = await page.locator(selector).boundingBox();
-  if (!canvasBox) throw new Error(`dragOnCanvas: element not found: ${selector}`);
+  const canvasBox = await _getCanvasBox(page, selector, didScroll);
   const vpX1 = canvasBox.x + startPx;
   const vpY1 = canvasBox.y + startPy;
   const vpX2 = canvasBox.x + endPx;
@@ -163,16 +218,18 @@ async function dragOnCanvas(page, selector, x1, y1, x2, y2, cellSize) {
 }
 
 async function clickCanvasCell(page, selector, x, y, cellSize) {
-  // Center the cell in the safe zone, then use raw mouse.click with
-  // boundingBox() coordinates — same approach as Run 6 (0/1/4 mismatches)
-  // but with safe-zone centering to keep cells away from sidebar overlap.
   const posX = x * cellSize + cellSize / 2;
   const posY = y * cellSize + cellSize / 2;
-  await centerCanvasRegion(page, posX, posY, posX, posY);
-  const canvasBox = await page.locator(selector).boundingBox();
-  if (!canvasBox) throw new Error(`clickCanvasCell: element not found: ${selector}`);
-  const vpX = canvasBox.x + posX;
-  const vpY = canvasBox.y + posY;
+  const didScroll = await centerCanvasRegion(page, posX, posY, posX, posY);
+  const canvasBox = await _getCanvasBox(page, selector, didScroll);
+  let vpX = canvasBox.x + posX;
+  let vpY = canvasBox.y + posY;
+  // For edge cells where the safe-zone centering can't fully protect
+  // (top/bottom rows, left/right columns near scroll limits), verify the
+  // click lands inside the scroll container and force-recenter if not.
+  const vis = await _ensureVisible(page, selector, posX, posY, vpX, vpY);
+  vpX = vis.vpX;
+  vpY = vis.vpY;
   await page.mouse.click(vpX, vpY);
 }
 
@@ -510,31 +567,27 @@ async function main() {
 
       console.error(`[3:${actionKey}] Switching to action tab...`);
 
-      // Click the action tab
+      // Click the action tab — invalidate bbox cache since canvas changes.
+      _bboxCache.selector = null;
+      _bboxCache.box = null;
       const tabLocator = page.locator('#bundleActionTabs button').filter({ hasText: ACTION_LABELS[actionKey] });
       await tabLocator.first().click();
 
-      // Wait for session load to complete.  Two guards:
-      // 1. sessionOut must show the expected geometry (grid_cols × grid_rows).
-      // 2. The internal state.sessionId must match the action's session ID.
-      // Both are set by hydrateLoadedSession inside the async loadSession call.
+      // Wait for session load to complete.  Require BOTH sessionOut AND metaOut
+      // to be populated with the expected geometry before proceeding.  Previous
+      // versions only checked sessionOut, causing a race where metaOut was still
+      // empty when readSummary ran.
       const expectedGeom = actionInputs[actionKey].truthTable;
       await page.waitForFunction(({ expW, expH }) => {
-        const text = String(document.getElementById('sessionOut')?.textContent || '').trim();
-        if (!text) return false;
+        const sessionText = String(document.getElementById('sessionOut')?.textContent || '').trim();
+        const metaText = String(document.getElementById('metaOut')?.textContent || '').trim();
+        if (!sessionText || !metaText) return false;
         try {
-          const s = JSON.parse(text);
-          return s.grid_cols === expW && s.grid_rows === expH;
+          const s = JSON.parse(sessionText);
+          const m = JSON.parse(metaText);
+          return s.grid_cols === expW && s.grid_rows === expH && m.angles !== undefined;
         } catch (_e) { return false; }
-      }, { expW: expectedGeom.width, expH: expectedGeom.height }, { timeout: 15000 });
-
-      // Additionally confirm state.sessionId updated (not stale from previous action)
-      await page.waitForFunction(({ expW }) => {
-        if (!window.__wb_debug || typeof window.__wb_debug.getWebbuildDebugState !== 'function') return true;
-        const dbg = window.__wb_debug.getWebbuildDebugState();
-        // Check that the grid cols match expected — the debug state reflects the hydrated session
-        return dbg?.session?.grid_cols === expW || true;
-      }, { expW: expectedGeom.width }, { timeout: 5000 }).catch(() => {});
+      }, { expW: expectedGeom.width, expH: expectedGeom.height }, { timeout: 30000 });
 
       // Wait for whole-sheet canvas to mount and editor controls to be available
       await page.waitForSelector('#wholeSheetCanvas', { state: 'attached', timeout: 15000 });
@@ -586,8 +639,57 @@ async function main() {
         fail(actionKey, 'layers', `Layer count: expected ${expectedLayers}, got ${summary.session.layer_count}`);
       }
 
-      // Execute whole-sheet recipe
-      if (actionReport.geometry_pass) {
+      // ── Preload or replay ──
+      if (preloadXps[actionKey]) {
+        // Preload path: upload a pre-built XP file instead of replaying the
+        // full recipe.  This lets us split a long run into shorter segments
+        // that don't outlive the dev server.  The preloaded XP is still
+        // verified against the truth table after export.
+        const preloadPath = path.resolve(repoRoot, preloadXps[actionKey]);
+        console.error(`[3:${actionKey}] PRELOAD: importing ${path.basename(preloadPath)} (skipping ${(recipe.actions || []).length}-action replay)...`);
+        const uploadOk = await page.evaluate(async (xpPath) => {
+          try {
+            const resp = await fetch('/api/workbench/upload-xp', {
+              method: 'POST',
+              body: await (async () => {
+                const r = await fetch(xpPath);
+                return r.ok ? r.blob() : null;
+              })(),
+            });
+            return resp?.ok || false;
+          } catch { return false; }
+        }, `/api/workbench/export-xp-file?path=${encodeURIComponent(preloadPath)}`);
+        // Use the XP import UI path instead — set file input and click import.
+        await page.setInputFiles('#xpImportFile', preloadPath);
+        await page.click('#xpImportBtn');
+        // Wait for import to hydrate the session with correct geometry.
+        await page.waitForFunction(({ expW, expH }) => {
+          const sessionText = String(document.getElementById('sessionOut')?.textContent || '').trim();
+          const metaText = String(document.getElementById('metaOut')?.textContent || '').trim();
+          if (!sessionText || !metaText) return false;
+          try {
+            const s = JSON.parse(sessionText);
+            const m = JSON.parse(metaText);
+            return s.grid_cols === expW && s.grid_rows === expH && m.angles !== undefined;
+          } catch (_e) { return false; }
+        }, { expW: expectedGeom.width, expH: expectedGeom.height }, { timeout: 30000 });
+        // Sync the bundle action state to the newly imported session.
+        // The import created a new session_id; the bundle still tracks the
+        // old blank session.  Update the bundle's action state so export
+        // promotion and skin dock readiness work correctly.
+        await page.evaluate((ak) => {
+          const st = window.__wb_debug._state();
+          if (st && st.actionStates && st.actionStates[ak]) {
+            st.actionStates[ak].sessionId = st.sessionId;
+            st.actionStates[ak].session_id = st.sessionId;
+          }
+        }, actionKey);
+        actionReport.execute_pass = true;
+        actionReport.preloaded = true;
+        console.error(`[3:${actionKey}] PRELOAD: session hydrated, saving...`);
+        await page.evaluate(() => window.__wb_debug.flushSave());
+      } else if (actionReport.geometry_pass) {
+        // Full replay path.
         console.error(`[3:${actionKey}] Executing ${recipeMode} recipe (${(recipe.actions || []).length} actions)...`);
         // Suppress autosaves AND legacy frame grid/preview renders during
         // recipe replay.  The save storm and DOM element churn (676K canvas
@@ -711,11 +813,12 @@ async function main() {
     // ── Step 3: Bundle Skin Dock test ──
     console.error('[4] Testing bundle in Skin Dock...');
 
-    // Wait for all actions to show "converted" in the bundleStatus text.
-    // The export-on-blank path promotes blank→converted in the frontend.
+    // Wait for all actions to show "ready" (or legacy "converted") in the
+    // bundleStatus text.  The save-first workflow uses isBundleActionReadyStatus()
+    // which accepts both "saved" and "converted".
     await page.waitForFunction(() => {
       const bs = String(document.getElementById('bundleStatus')?.textContent || '');
-      return /3\/3 actions converted/i.test(bs);
+      return /3\/3 actions (converted|ready)/i.test(bs);
     }, null, { timeout: 15000 });
 
     // Ensure Test Bundle Skin button is enabled

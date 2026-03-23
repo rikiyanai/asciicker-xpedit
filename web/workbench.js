@@ -4215,9 +4215,6 @@
 
   function setDraftBox(box) {
     state.drawCurrent = box ? clampBoxToCanvas(box) : null;
-    if (state.drawCurrent) {
-      state.anchorBox = { x: state.drawCurrent.x, y: state.drawCurrent.y, w: state.drawCurrent.w, h: state.drawCurrent.h };
-    }
   }
 
   function sourceSelectionPrimaryBox() {
@@ -5348,7 +5345,7 @@
   }
 
   function deleteSelectedSourceObjectsOrDraft() {
-    if (state.sourceSelection.size > 0 || state.sourceSelectedCut || state.drawCurrent) {
+    if (state.sourceSelection.size > 0 || state.sourceSelectedCut) {
       pushHistory();
       if (state.sourceSelection.size > 0) {
         const ids = new Set([...state.sourceSelection].map((x) => Number(x)));
@@ -5368,13 +5365,16 @@
         status("Deleted vertical cut", "ok");
         return true;
       }
-      if (state.drawCurrent) {
-        state.drawCurrent = null;
-        renderSourceCanvas();
-        saveSessionState("delete-source-draft");
-        status("Deleted draft box", "ok");
-        return true;
-      }
+    }
+    // Draft-only without explicit selection: let caller handle via clear-all
+    // so a lingering draft does not block clearing committed boxes.
+    if (state.drawCurrent && !state.extractedBoxes.length && !state.sourceCutsV.length) {
+      pushHistory();
+      state.drawCurrent = null;
+      renderSourceCanvas();
+      saveSessionState("delete-source-draft");
+      status("Deleted draft box", "ok");
+      return true;
     }
     return false;
   }

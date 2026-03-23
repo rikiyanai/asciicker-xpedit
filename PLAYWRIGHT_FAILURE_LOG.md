@@ -1433,3 +1433,60 @@ Short version:
 - If `master` and `feat/base-path-support` differ on verifier waits, generated SAR coverage,
   state capture, route handling, or acceptance claims, reconcile that first.
 - Treat verifier/doc drift as a blocker for Milestone 2 foundation work, not as a minor cleanup.
+
+---
+
+## M2-A Structural PNG Baseline — Established 2026-03-23
+
+**Status:** ACCEPTANCE-GRADE PASS on both root-hosted and prefixed workbench URLs.
+
+**Merge:** `feat/base-path-support` merged into `master` at `e895298`.
+
+**Runner:** `scripts/xp_fidelity_test/run_structural_baseline_test.mjs`
+Built on `verifier_lib.mjs` (shared M2 foundation). Base-path-aware via `--url`.
+
+**Commands:**
+```bash
+# Root-hosted
+node scripts/xp_fidelity_test/run_structural_baseline_test.mjs \
+  --url http://127.0.0.1:5071/workbench --out-dir output/structural_baseline_root
+
+# Prefixed (/xpedit) — requires PIPELINE_BASE_PATH=/xpedit server
+node scripts/xp_fidelity_test/run_structural_baseline_test.mjs \
+  --url http://127.0.0.1:5072/xpedit/workbench --out-dir output/structural_baseline_prefixed
+```
+
+**Fixtures:**
+
+| Family | Fixture Path | Size |
+|--------|-------------|------|
+| idle | `tests/fixtures/baseline/player-idle.png` | 20 KB |
+| attack | `tests/fixtures/baseline/attack.png` | 25 KB |
+| death | `tests/fixtures/baseline/death.png` | 21 KB |
+
+**Gate verdicts (identical at root and /xpedit):**
+
+| Family | G10 (dims) | G11 (layers) | G12 (L0 meta) | Details |
+|--------|-----------|-------------|--------------|---------|
+| idle | THRESHOLD_MET | THRESHOLD_MET | THRESHOLD_MET | 126x80, 4 layers, L0=[8,1,8] |
+| attack | THRESHOLD_MET | THRESHOLD_MET | THRESHOLD_MET | 144x80, 4 layers, L0=[8,8] |
+| death | THRESHOLD_MET | THRESHOLD_MET | THRESHOLD_MET | 110x88, 3 layers, L0=[8,5] |
+
+**Hosting mode comparison:** Results identical across root and /xpedit for all 9 gate verdicts
+and all structural details. Only `hosting_mode`, `workbench_url`, `bundle_id`, and timestamps differ.
+
+**`_state()` usage:** The M2-A acceptance path (`run_structural_baseline_test.mjs`) contains
+zero `_state()` calls. It operates entirely via API fetch + `captureState` from `verifier_lib.mjs`.
+`verifier_lib.mjs` uses `_state()` in `captureState()` (for `actionStates` only) and
+`switchActionTab()` (for `activeActionKey` match), but neither is called by the structural
+baseline runner's acceptance path.
+
+**Requirements satisfied:**
+- M2-R5: structured per-family JSON evidence with fixture paths, step results, gate verdicts
+- M2-R6: acceptance lane passes identically at root and /xpedit
+
+**Closeout statement:**
+As of March 23, 2026, the M2-A structural PNG baseline passes as an acceptance-grade verifier
+slice on both canonical root-hosted and prefixed /xpedit workbench URLs. Results are identical
+across hosting modes for idle, attack, and death native-family fixtures, with all required
+G10/G11/G12 structural gates passing.

@@ -1,7 +1,7 @@
 # Milestone 2: Implementation-Ready Checklist
 
 Date: 2026-03-21
-Status: draft
+Status: active (M2-A established 2026-03-23, remaining phases in progress)
 Based on: `docs/plans/2026-03-21-milestone-2-practical-png-ingest-plan.md`
 Method: Direct codebase inspection (read-only audit)
 

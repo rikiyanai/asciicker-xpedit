@@ -1,3 +1,13 @@
+/**
+ * CLASSIFICATION: UI-driven with diagnostic observation layer
+ * ACTION PATH:    XP import via file input; cell painting via canvas mouse events
+ *                 (acceptance mode). Inspector actions via page.evaluate()
+ *                 (diagnostic mode only — refused in acceptance mode).
+ * OBSERVATION:    Cell verification via __wb_debug.readFrameCell() / frameSignature()
+ * ELIGIBLE FOR:   UI-driven acceptance (acceptance mode); diagnostic (diagnostic mode)
+ * CAVEAT:         Cell-level verification reads use debug API. Actions themselves are
+ *                 UI-driven in acceptance mode. The --mode flag enforces the boundary.
+ */
 import { chromium } from 'playwright';
 import fs from 'fs';
 import path from 'path';

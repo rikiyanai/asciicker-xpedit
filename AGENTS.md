@@ -56,6 +56,16 @@ Short version:
 
 - Do not build new M2 work on top of drifted verifier code or stale planning docs.
 - If `master` and `feat/base-path-support` disagree on verifier semantics, treat that as a blocker and reconcile it before adding new slices.
+
+### Acceptance vs Diagnostic Enforcement (MANDATORY)
+
+- **Acceptance evidence** = user-reachable actions through the shipped UI only: button clicks, canvas drags, file inputs, DOM interactions. Nothing else qualifies.
+- **Structural-contract evidence** = API-driven path explicitly permitted by a structural contract doc (e.g., `PNG_STRUCTURAL_BASELINE_CONTRACT.md`). Valid for structural safety gates. Does NOT prove UI workflows.
+- **Diagnostic evidence** = `fetch()` calls, `page.evaluate()`, `window.__wb_debug` methods, ad hoc scripts. Never acceptance. Never labeled PASS/VERIFIED/acceptance.
+- Any runner that uses `fetch()` or `page.evaluate(async => fetch(...))` in code labeled "acceptance" is a **process violation**. Log it in `PLAYWRIGHT_FAILURE_LOG.md`.
+- If the verifier cannot express a required UI workflow, that is a **verifier gap**, not permission to bypass it with API calls. Fix the verifier first.
+- See `AGENT_PROTOCOL.md` §13a-13d for the full protocol.
+
 ## Document Authority Model
 
 This repo uses a 3-doc canonical authority model. Only these docs are authority for active execution state:

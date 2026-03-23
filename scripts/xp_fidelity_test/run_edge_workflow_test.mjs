@@ -1,3 +1,14 @@
+/**
+ * CLASSIFICATION: mixed — UI-driven actions with debug API state observation
+ * ACTION PATH:    Tab switching via DOM click, partial_bundle_gating via button clicks,
+ *                 generated SAR seed recipes via DOM interactions
+ * OBSERVATION:    Core state capture via __wb_debug.getState() + __wb_debug._state()
+ *                 (for actionStates). Tab-switch readiness via _state().activeActionKey.
+ * ELIGIBLE FOR:   M1 historical evidence (closed under then-accepted model).
+ *                 NOT pure UI-driven acceptance going forward.
+ * CAVEAT:         Actions are UI-driven but readiness waits and state assertions rely
+ *                 on diagnostic debug API. This is the M1 edge-workflow pattern.
+ */
 import { chromium } from 'playwright';
 import fs from 'fs';
 import path from 'path';

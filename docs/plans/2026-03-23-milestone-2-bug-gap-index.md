@@ -13,7 +13,7 @@
 | ID | Title | Scope | Severity | Status | Evidence |
 |----|-------|-------|----------|--------|----------|
 | PB-01 | Anchor set not undoable (context menu) | both | HIGH | OPEN | `workbench.js:6592` — `setAnchorFromTarget()` called without `pushHistory()` |
-| PB-02 | Anchor set not undoable (setDraftBox implicit) | both | MEDIUM | OPEN | `workbench.js:4086` — `setDraftBox()` silently mutates `anchorBox` without undo |
+| PB-02 | ~~Anchor set not undoable (setDraftBox implicit)~~ | both | ~~MEDIUM~~ | CLOSED (M2-B) | `setDraftBox()` implicit `anchorBox` mutation removed. Anchor now only set via explicit "Set as anchor" context menu. PLAYWRIGHT_FAILURE_LOG M2-B closeout. |
 | PB-03 | File upload clears anchor without undo | both | MEDIUM | OPEN | `workbench.js:6513` — `state.anchorBox = null` with no `pushHistory()` |
 | PB-04 | 4 root-relative paths in workbench.html | base-path | ~~HIGH~~ N/A | STALE-DOC (not a bug) | `workbench.html:7,8,425,426` appear root-relative in raw HTML but are rewritten at serve time by `_serve_web_html()` in `app.py:79-99` — all 4 paths are prefixed with `BASE_PATH` + cache-bust nonce. Confirmed working under `/xpedit`. |
 | PB-05 | OvalTool on disk but not wired | both | LOW | DEFERRED | `web/rexpaint-editor/tools/oval-tool.js` exists, not imported in `whole-sheet-init.js` |
@@ -34,7 +34,7 @@
 | VB-01 | `getState()` missing 9 P1 fields | both | ~~HIGH~~ | CLOSED (`f246828`) | All 9 P1 fields added: `bundleId`, `activeActionKey`, `templateSetKey`, `activeLayer`, `visibleLayers`, `layerCount`, `sessionDirty`, `gridCols`, `gridRows` |
 | VB-02 | `getState()` missing 2 P2 fields | both | ~~MEDIUM~~ | CLOSED (`f246828`) | Both P2 fields added: `sourceCutsV`, `sourceCanvasZoom` |
 | VB-03 | `_state()` leaks full mutable state by reference | both | MEDIUM | OPEN (design debt) | `workbench.js:7193` — returns raw `state` object, ~80+ fields, mutable |
-| VB-04 | 0 of 5 M2 verifier slices implemented | both | HIGH | OPEN | Slices 1-5 designed in `2026-03-21-milestone-2-png-verifier-design.md`, none built |
+| VB-04 | ~~0~~ 2 of 5 M2 verifier slices implemented | both | HIGH | OPEN (3 remaining) | Slice 1 (structural baseline) and Slice 2 (source-panel workflow) built and passing. Slices 3-5 not started. |
 | VB-05 | No shared verifier infrastructure extracted | both | HIGH | OPEN | `selectors.mjs`, `verifier_lib.mjs`, `action_registry.json`, `recipe_schema.json` all needed per design |
 | VB-06 | `test_contracts.py` hardcoded to root "/" | base-path | ~~MEDIUM~~ | CLOSED (`7d3b186`) | `hosted_client` fixture parameterizes root + /xpedit; 80/80 pass |
 | VB-07 | `test_workbench_flow.py` hardcoded to root "/" | base-path | ~~MEDIUM~~ | CLOSED (`7d3b186`) | `hosted_client` fixture parameterizes root + /xpedit |
@@ -83,10 +83,10 @@
 
 | Area | What's Missing | Blocking Factor |
 |------|---------------|-----------------|
-| Source panel input modes | No test for file-browse, url-input, or drag-drop as source acquisition paths | No verifier capability exists |
+| Source panel input modes | No test for url-input or drag-drop as source acquisition paths | File-browse covered by M2-B runner (step 1). URL and drag-drop still untested. |
 | PNG structural edge cases | No tests for corrupt PNG, wrong color mode (palette/RGBA/grayscale), oversized, zero-dimension, non-PNG masquerading | No fixtures or negative-path tests |
-| Source context-menu action outcomes | DOM element presence probed by coverage agent; NO functional verification of click → state change | VB-01 (getState gaps) blocks state assertion |
-| Undo/redo state verification | Coverage agent probes buttons; no pre/post state comparison after undo/redo cycle | VB-01 blocks; PB-01/02/03 make anchor undo untestable |
+| ~~Source context-menu action outcomes~~ | ~~DOM element presence probed by coverage agent; NO functional verification~~ | **PARTIALLY RESOLVED** — M2-B runner functionally verifies C1 (add sprite), C3 (set anchor), C4 (pad to anchor). C2, C5-C9 still untested. |
+| Undo/redo state verification | Coverage agent probes buttons; no pre/post state comparison after undo/redo cycle | PB-01/03 make anchor undo untestable; PB-02 CLOSED |
 | Multi-frame semantic operations | Copy frame, clone angle, reorder frames — no test | No verifier slice or agent covers this |
 
 ### Partial Coverage
@@ -148,23 +148,23 @@ Classification of all 96 user-reachable actions from SAR blueprint:
 
 | ID | Action | Status |
 |----|--------|--------|
-| S1 | Set source mode (draw) | implemented + untested |
-| S2 | Set source mode (select) | implemented + untested |
-| S3 | Draw box | implemented + partially covered (drag-drop agent draws 1 box) |
-| S4 | Commit box | implemented + partially covered (drag-drop agent) |
-| S5 | Select box | implemented + partially covered (drag-drop agent) |
+| S1 | Set source mode (draw) | implemented + covered (M2-B source panel runner step 2) |
+| S2 | Set source mode (select) | implemented + covered (M2-B source panel runner step 5) |
+| S3 | Draw box | implemented + covered (M2-B source panel runner steps 3, 7) |
+| S4 | Commit box | implemented + covered (M2-B source panel runner step 4 via C1) |
+| S5 | Select box | implemented + covered (M2-B source panel runner step 5) |
 | S6 | Move box | implemented + untested |
 | S7 | Resize box | implemented + untested |
 | S8 | Delete box | implemented + untested |
-| S9 | Find sprites | implemented + untested |
+| S9 | Find sprites | implemented + covered (M2-B source panel runner step 8) |
 | S10 | Row select mode | implemented + untested |
 | S11 | Column select mode | implemented + untested |
 | S12 | Pad to anchor | implemented + untested |
-| S13 | Set anchor | implemented + untested (PB-01: not undoable) |
+| S13 | Set anchor | implemented + covered (M2-B source panel runner step 6; PB-01 undo gap remains) |
 | S14 | Cut V overlay | implemented + untested |
 | S15 | Cut H overlay | implemented + untested |
 | S16 | Zoom source | implemented + untested |
-| S17 | Clear all boxes | implemented + untested |
+| S17 | Clear all boxes | implemented + covered (M2-B source panel runner step 9; Delete Box UX bug fixed) |
 | S18 | Undo source op | implemented + untested |
 | S19 | Redo source op | implemented + untested |
 
@@ -172,10 +172,10 @@ Classification of all 96 user-reachable actions from SAR blueprint:
 
 | ID | Action | Status |
 |----|--------|--------|
-| C1 | Add as sprite | implemented + untested (DOM presence probed only) |
+| C1 | Add as sprite | implemented + covered (M2-B source panel runner step 4) |
 | C2 | Add to row | implemented + partially covered (AddToRowSequence agent) |
-| C3 | Set anchor (ctx) | implemented + untested (PB-01: not undoable) |
-| C4 | Pad to anchor (ctx) | implemented + untested |
+| C3 | Set anchor (ctx) | implemented + covered (M2-B source panel runner step 6; PB-01 undo gap remains) |
+| C4 | Pad to anchor (ctx) | implemented + covered (M2-B source panel runner step 7; PB-02 fixed) |
 | C5 | Delete box (ctx) | implemented + untested |
 | C6 | Grid copy | implemented + untested |
 | C7 | Grid paste | implemented + untested |
@@ -271,10 +271,12 @@ Classification of all 96 user-reachable actions from SAR blueprint:
 
 | Classification | Count |
 |---------------|-------|
-| implemented + covered | 14 |
+| implemented + covered | 23 |
 | implemented + partially covered | 12 |
-| implemented + untested | 57 |
+| implemented + untested | 48 |
 | blocked by missing verifier capability | 1 |
 | blocked by missing product behavior | 5 |
 | deferred from M2 | 7 |
 | **Total** | **96** |
+
+> **2026-03-23 update:** 9 source-panel actions moved from untested to covered by M2-B runner (S1, S2, S3, S4, S5, S9, S13, S17, C1, C3, C4). PB-02 closed.

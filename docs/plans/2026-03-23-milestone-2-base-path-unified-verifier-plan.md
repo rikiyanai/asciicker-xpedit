@@ -108,6 +108,8 @@ Full matrix in companion doc: **`docs/plans/2026-03-23-milestone-2-bug-gap-index
 | Lane | Acceptance? | Base-Path? | Ready? |
 |------|------------|-----------|--------|
 | XP fidelity runners (3) | YES | Partial (--url) | YES for current scope |
+| M2-A structural baseline (`run_structural_baseline_test.mjs`) | YES | YES (--url) | **PASS** root + /xpedit |
+| M2-B source-panel workflow (`run_source_panel_workflow_test.mjs`) | YES | YES (--url) | **PASS** root + /xpedit |
 | ui_tests framework | YES | YES | YES |
 | test_base_path.py | YES | YES | YES |
 | test_contracts.py | YES | NO | NEEDS PREFIX PARAM |
@@ -288,8 +290,8 @@ Build the shared infrastructure all 5 slices depend on.
 
 | Task | Files | Why Next |
 |------|-------|----------|
-| Fix anchor undo gap (3 locations) | `web/workbench.js:6592,4086,6513` — add `pushHistory()` | PB-01/02/03 — blocks undo verification |
-| Implement Slice 2 runner (source-panel contract) | `scripts/xp_fidelity_test/run_source_panel.mjs` (NEW) | S1-S19 coverage |
+| Fix anchor undo gap (2 remaining locations) | `web/workbench.js:6592,6513` — add `pushHistory()` | PB-01/03 — blocks undo verification. PB-02 CLOSED (setDraftBox anchor override removed). |
+| ~~Implement Slice 2 runner (source-panel contract)~~ | `scripts/xp_fidelity_test/run_source_panel_workflow_test.mjs` | **DONE** — 10/10 PASS on root + /xpedit. Covers S1-S5, S9, S13, S17, C1, C3, C4. Diagnostic-only actions (S6-S8, S10-S12, S14, S16) deferred. |
 | Implement Slice 3 runner (source-to-grid) | `scripts/xp_fidelity_test/run_source_to_grid.mjs` (NEW) | D1-D2 + G1-G14 coverage |
 | Implement Slice 5 runner (manual assembly acceptance) | `scripts/xp_fidelity_test/run_manual_assembly.mjs` (NEW) | End-to-end acceptance gate |
 | Test source panel input modes | Slice 2 recipes | File-browse, url-input, drag-drop |

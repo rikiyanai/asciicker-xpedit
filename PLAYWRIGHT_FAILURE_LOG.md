@@ -1483,13 +1483,15 @@ baseline runner's acceptance path.
 
 **Requirements satisfied:**
 - M2-R5: structured per-family JSON evidence with fixture paths, step results, gate verdicts
-- M2-R6: acceptance lane passes identically at root and /xpedit
+- M2-R6: structural-contract lane passes identically at root and /xpedit (NOT UI-driven acceptance)
 
 **Closeout statement:**
-As of March 23, 2026, the M2-A structural PNG baseline passes as an acceptance-grade verifier
-slice on both canonical root-hosted and prefixed /xpedit workbench URLs. Results are identical
-across hosting modes for idle, attack, and death native-family fixtures, with all required
-G10/G11/G12 structural gates passing.
+As of March 23, 2026, the M2-A structural PNG baseline passes as a **structural-contract
+verifier slice** (API-driven, NOT UI-driven acceptance) on both canonical root-hosted and
+prefixed /xpedit workbench URLs. Results are identical across hosting modes for idle, attack,
+and death native-family fixtures, with all required G10/G11/G12 structural gates passing.
+This proves the API contract and structural safety gates. It does NOT prove the UI-driven
+bundle workflow (template selector, upload button, analyze/run UI, export button, tab switching).
 
 ---
 
@@ -1624,7 +1626,7 @@ None. The runner uses only `getState()` (which includes P1 and P2 fields) via
 - M2-R1: verifier covers source panel (second slice of full workbench)
 - M2-R2: SAR model — 10 actions mapped with pre/post state and invariants
 - M2-R5: structured per-step JSON evidence with state snapshots
-- M2-R6: acceptance lane passes identically at root and /xpedit
+- M2-R6: UI-driven lane passes identically at root and /xpedit (actions via DOM; observation via getState())
 
 ### Remaining gaps for source-panel coverage
 

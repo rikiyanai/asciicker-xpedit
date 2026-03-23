@@ -69,9 +69,9 @@ Each capability row has five columns:
 
 | # | Action | Canon Source | Code Evidence | Proof Evidence | Status | M2 Scope |
 |---|--------|-------------|---------------|----------------|--------|----------|
-| U1 | Upload PNG | M2 plan, SAR blueprint | `wbUpload()` → `/api/upload` | M2-A structural baseline PASS | PROVEN | M2-A |
+| U1 | Upload PNG | M2 plan, SAR blueprint | `wbUpload()` → `/api/upload` | M2-A structural-contract PASS (API-driven, not UI proof); M2-B source-panel UI-driven PASS (file input + button click) | PROVEN (structural + UI) | M2-A, M2-B |
 | U2 | Analyze | M2 plan | `wbAnalyze()` → `/api/analyze` | Wired, no specific proof entry | WIRED | M2-F |
-| U3 | Convert to XP (Run pipeline) | M2 plan | `wbRun()` → `/api/run` | M2-A structural baseline PASS | PROVEN | M2-A |
+| U3 | Convert to XP (Run pipeline) | M2 plan | `wbRun()` → `/api/run` | M2-A structural-contract PASS (API-driven, not UI proof) | PROVEN (structural-contract only) | M2-A |
 
 ### Family 3: Source Panel (19 actions)
 
@@ -242,12 +242,12 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 |----------|-------|-------------|----------|
 | **XP import → edit → save → export → runtime** | T6 → edit → T3 → T4 → T7 | **PROVEN** | M1 full_recreation PASS, 7/7 edge workflows |
 | **Bundle: apply → per-action edit → save → test** | T1 → T2 → edit → T3 → T7 | **PROVEN** | M1 action_tab_hydration + partial_bundle_gating PASS |
-| **PNG upload → analyze → convert → session** | U1 → U2 → U3 → T3 | **PROVEN (structural)** | M2-A 9/9 structural gates PASS |
+| **PNG upload → analyze → convert → session** | U1 → U2 → U3 → T3 | **PROVEN (structural-contract only, API-driven)** | M2-A 9/9 structural gates PASS via fetch() — does NOT prove UI button workflow |
 | **PNG → source panel → manual assembly → grid → WS → export** | U1 → S12 → S7 → D1 → W2 → T3 → T4 | **NOT PROVEN** | All steps WIRED but no end-to-end verifier coverage |
 | **Source panel → manual box draw → drag to grid** | S2 → S7 → D1 | **NOT PROVEN** | All steps WIRED, zero verifier coverage |
 | **Whole-sheet correction → save → export** | W1 → W2-W8 → T3 → T4 | **NOT PROVEN** | WS tools WIRED, save/export PROVEN separately |
 | **Semantic editing (region-based)** | Dict lookup → W2 → T3 → T4 | **NOT PROVEN** | M2-E scope, dictionaries exist, no verifier |
-| **Base-path parity** | Any workflow at /xpedit | **PROVEN (structural)** | Base-path verification: 0 regressions, M2-A PASS at both root and /xpedit |
+| **Base-path parity** | Any workflow at /xpedit | **PROVEN (structural-contract + M2-B UI)** | M2-A structural-contract PASS at both root + /xpedit; M2-B source-panel UI-driven PASS at both; base-path verification: 0 regressions |
 
 ---
 

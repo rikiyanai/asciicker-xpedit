@@ -65,13 +65,22 @@ Short version:
 - The current priority is Milestone 2 verifier architecture and practical PNG ingest/manual assembly on top of the closed M1 baseline.
 - The whole-sheet editor remains the primary correction surface, but M2 verification scope is the entire shipped workbench, not just the editor.
 
+## Acceptance vs Diagnostic Boundary (MANDATORY)
+
+- **Acceptance evidence** = user-reachable actions through the shipped UI surface ONLY (button clicks, canvas drags, file inputs, DOM interactions).
+- **Diagnostic evidence** = `fetch()` API calls, `page.evaluate()` state reads, `window.__wb_debug` methods, ad hoc scripts.
+- **Structural contract evidence** = API-backed path explicitly permitted by a structural contract doc (e.g., `PNG_STRUCTURAL_BASELINE_CONTRACT.md`).
+- Runners that use `fetch()` or `page.evaluate(async => fetch(...))` are NEVER acceptance-grade. They are structural-contract or diagnostic.
+- If the verifier cannot express a UI workflow, that is a verifier gap — fix the verifier, do not bypass it with API calls.
+- Citations: AGENTS.md:29,46; AGENT_PROTOCOL.md:305-354; workbench-canonical-spec.md:67-74.
+
 ## Current High-Signal Truths
 
 - `PLAYWRIGHT_FAILURE_LOG.md` is the current log of record for M1 closeout and verifier fixes.
 - M1 edge-workflow closeout on `master` includes `partial_bundle_gating`, `action_tab_hydration`, and generated SAR seed passes.
 - Base-path verification found no `/xpedit`-specific regressions for the M1 edge-workflow lane.
-- M2-A structural PNG baseline is established (9/9 gate verdicts PASS on both hosting modes).
-- M2-B source-panel workflow: evidence exists (10/10 steps PASS on both hosting modes, PB-02 + Delete Box UX fixed) but runner and product fixes are **uncommitted**. Treat as provisional until committed and independently reverified.
+- M2-A structural PNG baseline: **structural-contract proof only** (API-driven, not UI-driven). Valid per `PNG_STRUCTURAL_BASELINE_CONTRACT.md`. Does NOT prove the bundle UI workflow. See PLAYWRIGHT_FAILURE_LOG.md process failure entry.
+- M2-B source-panel workflow: evidence exists (10/10 steps PASS on both hosting modes, PB-02 + Delete Box UX fixed) but runner and product fixes are **uncommitted**. Treat as provisional until committed and independently reverified. This runner IS UI-driven (DOM clicks + canvas drags).
 - `feat/base-path-support` has newer M2 verifier-foundation work, but it may still drift from canonical `master` on runner behavior and docs.
 - `window.__wb_debug.getState()` is the preferred verifier state surface; `_state()` fallback should be treated as a temporary exception, not the long-term contract.
 - Any doc claiming M1 is still open, or claiming the 9 P1 `getState()` gaps or hosted-test gaps are still unresolved on `feat/base-path-support`, should be re-audited before being trusted.

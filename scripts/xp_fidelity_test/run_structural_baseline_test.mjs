@@ -3,16 +3,21 @@
 /**
  * run_structural_baseline_test.mjs — M2-A Structural PNG Baseline Verifier
  *
+ * CLASSIFICATION: structural-contract only (NOT UI-driven acceptance)
+ * ACTION PATH:    All actions via fetch() API calls — zero DOM/UI interaction
+ * OBSERVATION:    API response JSON only — no debug API reads
+ * ELIGIBLE FOR:   Structural-contract evidence per PNG_STRUCTURAL_BASELINE_CONTRACT.md
+ * NOT ELIGIBLE:   UI-driven acceptance evidence (does not prove UI workflow works)
+ *
  * Validates the PNG_STRUCTURAL_BASELINE_CONTRACT:
  *   PNG upload → bundle create → action-grid apply → export → G10/G11/G12 gates
  *
+ * This runner proves the API contract and structural gates are sound.
+ * It does NOT prove: template selector UI, upload button, analyze/run UI,
+ * export button, tab switching, or any user-visible interaction path.
+ *
  * Built on verifier_lib.mjs (shared M2 verifier foundation).
  * Base-path-aware: pass --url to test under /xpedit/workbench.
- *
- * Requirements checked:
- *   M2-R1  verifier covers full workbench (structural pipeline is first slice)
- *   M2-R5  structured workflow-state evidence
- *   M2-R6  acceptance lanes pass at root and /xpedit
  *
  * Usage:
  *   node run_structural_baseline_test.mjs --out-dir output/structural_baseline

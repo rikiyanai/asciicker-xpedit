@@ -337,13 +337,15 @@ const RECIPE_PARTIAL_BUNDLE_GATING = {
         { field: 'buttons.save', op: 'enabled', message: 'Save must still be enabled (workbench responsive)' },
       ],
     },
-    // Step 3: Save idle action — transitions to "saved" but not "converted"
+    // Step 3: Save idle action — session data persists to disk, but the blank
+    // canvas has no visual content so saveCurrentActionProgress() correctly
+    // refuses to mark the action "saved" for bundle readiness.
     {
       action: 'save_action',
       params: {},
       assertions: [
-        { field: 'actionStates.idle.status', op: 'match', value: 'saved|converted', message: 'idle should be saved or converted after save' },
-        { field: 'bundleStatus', op: 'match', value: '0/3|1/3', message: 'Bundle status must reflect partial readiness' },
+        { field: 'actionStates.idle.status', op: 'eq', value: 'blank', message: 'idle must stay blank after saving an empty canvas' },
+        { field: 'bundleStatus', op: 'contains', value: '0/3', message: 'Bundle status must still show 0/3 (no false readiness)' },
         { field: 'buttons.testThisSkin', op: 'disabled', message: 'Test This Skin must still be disabled after 1 save' },
       ],
     },

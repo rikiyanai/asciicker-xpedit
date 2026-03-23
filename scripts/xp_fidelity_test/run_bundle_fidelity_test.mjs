@@ -673,6 +673,17 @@ async function main() {
             return s.grid_cols === expW && s.grid_rows === expH && m.angles !== undefined;
           } catch (_e) { return false; }
         }, { expW: expectedGeom.width, expH: expectedGeom.height }, { timeout: 30000 });
+        // Sync the bundle action state to the newly imported session.
+        // The import created a new session_id; the bundle still tracks the
+        // old blank session.  Update the bundle's action state so export
+        // promotion and skin dock readiness work correctly.
+        await page.evaluate((ak) => {
+          const st = window.__wb_debug._state();
+          if (st && st.actionStates && st.actionStates[ak]) {
+            st.actionStates[ak].sessionId = st.sessionId;
+            st.actionStates[ak].session_id = st.sessionId;
+          }
+        }, actionKey);
         actionReport.execute_pass = true;
         actionReport.preloaded = true;
         console.error(`[3:${actionKey}] PRELOAD: session hydrated, saving...`);

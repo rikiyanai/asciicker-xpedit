@@ -152,6 +152,40 @@ async function _getCanvasBox(page, selector, didScroll) {
   return box;
 }
 
+// Get the scroll container's viewport bounds for visibility checks.
+async function _getScrollBounds(page) {
+  return page.evaluate(() => {
+    const scroll = document.getElementById('wholeSheetScroll');
+    if (!scroll) return null;
+    const rect = scroll.getBoundingClientRect();
+    return { x: rect.left, y: rect.top, w: rect.width, h: rect.height };
+  });
+}
+
+// Verify viewport coordinates are inside the scroll container's visible area.
+// If not, force-scroll to center the target and refresh the bounding box.
+async function _ensureVisible(page, selector, canvasPx, canvasPy, vpX, vpY) {
+  const bounds = await _getScrollBounds(page);
+  if (!bounds) return { vpX, vpY, refreshed: false };
+  const margin = 4; // px inside the container edge
+  if (vpX >= bounds.x + margin && vpX <= bounds.x + bounds.w - margin &&
+      vpY >= bounds.y + margin && vpY <= bounds.y + bounds.h - margin) {
+    return { vpX, vpY, refreshed: false };
+  }
+  // Force-center the target and refresh the bounding box.
+  await page.evaluate(({ tx, ty }) => {
+    const scroll = document.getElementById('wholeSheetScroll');
+    if (!scroll) return;
+    scroll.scrollLeft = Math.max(0, tx - scroll.clientWidth / 2);
+    scroll.scrollTop = Math.max(0, ty - scroll.clientHeight / 2);
+  }, { tx: canvasPx, ty: canvasPy });
+  const box = await page.locator(selector).boundingBox();
+  if (!box) throw new Error(`canvas element not found after re-scroll: ${selector}`);
+  _bboxCache.selector = selector;
+  _bboxCache.box = box;
+  return { vpX: box.x + canvasPx, vpY: box.y + canvasPy, refreshed: true };
+}
+
 async function dragOnCanvas(page, selector, x1, y1, x2, y2, cellSize) {
   const startPx = x1 * cellSize + cellSize / 2;
   const startPy = y1 * cellSize + cellSize / 2;
@@ -180,8 +214,14 @@ async function clickCanvasCell(page, selector, x, y, cellSize) {
   const posY = y * cellSize + cellSize / 2;
   const didScroll = await centerCanvasRegion(page, posX, posY, posX, posY);
   const canvasBox = await _getCanvasBox(page, selector, didScroll);
-  const vpX = canvasBox.x + posX;
-  const vpY = canvasBox.y + posY;
+  let vpX = canvasBox.x + posX;
+  let vpY = canvasBox.y + posY;
+  // For edge cells where the safe-zone centering can't fully protect
+  // (top/bottom rows, left/right columns near scroll limits), verify the
+  // click lands inside the scroll container and force-recenter if not.
+  const vis = await _ensureVisible(page, selector, posX, posY, vpX, vpY);
+  vpX = vis.vpX;
+  vpY = vis.vpY;
   await page.mouse.click(vpX, vpY);
 }
 

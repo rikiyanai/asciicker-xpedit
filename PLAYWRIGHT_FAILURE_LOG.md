@@ -1213,6 +1213,52 @@ bug. Do not broaden investigation.
 - Button remains enabled through all partial states (after save, after partial readiness)
 - Verifier screenshot: `edge-partial_bundle_gating-step0-FAIL.png`
 
+### 2026-03-22: Fresh-server full_recreation — Skin Dock PASSES
+
+- Artifact: `output/xp-fidelity-test/bundle-run-2026-03-22T18-47-57Z/result.json`
+- Mode: `full_recreation`
+- HEAD: `b1faac3`
+- Server: freshly restarted with save-first backend code (`14d99d6`)
+
+**Result**:
+
+- `idle_pass=false` (10 mismatches — all in rows 0-1, top canvas edge)
+- `attack_pass=false` (1 mismatch — rightmost column (143,47))
+- `death_pass=false` (1 mismatch — bottom-right (104,87))
+- `skin_dock_pass=true`
+- `overall_pass=false`
+- `bundleStatus: "Bundle: 3/3 actions ready"`
+- `playable: true`
+
+**Significance**:
+
+- First run where **Skin Dock/runtime passes end-to-end** with the save-first workflow.
+- All core product blockers cleared: crash class, skin dock, save-first readiness.
+- `overall_pass=false` because of remaining cell-fidelity edge mismatches.
+
+**Mismatch pattern — all canvas-edge cells**:
+
+- idle: 10 cells in rows 0-1 only (top edge, `scrollTop` can't go below 0)
+- attack: 1 cell at column 143 of 144 (rightmost column)
+- death: 1 cell at (104,87) in a 110x88 grid (bottom-right corner)
+
+**Classification**: harness/verifier edge-hit artifacts at scroll container boundaries,
+not known product failures. The safe-zone centering prevents sidebar overlap for interior
+cells but cannot protect cells at extreme canvas edges where scroll limits prevent
+centering.
+
+**Previous runs with dead server**: Two runs on the same HEAD with the server down
+produced worse results (export failures, geometry mismatches, timeouts). Those were
+caused by server death, not code regressions. The fresh-server run is the authoritative
+result.
+
+**Milestone 1 status**:
+
+- Core product blockers: **CLEARED** (crash, skin dock, save-first)
+- Formal closeout: **NOT YET** — `overall_pass=false` due to edge mismatches
+- Next step: edge-safe harness patch to fix top/bottom/left/right boundary cells,
+  then rerun. If mismatches remain, write explicit acceptance decision.
+
 **Root cause:** `updateWebbuildUI()` at workbench.js:816 checked `actionBusy || !preflightOk || !sessionReady` but did NOT check bundle readiness. After template apply, a blank session is loaded (sessionReady=true), so the button was enabled despite 0/3 actions ready.
 
 **Fix:** Added `isBundleMode() && !areAllEnabledBundleActionsReady()` to the disabled condition at workbench.js:816. Button now shows "Disabled: not all required bundle actions are ready" in bundle mode when readiness < 3/3.

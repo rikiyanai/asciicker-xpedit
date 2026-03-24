@@ -435,6 +435,10 @@ function _applyEyedropperSample(glyph, fg, bg) {
 
 function _switchTool(name) {
   if (!editorState.mounted || !editorState.canvas) return;
+  // Deactivate select tool when switching away (clears stale selection)
+  if (editorState.activeTool === 'select' && name !== 'select' && editorState.selectTool) {
+    editorState.selectTool.deactivate();
+  }
   editorState.activeTool = name;
   const canvasEl = editorState.canvas.canvasElement;
   switch (name) {
@@ -492,6 +496,25 @@ function _onKeyDown(e) {
   const tag = e.target.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
+  // Ctrl/Cmd+key shortcuts (undo/redo) before tool shortcuts
+  if (e.ctrlKey || e.metaKey) {
+    switch (e.key.toLowerCase()) {
+      case 'z':
+        if (editorState.onUndo) editorState.onUndo();
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      case 'y':
+        if (editorState.onRedo) editorState.onRedo();
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+    }
+    // Let all other Ctrl/Cmd combos (Ctrl+C, Ctrl+R, etc.) pass through
+    return;
+  }
+
+  // Plain key tool shortcuts — only fire without modifiers
   switch (e.key.toLowerCase()) {
     case 'c':
       _switchTool('cell');
@@ -518,24 +541,8 @@ function _onKeyDown(e) {
       e.preventDefault();
       break;
     case 's':
-      if (!e.ctrlKey && !e.metaKey) {
-        _switchTool('select');
-        e.preventDefault();
-      }
-      break;
-    case 'z':
-      if (e.ctrlKey || e.metaKey) {
-        if (editorState.onUndo) editorState.onUndo();
-        e.preventDefault();
-        e.stopPropagation();
-      }
-      break;
-    case 'y':
-      if (e.ctrlKey || e.metaKey) {
-        if (editorState.onRedo) editorState.onRedo();
-        e.preventDefault();
-        e.stopPropagation();
-      }
+      _switchTool('select');
+      e.preventDefault();
       break;
   }
 }

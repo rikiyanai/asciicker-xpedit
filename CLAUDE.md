@@ -83,6 +83,7 @@ Short version:
 - M2-B source-panel workflow: **committed proof** at `5c67ef2`. 10/10 PASS on both hosting modes on committed code. UI-driven actions with read-only diagnostic observation layer. PB-02 + Delete Box UX fixed.
 - `window.__wb_debug.getState()` is the preferred verifier state surface; `_state()` fallback should be treated as a temporary exception, not the long-term contract.
 - Any doc still referencing `feat/base-path-support` as a live branch is stale — that branch was merged and retired on 2026-03-23.
+- MVP deployment targets Google Cloud Run (single instance, ephemeral storage). Deploy via GitHub Actions `deploy-cloudrun.yml`. Custom domain routing via Cloudflare Worker at `rikiworld.com/xpedit/*`. See `docs/plans/2026-03-24-mvp-deploy-cloud-run.md`.
 
 ## Do Not Assume
 

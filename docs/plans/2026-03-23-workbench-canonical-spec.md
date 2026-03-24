@@ -53,7 +53,7 @@ Execute in dependency order. M2-B and M2-C may run in parallel after M2-A.
 
 **Last reviewed:** 2026-03-24
 
-1. **MVP deployment to `rikiworld.com/xpedit`** — base-path hosting is proven locally; the missing piece is real server deployment automation plus post-deploy smoke verification.
+1. **MVP deployment to `rikiworld.com/xpedit`** — deploy automation is implemented: Dockerfile, `deploy-cloudrun.yml` (GitHub Actions → Cloud Run), Cloudflare Worker routing, post-deploy smoke tests. Remaining: one-time GCP setup + first deploy.
 2. **M2-D full SAR workflow coverage** — M2-B and M2-C are established. Remaining WIRED actions outside the whole-sheet blocked/deferred set need committed proof.
 3. **PB-01/02/03 undo gaps** in source panel anchor ops — small fixes that affect M2-D completeness.
 4. **PB-06 SelectTool visualization** — tool activates but canvas.setSelectionTool() never called, marching-ants not rendered, drag→bounds unverified. W18 (undo) is PROVEN. W16/W17 remain deferred.

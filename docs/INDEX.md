@@ -168,9 +168,9 @@ Related docs:
 Summary:
 - MVP is server-backed Flask, not static GitHub Pages
 - committed runtime payload under `runtime/termpp-skin-lab-static` is part of the deployable product
-- `/xpedit` subpath hosting is now implemented and proven; MVP launch should target a real reverse-proxied server deployment at `rikiworld.com/xpedit`
-- preferred MVP launch shape is subdomain or reverse-proxied root path
-- GitHub Actions CI exists (`.github/workflows/ci.yml`); manual deploy-package workflow exists; deploy-to-server automation is the main remaining MVP deployment gap
+- `/xpedit` subpath hosting is implemented and proven; MVP deploys to Google Cloud Run at `rikiworld.com/xpedit` via Cloudflare Worker routing
+- GitHub Actions `deploy-cloudrun.yml` handles build → push → deploy → smoke test
+- VPS/nginx/systemd configs remain in `deploy/` as documented alternatives
 - The runtime payload must remain committed inside this repo. Do not reintroduce any dependency on external runtime folders.
 - For the first manual MVP launch, verifier scripts are offline QA tools, not required production-host dependencies.
 

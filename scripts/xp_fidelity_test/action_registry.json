@@ -42,8 +42,8 @@
       "name": "Grid Panel",
       "generatorReadiness": "MOSTLY_READY",
       "canonActionCount": 14,
-      "registryActionCount": 0,
-      "blockingIssue": "G1 click, G2 shift-click, G14 drag-select need canvas-coordinate patterns; button-click actions individually ready but deferred to MOSTLY_READY pass"
+      "registryActionCount": 5,
+      "blockingIssue": "G3/G4 deferred (dual-button schema gap); G7/G8 deferred alias rows (=C6/C7); G13 needs inputRange; G1/G2/G12/G14 need canvas gestures"
     },
     "F7": {
       "name": "Whole-Sheet Editor",
@@ -1157,6 +1157,113 @@
           "value": 0
         }
       },
+      "blockers": [],
+      "paramBindings": []
+    },
+    "G5": {
+      "id": "G5",
+      "name": "Add frame",
+      "family": "F6",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "addFrameBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "sessionId": {
+          "op": "truthy",
+          "value": null
+        }
+      },
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "G6": {
+      "id": "G6",
+      "name": "Delete selected",
+      "family": "F6",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "deleteCellBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "selectedRow": {
+          "op": "gte",
+          "value": 0
+        }
+      },
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "G9": {
+      "id": "G9",
+      "name": "Assign row category",
+      "family": "F6",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "assignAnimCategoryBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "selectedRow": {
+          "op": "gte",
+          "value": 0
+        }
+      },
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": [
+        {
+          "selectorKey": "animCategorySelect",
+          "gestureType": "selectOption",
+          "paramKey": "category"
+        }
+      ]
+    },
+    "G10": {
+      "id": "G10",
+      "name": "Assign frame group",
+      "family": "F6",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "assignFrameGroupBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "selectedRow": {
+          "op": "gte",
+          "value": 0
+        }
+      },
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": [
+        {
+          "selectorKey": "frameGroupName",
+          "gestureType": "fill",
+          "paramKey": "groupName"
+        }
+      ]
+    },
+    "G11": {
+      "id": "G11",
+      "name": "Apply groups to metadata",
+      "family": "F6",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "applyGroupsToAnimsBtn",
+      "gestureType": "click",
+      "preconditions": {},
+      "postconditions": {},
       "blockers": [],
       "paramBindings": []
     }

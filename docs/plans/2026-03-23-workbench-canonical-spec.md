@@ -1,9 +1,9 @@
 # Workbench Canonical Spec
 
-**Authority:** This is one of the 3 canonical authority docs for this repo. See Section 5 below.
+**Authority:** This is one of the 3 canonical authority docs for this repo. See Section 6 below.
 
 **Last updated:** 2026-03-23
-**Branch:** master @ b5034b5
+**Branch:** master @ 85ff3b8
 
 ---
 
@@ -39,7 +39,7 @@ Placeholder. No milestone beyond M2 is currently defined.
 | Phase | Scope | Depends On | Status |
 |-------|-------|-----------|--------|
 | **M2-A** | Structural PNG baseline (dims, layers, metadata gates) | M1 closed | ESTABLISHED |
-| **M2-B** | Source panel + grid assembly (draw box, find sprites, drag-to-grid) | M2-A | UNCOMMITTED — evidence exists from dirty worktree (10/10 PASS) but runner and product fixes not committed; requires independent verification |
+| **M2-B** | Source panel + grid assembly (draw box, find sprites, drag-to-grid) | M2-A | ESTABLISHED — source-panel 10/10 PASS (5c67ef2); source-to-grid 13/13 PASS (380edee) at root + /xpedit. D1, D2/C2, G1 PROVEN. |
 | **M2-C** | Whole-sheet editor coverage (tools, layers, undo) | M2-A | NOT STARTED |
 | **M2-D** | Full SAR workflow coverage (all remaining WIRED actions get verifier proof) | M2-B, M2-C | NOT STARTED |
 | **M2-E** | Semantic editing (region-based dictionary-driven edits) | M2-D | NOT STARTED |
@@ -53,7 +53,7 @@ Execute in dependency order. M2-B and M2-C may run in parallel after M2-A.
 
 **Last reviewed:** 2026-03-23
 
-1. **M2-B source panel assembly** — committed proof (`5c67ef2`), 10/10 PASS on committed code at both root and /xpedit. UI-driven actions with read-only diagnostic observation layer. Prerequisite for the PNG→source→grid→WS→export end-to-end workflow.
+1. **M2-B source panel + grid assembly** — committed proof: source-panel 10/10 PASS (`5c67ef2`), source-to-grid 13/13 PASS (`380edee`) at root + /xpedit. D1/D2/G1 PROVEN. Next: M2-C whole-sheet editor.
 2. **M2-C whole-sheet editor verification** — tools are wired but unproven; parallel with M2-B
 3. **PB-01/02/03 undo gaps** in source panel anchor ops — small fixes that affect M2-D completeness
 4. **PB-06 SelectTool wiring** — blocked M2-C.2 feature, needed for whole-sheet editor parity
@@ -82,6 +82,7 @@ Project-specific narrowing:
 | `run_edge_workflow_test.mjs` | Tab switch via DOM click; button clicks; DOM waits | Core state via `getState()` + `_state()` | Mixed — UI actions + diagnostic observation. M1 historical evidence only. |
 | `run_structural_baseline_test.mjs` | ALL actions via `fetch()` API calls — zero DOM interaction | API response JSON | Structural-contract only (per `PNG_STRUCTURAL_BASELINE_CONTRACT.md`). NOT UI proof. |
 | `run_source_panel_workflow_test.mjs` | ALL actions via DOM clicks, canvas drags, file input, context menu | State reads via `getState()` | UI-driven with diagnostic observation layer |
+| `run_source_to_grid_workflow_test.mjs` | ALL actions via DOM clicks, canvas drags, file input, context menu, cross-panel drag/drop | State reads via `getState()` + `readFrameSignature()` | UI-driven with diagnostic observation layer |
 | `workbench_agents.mjs` (subagents) | DOM clicks + file inputs | `getState()` reads + request interception | Diagnostic / subagent coverage |
 | `workbench_coverage_agent.mjs` | DOM clicks, drags, screenshots | Element probes via `evaluate()` | Diagnostic coverage |
 
@@ -95,7 +96,97 @@ Project-specific narrowing:
 
 ---
 
-## 5. Document Authority Model
+## 5. Unified M2 Verifier Architecture
+
+### The Problem
+
+M1 used hand-written runners with inline readiness patterns. This worked because M1 scope was small (7 edge workflows, 1 fidelity test, 1 bundle test). M2 has 96+ SAR-enumerated actions across 13 families — hand-writing a runner per workflow does not scale.
+
+### Required Architecture: Capability Canon → Recipe → Run → Proof
+
+The M2 verifier is a pipeline with five stages:
+
+```
+┌─────────────────────┐
+│ 1. Capability Canon  │  docs/plans/2026-03-23-m2-capability-canon-inventory.md
+│    (human-curated)   │  Action families, status, code evidence, proof evidence
+└──────────┬──────────┘
+           │ machine-readable extraction
+           ▼
+┌─────────────────────┐
+│ 2. Action Registry   │  scripts/xp_fidelity_test/action_registry.json
+│    (generated)       │  Per-action: id, family, selectors, preconditions, postconditions
+└──────────┬──────────┘
+           │ recipe generation
+           ▼
+┌─────────────────────┐
+│ 3. Recipe Generator  │  scripts/xp_fidelity_test/recipe_generator.mjs
+│    (UI-only recipes) │  Combines actions into bounded workflow sequences
+│                      │  Each step = DOM selector + user gesture (click/drag/input)
+│                      │  No page.evaluate() action calls — UI gestures only
+└──────────┬──────────┘
+           │ execution
+           ▼
+┌─────────────────────┐
+│ 4. DOM Runner        │  scripts/xp_fidelity_test/dom_runner.mjs
+│    (Playwright)      │  Executes recipe steps via Playwright actions
+│                      │  Uses verifier_lib.mjs for readiness, base-path, reporting
+└──────────┬──────────┘
+           │ read-only observation
+           ▼
+┌─────────────────────┐
+│ 5. Observation Layer │  getState() primary, _state() fallback (actionStates only)
+│    + Proof Artifacts │  Per docs/plans/2026-03-23-state-capture-contract.md
+│                      │  Output: structured report JSON + failure-log entries
+└─────────────────────┘
+```
+
+### Stage Details
+
+**Stage 1 — Capability Canon** is human-curated and already exists (`m2-capability-canon-inventory.md`). It classifies every action as PROVEN/WIRED/PARTIAL/PLANNED/BLOCKED/DEFERRED and tracks code evidence and proof evidence.
+
+**Stage 2 — Action Registry** (`action_registry.json`) does not yet exist. It is the machine-readable extraction of the capability canon: one entry per action with `id`, `family`, `domSelector` (the CSS selector or canvas coordinate method to trigger it), `preconditions` (required state), `postconditions` (expected state changes), and `acceptanceEligible` (boolean — only UI-driven actions are acceptance-eligible).
+
+**Stage 3 — Recipe Generator** (`recipe_generator.mjs`) does not yet exist. It reads the action registry and composes bounded workflow sequences. A recipe is an ordered list of `{ actionId, params, expectedOutcome }` steps. The generator can produce fixed regression recipes (hardcoded sequences for known workflows) and bounded-random exploration recipes (random action sequences within SAR constraints).
+
+**Stage 4 — DOM Runner** (`dom_runner.mjs`) does not yet exist but `verifier_lib.mjs` provides the foundation. The runner executes each recipe step as a Playwright DOM action (click, drag, type, file-choose) — never `page.evaluate()` for action driving. It uses `verifier_lib.mjs` for `openWorkbench()`, `captureState()`, base-path resolution, and structured reporting.
+
+**Stage 5 — Observation Layer** already partially exists via `getState()` and the state-capture contract. Known debt: `actionStates` still requires `_state()` fallback (see state-capture contract). The observation layer reads state after each recipe step and compares against postconditions. Failures become structured report entries and failure-log candidates.
+
+### Selector Infrastructure
+
+A shared `selectors.mjs` module is needed to centralize DOM selectors used by both the action registry and runners. This prevents selector drift between the registry and execution. Current runners hard-code selectors inline.
+
+### Relationship to Existing Infrastructure
+
+| Existing | Role in M2 Architecture |
+|----------|------------------------|
+| `truth_table.py` | XP fidelity oracle — orthogonal to SAR; kept for export/cell truth |
+| `verifier_lib.mjs` | Foundation for DOM runner (readiness, state capture, reporting) |
+| `run_source_panel_workflow_test.mjs` | M2-B source-panel proof runner — will be replaced by generated recipe + DOM runner |
+| `run_source_to_grid_workflow_test.mjs` | M2-B source-to-grid proof runner (D1/D2/G1) — will be replaced by generated recipe + DOM runner |
+| `run_structural_baseline_test.mjs` | Structural-contract only — stays standalone, not part of SAR pipeline |
+| M1 runners (fidelity, bundle, edge-workflow) | Frozen — M1 is closed, do not refactor |
+
+### Known Design Debt
+
+- `actionStates` not yet in `getState()` — requires `_state()` fallback (state-capture contract §4)
+- Tab hydration readiness uses `_state().activeActionKey` — should migrate to `getState()` P3 batch
+- Canvas-coordinate actions (source panel drawing, grid drag) need a selector abstraction beyond CSS — likely `{ type: "canvas", target: "sourceCanvas", gesture: "drag", from: [x1,y1], to: [x2,y2] }`
+
+### Implementation Order
+
+1. `action_registry.json` — machine-readable action inventory (extracted from capability canon)
+2. `selectors.mjs` — shared DOM selector module
+3. Recipe/action schema — JSON schema for recipe format
+4. `recipe_generator.mjs` — fixed regression recipes first, bounded-random later
+5. `dom_runner.mjs` — recipe executor using verifier_lib foundation
+
+This architecture is NOT yet implemented. The next implementation target after this canonization pass is items 1-3 above.
+
+---
+
+## 6. Document Authority Model
 
 This repo uses a 3-doc canonical authority model:
 
@@ -124,7 +215,7 @@ This repo uses a 3-doc canonical authority model:
 
 ---
 
-## 6. Non-Negotiable Constraints
+## 7. Non-Negotiable Constraints
 
 - **Self-containment**: No runtime, test, or build dependency on external folders. Enforced by `scripts/self_containment_audit.py`.
 - **Claim discipline**: No "fixed" / "restored" / "working" claims without branch, commit, and verification evidence. See `docs/AGENT_PROTOCOL.md` Section 8.
@@ -132,14 +223,14 @@ This repo uses a 3-doc canonical authority model:
 
 ---
 
-## 7. Structural Contract Pointers
+## 8. Structural Contract Pointers
 
 - `docs/XP_EDITOR_ACCEPTANCE_CONTRACT.md` — canonical acceptance contract for XP-editor parity
 - `docs/PNG_STRUCTURAL_BASELINE_CONTRACT.md` — non-regression contract for the PNG structural ingest path
 
 ---
 
-## 8. Canonical Read Order
+## 9. Canonical Read Order
 
 Agents must read in this order at session start:
 

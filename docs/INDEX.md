@@ -37,11 +37,11 @@ This repo uses a 3-doc canonical authority model. Agents must treat ONLY these 3
 
 ## Current Branch Truth
 
-- Audit date: 2026-03-21
+- Audit date: 2026-03-23
 - Audited worktree: `/Users/r/Downloads/asciicker-pipeline-v2`
 - Audited branch: `master`
-- Audited HEAD: `818d6af`
-- Current branch role: active XP-editor Phase 4 acceptance line
+- Audited HEAD: `d12740c`
+- Current branch role: active M2 acceptance and verifier architecture line
 - **Self-containment**: This repo must be 100% self-contained. No runtime, test, or build-time dependency on external folders (e.g. `/Users/r/Downloads/asciicker-Y9-2`, `/Users/r/Downloads/n`). Run `python3 scripts/self_containment_audit.py` at startup.
 
 Do not assume `master` is the canonical restore/bundle line. For bundle/runtime issues, read the branch-history handoff below before making fix claims.
@@ -155,14 +155,14 @@ Milestone 2 is **not**:
 
 ## Launch / Deployment Truth
 
-Canonical deployment doc: `docs/MVP_DEPLOYMENT.md`
+Canonical deployment doc: `docs/WORKBENCH_DOCS_ARCHIVE.md#mvp-deployment`
 
 Related docs:
-- `docs/HOST_DEPLOYMENT_CHECKLIST.md` — step-by-step host provisioning and config
-- `docs/LAUNCH_READINESS_CHECKLIST.md` — all launch gates with current status
-- `docs/BASE_PATH_SUPPORT_CHECKLIST.md` — exact work required before safe subpath hosting such as `/asciicker-XPEdit`
-- `docs/plans/2026-03-22-base-path-support-plan.md` — detailed implementation plan for `PIPELINE_BASE_PATH` support (config, routing, frontend, runtime iframe, proxy, acceptance criteria, phased rollout)
-- `docs/RESKIN_PREP.md` — safe font/CSS reskin surface
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#host-deployment-checklist` — step-by-step host provisioning and config
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#launch-readiness-checklist` — all launch gates with current status
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#base-path-support-checklist` — exact work required before safe subpath hosting such as `/asciicker-XPEdit`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-22-base-path-support-plan` — detailed implementation plan for `PIPELINE_BASE_PATH` support (config, routing, frontend, runtime iframe, proxy, acceptance criteria, phased rollout)
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#reskin-prep` — safe font/CSS reskin surface
 - `deploy/README.md` — deployment config quick start
 
 Summary:
@@ -200,52 +200,66 @@ Summary:
 
 ### Editor/doc status or plan audits
 
-- `docs/research/ascii/2026-03-13-claim-verification.md`
-- `docs/2026-03-13-CLAUDE-HANDOFF-EDITOR-DOC-ALIGNMENT.md`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-13-claim-verification`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-13-claude-handoff-editor-doc-alignment`
 
 ### Bundle/runtime/restore regressions
 
-- `docs/2026-03-11-CLAUDE-HANDOFF-CURRENT-STATE.md`
-- `docs/WORKBENCH_IFRAME_KEYBOARD_STUCK_HANDOFF.md`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-11-claude-handoff-current-state`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#workbench-iframe-keyboard-stuck-handoff`
 
 ## Active High-Signal Docs
 
-- `docs/2026-03-20-CLAUDE-HANDOFF-PHASE-4-ACCEPTANCE-STRICT.md`
-  - primary fresh-session resume point for Phase 4; separates manual-only `T` review from real acceptance evidence and defines the remaining acceptance/responsiveness/repeatability work
-- `docs/2026-03-18-CLAUDE-HANDOFF-BUNDLE-RUNTIME-STRICT.md`
-  - historical strict handoff for the Phase 1-3 bundle runtime blocker path; no longer the primary resume point after the Phase 4 handoff above
-- `docs/2026-03-18-CLAUDE-HANDOFF-BUNDLE-RUNTIME-AND-WHOLE-SHEET-VISIBILITY.md`
-  - softer context handoff retained for continuity; superseded as the primary resume doc by the strict 2026-03-18 handoff above
-- `docs/2026-03-17-CLAUDE-HANDOFF-WHOLE-SHEET-STROKE-PATH.md`
-  - latest resume point for the whole-sheet stroke-end perf fix, current open risks, and next blocker ordering
-- `docs/XP_EDITOR_ACCEPTANCE_CONTRACT.md`
-  - canonical acceptance contract; this is the source of truth for what counts as XP-editor parity and what shortcuts are forbidden
-- `docs/2026-03-15-CLAUDE-HANDOFF-FOUR-AUDITS-XP-EDITOR.md`
-  - restart handoff requiring four full audits across local code, local history, remote refs, and contract cross-checking
-- `docs/2026-03-15-CLAUDE-HANDOFF-WHOLE-SHEET-REXPAINT-PIVOT.md`
-  - current next-step handoff: keep backend geometry fixes, stop optimizing the legacy frame inspector as the parity path, and pivot to auditing the whole-sheet REXPaint editor integration
-- `docs/research/ascii/2026-03-15-xp-data-contract.md`
-  - canonical code-backed XP data contract: binary format, layer roles, frame layout, geometry derivation, confirmed contradictions, and unknowns
-- `docs/plans/2026-03-15-xp-editor-hard-fail-plan.md`
-  - active hard-fail plan replacing the deleted single-frame harness plan
-- `docs/plans/2026-03-22-milestone-1-edge-case-verifier-plan.md`
-  - dedicated Milestone 1 verifier plan for partial bundle gating, action-tab/session hydration, `New XP`, refresh/recovery, and Skin Dock precondition bugs
-- `docs/plans/2026-03-22-workbench-verifier-sar-model.md`
-  - canonical explanation of the verifier data model split: current XP truth table vs the required full workbench SAR map across bundle controls, source panel, grid, whole-sheet editor, runtime dock, and bug reporting
+> **2026-03-23 restructure:** This section now reflects the 3-doc canonical model. For the canonical authority docs, see "Document Authority Model" above. For the full non-canonical classification, see "Non-Canonical Doc Classification" below.
+
+### Active Plans (retain until completed/superseded)
+
 - `docs/plans/2026-03-21-milestone-2-practical-png-ingest-plan.md`
-  - next-step roadmap after Milestone 1: preserve the arbitrary-PNG structural baseline, center PNG workflows on source-panel/manual assembly, promote whole-sheet correction, and add human-verified semantic dictionaries
-- `docs/2026-03-13-CLAUDE-HANDOFF-EDITOR-DOC-ALIGNMENT.md`
-  - current Claude resume point for doc alignment and editor-status truth
-- `docs/research/ascii/2026-03-13-claim-verification.md`
-  - evidence-backed audit of recent Claude/editor document claims against current code
-- `docs/2026-03-11-CLAUDE-HANDOFF-CURRENT-STATE.md`
-  - historical branch/bundle handoff; still important for restore-line truth, but not the default source for editor implementation status on `master`
-- `docs/plans/2026-03-04-web-rexpaint-editor/claude-embedded-editor-plan.md`
-  - design brief only; not shipped-state truth
-- `docs/plans/2026-03-04-web-rexpaint-editor/claude-grid-editor-integration.md`
-  - accurate legacy-inspector analysis; not proof of `EditorApp` embedding
-- `docs/plans/2026-03-04-web-rexpaint-editor/xp-editor-feature-inventory.md`
-  - historical feature inventory with 2026-03-13 audit corrections
+  - strategic M2 plan: structural baseline, source-panel/manual assembly, whole-sheet correction, semantic dictionaries
+- `docs/plans/2026-03-21-milestone-2-png-verifier-design.md`
+  - M2 verifier design — architecture input for canonical spec §5
+- `docs/plans/2026-03-21-milestone-2-implementation-checklist.md`
+  - implementation checklist with EXISTS/PARTIAL/MISSING per item
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-22-base-path-support-plan`
+  - base-path implementation plan — partially implemented
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-23-milestone-2-base-path-unified-verifier-plan`
+  - unified verifier plan for M2 slices
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-15-xp-editor-hard-fail-plan`
+  - hard-fail plan — active for verifier discipline
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-21-legacy-inspector-retirement-checklist`
+  - inspector demotion checklist for M2-C.1
+
+### Key Reference Docs
+
+- `docs/COMPLETE_UI_CONTROL_REFERENCE.md` — 189 workbench UI elements (DOM IDs, handlers); implementation reference for `action_registry.json`
+- `docs/WORKBENCH_SOURCE_PANEL_UX_CHECKLIST.md` — source panel feature tracking and UX acceptance criteria
+- `docs/plans/2026-03-22-workbench-sar-table-blueprint.md` — exhaustive SAR state-field mapping from code; needed for action_registry implementation
+- `docs/plans/2026-03-23-state-capture-contract.md` — getState/\_state API contract for all verifier code
+- `docs/plans/2026-03-23-milestone-2-bug-gap-index.md` — active bug/gap tracking
+- `docs/research/ascii/2026-03-15-xp-data-contract.md` — code-backed XP binary format contract
+- `docs/research/ascii/2026-03-20-bundle-animation-types.md` — bundle/animation type map
+- `docs/research/ascii/2026-03-21-player-sprite-semantic-dictionary-seed.md` — semantic dictionary seed
+
+### Worksheets — Retired (2026-03-23)
+
+4 superseded worksheets archived via `scripts/doc_lifecycle_stitch.sh`:
+
+- [claude-workbench-ui-inventory (ARCHIVED)](WORKBENCH_DOCS_ARCHIVE.md#claude-workbench-ui-inventory) — superseded by COMPLETE_UI_CONTROL_REFERENCE
+- [workbench-verifier-sar-model (ARCHIVED)](WORKBENCH_DOCS_ARCHIVE.md#2026-03-22-workbench-verifier-sar-model) — architecture absorbed into canonical spec §5
+- [M2 PNG verifier design handoff (ARCHIVED)](WORKBENCH_DOCS_ARCHIVE.md#2026-03-21-claude-handoff-m2-png-verifier-design) — handoff for completed verifier design
+- [edge-case-verifier-impl-plan (ARCHIVED)](WORKBENCH_DOCS_ARCHIVE.md#2026-03-22-edge-case-verifier-impl-plan) — M1 closed, implementation details no longer active
+
+### Historical Handoffs (worksheet — batch retirement candidate)
+
+~11 `CLAUDE-HANDOFF-*.md` files from 2026-03-10 through 2026-03-20. These predate the 3-doc canonical model. No unique normative truth not captured in the canon. Retained pending batch retirement pass.
+
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-20-claude-handoff-phase-4-acceptance-strict` — Phase 4 resume point (historical)
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-18-claude-handoff-bundle-runtime-strict` — Phase 1-3 bundle blocker (historical)
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-17-claude-handoff-whole-sheet-stroke-path` — whole-sheet perf fix (historical)
+- `docs/2026-03-15-CLAUDE-HANDOFF-*.md` (3 files) — audits and pivots (historical)
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-13-claude-handoff-editor-doc-alignment` — doc alignment (historical)
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-11-claude-handoff-current-state` — branch/bundle state (historical)
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-13-claim-verification` — claim audit (retain as reference)
 
 ## Historical Handoff Docs
 
@@ -258,21 +272,21 @@ metadata, layer, visual, export, and Skin Dock/runtime mismatches.
 
 - `docs/REXPAINT_UI_COMPLETE_INDEX.md`
   - REXPaint v1.70 complete UI index extracted from live screenshots; reference implementation, not asciicker-specific
-- `docs/FEATURE_BUTTON_INDEX_WITH_REXPAINT_MANUAL.md`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#feature-button-index-with-rexpaint-manual`
   - feature button reference + REXPaint v1.70 manual text; references `EditorApp` methods but these describe the standalone module, not proof of live workbench integration
 - `docs/COMPLETE_UI_CONTROL_REFERENCE.md`
   - 189 workbench UI elements + REXPaint manual appendix; notes Section 14 (inspector) planned for replacement by `EditorApp`
 
-## Editor Planning & Research
+## Editor Planning & Research (Worksheet tier — batch retirement candidate)
 
-- `docs/plans/2026-03-04-web-rexpaint-editor/claude-workbench-ui-inventory.md`
-  - exhaustive workbench.html/js UI element inventory (189 elements, handler-level detail)
-- `docs/plans/2026-03-04-web-rexpaint-editor/claude-cp437-font-research.md`
-  - CP437 bitmap font rendering research; lists font atlas filenames (cp437_8x8 through cp437_40x40); recommends Canvas 2D pre-tinted atlas caching
-- `docs/2026-03-10-readonly-investigation-rexpaint-state.md`
-  - readonly investigation of standalone `EditorApp` module; historical — see 2026-03-13 audit banner for current caveats
-- `docs/2026-03-10-DELIVERABLE-AUDIT-REPORT.md`
-  - deliverable audit identifying XP cell format mismatch; Issue 1 (7-byte vs 10-byte) superseded by `a26be4a`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#claude-workbench-ui-inventory`
+  - **SUPERSEDED** by `docs/COMPLETE_UI_CONTROL_REFERENCE.md` — ready to retire
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#claude-cp437-font-research`
+  - CP437 bitmap font rendering research — worksheet, retain as reference during font pipeline work
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-10-readonly-investigation-rexpaint-state`
+  - historical — see 2026-03-13 audit banner for current caveats
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-10-deliverable-audit-report`
+  - historical — Issue 1 (7-byte vs 10-byte) superseded by `a26be4a`
 
 ## Bundle & Animation Research
 
@@ -293,33 +307,33 @@ metadata, layer, visual, export, and Skin Dock/runtime mismatches.
 - `docs/plans/2026-03-21-milestone-2-implementation-checklist.md`
   - implementation-ready checklist with explicit Milestone 1/Milestone 2 boundary, EXISTS/PARTIAL/MISSING status per item, file:line references, and wave ordering
 - `docs/plans/2026-03-21-milestone-2-png-verifier-design.md`
-  - canonical design doc for the Milestone 2 verifier architecture: state/action/response maps, PNG recipe generation, verifier slices, and acceptance boundaries
+  - historical input to the unified M2 verifier architecture (now in canonical spec §5); retains verifier slice definitions and PNG recipe patterns as implementation reference
 - `docs/PNG_STRUCTURAL_BASELINE_CONTRACT.md`
   - non-regression contract for the PNG structural ingest path (also linked under Structural Contracts above)
-- `docs/2026-03-21-CLAUDE-HANDOFF-M2-PNG-VERIFIER-DESIGN.md`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-21-claude-handoff-m2-png-verifier-design`
   - historical handoff used to produce the completed M2 verifier design; keep for lineage, but start from the design doc above
-- `docs/plans/2026-03-21-legacy-inspector-retirement-checklist.md`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-21-legacy-inspector-retirement-checklist`
   - corrected retirement/demotion checklist for moving the legacy inspector to debug-only during Milestone 2
-- `docs/plans/2026-03-21-m2-png-fixture-inventory.md`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-21-m2-png-fixture-inventory`
   - corrected fixture inventory and gap analysis for the PNG structural baseline verifier
-- `docs/plans/2026-03-21-m2-source-panel-implementation-spec.md`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-21-m2-source-panel-implementation-spec`
   - implementation-facing source-panel spec aligned to current code, including corrective-pass notes
-- `docs/plans/2026-03-21-semantic-edit-test-matrix.md`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-21-semantic-edit-test-matrix`
   - semantic-edit API test matrix; still draft, but now corrected and useful as implementation support
 
 ## Local / Untracked Research (not committed)
 
-The following files exist in this worktree but are not committed to `master`. They are research output and should be read with caution — the `findings/INDEX.md` summary shows 4 of 11 findings were contradicted by code inspection.
+The following files exist in this worktree but are not committed to `master`. They are research output and should be read with caution — the `docs/WORKBENCH_DOCS_ARCHIVE.md#index` summary shows 4 of 11 findings were contradicted by code inspection.
 
-- `REXPAINT_LIBRARY_AUDIT_FINDINGS.md`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#rexpaint-library-audit-findings`
   - audit of 30+ REXPaint libraries across 6 languages; recommends rexpaintjs-fork (JS), pyrexpaint (Python)
-- `findings/INDEX.md`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#index`
   - findings index (11 findings: 5 verified, 4 contradicted, 1 partial, 1 verified-with-gaps)
-- `findings/09-FINDING-rexpaint-manual-coverage.md`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#09-finding-rexpaint-manual-coverage`
   - REXPaint manual coverage analysis (~94 features, 50-55% implemented)
-- `findings/10-FINDING-xp-editor-feature-audit.md`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#10-finding-xp-editor-feature-audit`
   - 67-feature audit: 38 fully implemented (56.7%), 3 partial, 26 missing
-- `findings/11-FINDING-manual-gaps-checker.md`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#11-finding-manual-gaps-checker`
   - 37 additional REXPaint features not covered in the 67-feature audit
 
 ## Font & Palette Assets
@@ -347,19 +361,35 @@ No distinct palette asset files (`.pal`, `palette.json`, etc.) exist in the repo
 - XP-file fidelity is not proven end-to-end. No canonical test exists. The deleted harness was not a valid fidelity test — see `PLAYWRIGHT_FAILURE_LOG.md`.
 - Self-containment is now machine-enforced via `scripts/self_containment_audit.py` and installable git hooks in `.githooks/`. Blocking findings are external symlinks and live/build/runtime/test references to absolute paths outside this repo.
 
-## 2026-03-23 Audit Note: Capability Canon and Doc Alignment
+## 2026-03-23 Audit Note: Capability Canon, Doc Alignment, and M2 Architecture
 
-> A canonical M2 capability inventory now exists at `docs/plans/2026-03-23-m2-capability-canon-inventory.md`. It cross-references every doc in this index against current code wiring and failure-log proof to classify each user-reachable behavior as PROVEN, WIRED, PARTIAL, PLANNED, BLOCKED, or DEFERRED.
+> A canonical M2 capability inventory exists at `docs/plans/2026-03-23-m2-capability-canon-inventory.md`. It cross-references every doc in this index against current code wiring and failure-log proof to classify each user-reachable behavior as PROVEN, WIRED, PARTIAL, PLANNED, BLOCKED, or DEFERRED.
 >
-> Key findings from the audit (updated 2026-03-23):
+> Key findings (updated 2026-03-23, post M2-B commit):
 > - M1 is closed (see status correction above)
-> - 96 SAR-enumerated actions: 10 PROVEN on committed code, 67 WIRED, 7 PARTIAL, 4 PLANNED, 1 BLOCKED, 2 DEFERRED
-> - 1 of 5 M2 verifier slices is built on committed code (M2-A structural baseline). M2-B source-panel runner exists but is uncommitted — treat its evidence as provisional.
-> - **CAVEAT:** M2-B source-panel coverage claims (runner + PB-02/Delete Box fixes) are from uncommitted code. Not acceptance-grade until committed and independently reverified.
+> - 96 SAR-enumerated actions: **20 PROVEN** on committed code, 67 WIRED, 2 PARTIAL, 4 PLANNED, 1 BLOCKED, 2 DEFERRED
+> - M2-B source-panel proof is **committed** (5c67ef2, d12740c): 10/10 PASS at root + /xpedit; PB-02 fixed, Delete Box UX fixed
+> - 0 of 5 M2 verifier slices are automated; structural baseline and source-panel proof are ad-hoc failure-log evidence
 > - The manual-assembly end-to-end workflow (PNG → source → grid → WS → export) is fully wired but has zero proof
-> - Next priority: commit M2-B runner + fixes, reverify, then source-to-grid slice
+> - **Unified M2 verifier architecture** is now documented in `docs/plans/2026-03-23-workbench-canonical-spec.md` §5: capability canon → action_registry.json → recipe generator → DOM runner → observation → proof
+> - Next implementation target: `action_registry.json`, `selectors.mjs`, recipe/action schema
 >
 > For reality/proof status on any capability claim in this repo, always check:
 > 1. `PLAYWRIGHT_FAILURE_LOG.md` (ground truth)
 > 2. `docs/plans/2026-03-23-m2-capability-canon-inventory.md` (classified inventory)
 > 3. The code itself (`web/workbench.js`, `web/whole-sheet-init.js`)
+
+## Non-Canonical Doc Classification
+
+> For the full inventory with per-doc archive-readiness assessment, see `docs/plans/2026-03-23-m2-capability-canon-inventory.md` Appendix B.
+
+| Tier | Examples | Count | Status |
+|------|---------|-------|--------|
+| **Canonical** | Failure log, canonical spec, capability canon | 3 | Protected |
+| **Structural Contract** | XP_EDITOR_ACCEPTANCE_CONTRACT, PNG_STRUCTURAL_BASELINE_CONTRACT | 2 | Protected until milestone boundary |
+| **Reference** | COMPLETE_UI_CONTROL_REFERENCE, SAR blueprint, state-capture contract, MVP deployment | ~12 | Retain — stable reference, no active state claims |
+| **Active Plan** | M2 ingest plan, M2 verifier design, base-path plan, hard-fail plan | ~8 | Retain until completed/superseded |
+| **Worksheet — Retired** | claude-workbench-ui-inventory, workbench-verifier-sar-model, M2 PNG verifier handoff, edge-case impl plan | 4 | Archived (2026-03-23) |
+| **Worksheet — Historical** | ~11 CLAUDE-HANDOFF files, ~30 old plans/research | ~41 | Batch retirement candidate after canon absorption |
+
+**Retirement workflow:** `scripts/doc_lifecycle_stitch.sh` archives to `docs/WORKBENCH_DOCS_ARCHIVE.md`, rewrites links, deletes originals, logs to failure log. Run `--list-candidates` to see full list.

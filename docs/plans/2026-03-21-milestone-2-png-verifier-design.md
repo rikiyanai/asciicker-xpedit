@@ -13,7 +13,7 @@ Define the Milestone 2 verifier architecture for practical PNG ingest and manual
 This design should now be read as the Milestone 2 realization of the broader workbench-wide
 SAR verifier model described in:
 
-- `docs/plans/2026-03-22-workbench-verifier-sar-model.md`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-22-workbench-verifier-sar-model`
 
 Milestone 1's verifier was paint-sequence-centered: the recipe generator produced a list of
 `ws_paint_cell` actions that recreated L2 content, and the verifier checked cell fidelity after
@@ -43,10 +43,10 @@ This design extends the verifier to handle stateful, multi-panel, gesture-driven
 This design assumes the following Milestone 2 support artifacts have received their
 2026-03-21 corrective pass and may now be used as implementation inputs with normal caution:
 
-- `docs/plans/2026-03-21-legacy-inspector-retirement-checklist.md`
-- `docs/plans/2026-03-21-m2-png-fixture-inventory.md`
-- `docs/plans/2026-03-21-m2-source-panel-implementation-spec.md`
-- `docs/plans/2026-03-21-semantic-edit-test-matrix.md`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-21-legacy-inspector-retirement-checklist`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-21-m2-png-fixture-inventory`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-21-m2-source-panel-implementation-spec`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-21-semantic-edit-test-matrix`
 - `scripts/validate_semantic_maps.py`
 
 They remain support artifacts rather than higher-priority truth than current code or the

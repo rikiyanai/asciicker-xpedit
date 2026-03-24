@@ -300,8 +300,8 @@ The next action is:
 Expected deliverables:
 
 - `docs/XP_EDITOR_ACCEPTANCE_CONTRACT.md`
-- `docs/2026-03-15-CLAUDE-HANDOFF-FOUR-AUDITS-XP-EDITOR.md`
-- `docs/plans/2026-03-15-xp-editor-hard-fail-plan.md`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-15-claude-handoff-four-audits-xp-editor`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-15-xp-editor-hard-fail-plan`
 
 Expected behavior of the next audit:
 
@@ -582,8 +582,8 @@ spec-defined REXPaint-style layout with the correct regions in the correct place
 
 The repo already recognizes this category in general:
 
-- `docs/plans/2026-03-15-xp-editor-hard-fail-plan.md` lists `UI layout mismatch`
-- `docs/REXPAINT_PARITY_EDITOR_SURFACE_SPEC.md` defines the required layout regions
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-15-xp-editor-hard-fail-plan` lists `UI layout mismatch`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#rexpaint-parity-editor-surface-spec` defines the required layout regions
 
 But this specific shipped-layout failure should be treated as an active product
 blocker now, not just a theoretical future cleanup.
@@ -1890,6 +1890,1373 @@ for honest M2 acceptance claims on the bundle pipeline.
 **Worksheet:** `docs/plans/2026-03-22-edge-case-verifier-impl-plan.md`
 **Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-22-edge-case-verifier-impl-plan`
 **Reason:** M1 closed (commit 14e8e95). Implementation details no longer active. Edge-case verifier plan retained separately.
+**References rewritten:** 2 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/2026-03-17-CLAUDE-HANDOFF-AREA-BASED-RECIPE.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-17-claude-handoff-area-based-recipe`
+**Reason:** Stale session handoff — superseded by canonical 3-doc model
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/2026-03-18-CLAUDE-HANDOFF-BUNDLE-RUNTIME-AND-WHOLE-SHEET-VISIBILITY.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-18-claude-handoff-bundle-runtime-and-whole-sheet-visibility`
+**Reason:** Stale worksheet — superseded by canonical 3-doc model
+**References rewritten:** 2 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/2026-03-18-CLAUDE-HANDOFF-BUNDLE-RUNTIME-STRICT.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-18-claude-handoff-bundle-runtime-strict`
+**Reason:** Stale worksheet — superseded by canonical 3-doc model
+**References rewritten:** 3 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/research/ascii/2026-03-15-whole-sheet-rexpaint-pivot.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-15-whole-sheet-rexpaint-pivot`
+**Reason:** Stale worksheet — superseded by canonical 3-doc model
+**References rewritten:** 3 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/research/ascii/2026-03-15-whole-sheet-seam-map.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-15-whole-sheet-seam-map`
+**Reason:** Stale worksheet — superseded by canonical 3-doc model
+**References rewritten:** 3 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/2026-03-10-branch-consolidation-plan.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-10-branch-consolidation-plan`
+**Reason:** Stale handoff/worksheet — superseded by canonical 3-doc model
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/2026-03-10-DELIVERABLE-AUDIT-REPORT.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-10-deliverable-audit-report`
+**Reason:** Stale handoff/worksheet — superseded by canonical 3-doc model
+**References rewritten:** 4 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/2026-03-10-EXECUTION-SUMMARY-GAP-CLOSURE.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-10-execution-summary-gap-closure`
+**Reason:** Stale handoff/worksheet — superseded by canonical 3-doc model
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/2026-03-10-readonly-investigation-rexpaint-state.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-10-readonly-investigation-rexpaint-state`
+**Reason:** Stale handoff/worksheet — superseded by canonical 3-doc model
+**References rewritten:** 4 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/2026-03-11-CLAUDE-HANDOFF-CURRENT-STATE.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-11-claude-handoff-current-state`
+**Reason:** Stale handoff/worksheet — superseded by canonical 3-doc model
+**References rewritten:** 3 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/2026-03-13-CLAUDE-HANDOFF-EDITOR-DOC-ALIGNMENT.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-13-claude-handoff-editor-doc-alignment`
+**Reason:** Stale handoff/worksheet — superseded by canonical 3-doc model
+**References rewritten:** 3 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/2026-03-15-CLAUDE-HANDOFF-B6-WHOLE-SHEET-INTEGRATION.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-15-claude-handoff-b6-whole-sheet-integration`
+**Reason:** Stale handoff/worksheet — superseded by canonical 3-doc model
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/2026-03-15-CLAUDE-HANDOFF-FOUR-AUDITS-XP-EDITOR.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-15-claude-handoff-four-audits-xp-editor`
+**Reason:** Stale handoff/worksheet — superseded by canonical 3-doc model
+**References rewritten:** 3 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/2026-03-15-CLAUDE-HANDOFF-WHOLE-SHEET-REXPAINT-PIVOT.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-15-claude-handoff-whole-sheet-rexpaint-pivot`
+**Reason:** Stale handoff/worksheet — superseded by canonical 3-doc model
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/2026-03-17-CLAUDE-HANDOFF-WHOLE-SHEET-STROKE-PATH.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-17-claude-handoff-whole-sheet-stroke-path`
+**Reason:** Stale handoff/worksheet — superseded by canonical 3-doc model
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/2026-03-20-CLAUDE-HANDOFF-PHASE-4-ACCEPTANCE-STRICT.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-20-claude-handoff-phase-4-acceptance-strict`
+**Reason:** Stale handoff/worksheet — superseded by canonical 3-doc model
+**References rewritten:** 2 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/CLAUDE_HANDOFF_ASCIIID_TERMPP_PARITY_NO_RUNTIME_DEPS_2026-02-27.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#claude-handoff-asciiid-termpp-parity-no-runtime-deps-2026-02-27`
+**Reason:** Stale handoff/worksheet — superseded by canonical 3-doc model
+**References rewritten:** 3 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/CLAUDE_RESEARCH_DUMP_WORKBENCH_MOVE_FREEZE_2026-02-27.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#claude-research-dump-workbench-move-freeze-2026-02-27`
+**Reason:** Stale handoff/worksheet — superseded by canonical 3-doc model
+**References rewritten:** 4 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/COMPLETE_AUDIT_MASTER_REPORT.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#complete-audit-master-report`
+**Reason:** Completed/superseded worksheet — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/CRITICAL_FIXES_COMPLETION_AUDIT.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#critical-fixes-completion-audit`
+**Reason:** Completed/superseded worksheet — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/FEATURE_BUTTON_INDEX_WITH_REXPAINT_MANUAL.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#feature-button-index-with-rexpaint-manual`
+**Reason:** Completed/superseded worksheet — doc cleanup pass
+**References rewritten:** 4 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/FINAL_SESSION_SUMMARY.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#final-session-summary`
+**Reason:** Completed/superseded worksheet — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/gap5-pan-error-handling.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#gap5-pan-error-handling`
+**Reason:** Completed/superseded worksheet — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/GAP_ANALYSIS.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#gap-analysis`
+**Reason:** Completed/superseded worksheet — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/HOST_DEPLOYMENT_CHECKLIST.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#host-deployment-checklist`
+**Reason:** Completed/superseded worksheet — doc cleanup pass
+**References rewritten:** 3 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/IMPLEMENTATION_PLAN.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#implementation-plan`
+**Reason:** Completed/superseded worksheet — doc cleanup pass
+**References rewritten:** 2 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/LAUNCH_READINESS_CHECKLIST.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#launch-readiness-checklist`
+**Reason:** Completed/superseded worksheet — doc cleanup pass
+**References rewritten:** 3 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/MVP_PORTABILITY_AUDIT.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#mvp-portability-audit`
+**Reason:** Completed/superseded worksheet — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/MVP_REQUIREMENTS_STATUS.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#mvp-requirements-status`
+**Reason:** Completed/superseded worksheet — doc cleanup pass
+**References rewritten:** 2 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/PERFORMANCE_BASELINE.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#performance-baseline`
+**Reason:** Completed/superseded worksheet — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/REQUIREMENTS_CHECKLIST.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#requirements-checklist`
+**Reason:** Completed/superseded worksheet — doc cleanup pass
+**References rewritten:** 3 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/RESKIN_PREP.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#reskin-prep`
+**Reason:** Completed/superseded worksheet — doc cleanup pass
+**References rewritten:** 2 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/REXPAINT_MCP_HANDOFF.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#rexpaint-mcp-handoff`
+**Reason:** Completed/superseded worksheet — doc cleanup pass
+**References rewritten:** 2 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/TASKS_9-22_FINAL_VERIFICATION.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#tasks-9-22-final-verification`
+**Reason:** Completed/superseded worksheet — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/UI_TEST_FRAMEWORK_CODEX.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#ui-test-framework-codex`
+**Reason:** Completed/superseded worksheet — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/CODEX_UI_TEST_FRAMEWORK_HANDOFF_TEMPLATE.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#codex-ui-test-framework-handoff-template`
+**Reason:** Completed/superseded worksheet — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/USER_REQUEST_API_TEST_CHECKLIST.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#user-request-api-test-checklist`
+**Reason:** Completed/superseded worksheet — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/W1_SUMMARY_WITH_HEADED_TESTS.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#w1-summary-with-headed-tests`
+**Reason:** Completed/superseded worksheet — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/WORKBENCH_FLAT_ARENA_WATER_LOADING_RESEARCH_HANDOFF.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#workbench-flat-arena-water-loading-research-handoff`
+**Reason:** Completed/superseded worksheet — doc cleanup pass
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/WORKBENCH_IFRAME_KEYBOARD_STUCK_HANDOFF.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#workbench-iframe-keyboard-stuck-handoff`
+**Reason:** Completed/superseded worksheet — doc cleanup pass
+**References rewritten:** 5 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/WORKBENCH_REGRESSIONS_TRACKER.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#workbench-regressions-tracker`
+**Reason:** Completed/superseded worksheet — doc cleanup pass
+**References rewritten:** 2 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/BASE_PATH_SUPPORT_CHECKLIST.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#base-path-support-checklist`
+**Reason:** Completed/superseded worksheet — doc cleanup pass
+**References rewritten:** 4 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-02-26-fix-skin-test-instance-bugs.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-02-26-fix-skin-test-instance-bugs`
+**Reason:** Completed/superseded plan — doc cleanup pass
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-02-26-termpp-parity-fix-design.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-02-26-termpp-parity-fix-design`
+**Reason:** Completed/superseded plan — doc cleanup pass
+**References rewritten:** 2 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-02-26-termpp-parity-fix-impl.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-02-26-termpp-parity-fix-impl`
+**Reason:** Completed/superseded plan — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-02-27-ralph-loop-design.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-02-27-ralph-loop-design`
+**Reason:** Completed/superseded plan — doc cleanup pass
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-02-27-ralph-loop-impl.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-02-27-ralph-loop-impl`
+**Reason:** Completed/superseded plan — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-02-27-ralph-regression-tracker.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-02-27-ralph-regression-tracker`
+**Reason:** Completed/superseded plan — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-02-multi-action-skin-bundle-approved-baseline.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-02-multi-action-skin-bundle-approved-baseline`
+**Reason:** Completed/superseded plan — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-08-critical-fixes-9-5-15-5-19-5.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-08-critical-fixes-9-5-15-5-19-5`
+**Reason:** Completed/superseded plan — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-08-phase-2-critical-gaps-4week-sprint.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-08-phase-2-critical-gaps-4week-sprint`
+**Reason:** Completed/superseded plan — doc cleanup pass
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-08-rexpaint-editor-tasks-9-35.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-08-rexpaint-editor-tasks-9-35`
+**Reason:** Completed/superseded plan — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-08-web-rexpaint-editor-implementation.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-08-web-rexpaint-editor-implementation`
+**Reason:** Completed/superseded plan — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-10-sprite-extraction-dual-analysis.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-10-sprite-extraction-dual-analysis`
+**Reason:** Completed/superseded plan — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-15-xp-editor-hard-fail-plan.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-15-xp-editor-hard-fail-plan`
+**Reason:** Completed/superseded plan — doc cleanup pass
+**References rewritten:** 4 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-22-base-path-support-plan.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-22-base-path-support-plan`
+**Reason:** Completed/superseded plan — doc cleanup pass
+**References rewritten:** 3 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-22-verifier-base-path-awareness.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-22-verifier-base-path-awareness`
+**Reason:** Completed/superseded plan — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-22-milestone-1-edge-case-verifier-plan.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-22-milestone-1-edge-case-verifier-plan`
+**Reason:** Completed/superseded plan — doc cleanup pass
+**References rewritten:** 2 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-23-milestone-2-base-path-unified-verifier-plan.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-23-milestone-2-base-path-unified-verifier-plan`
+**Reason:** Completed/superseded plan — doc cleanup pass
+**References rewritten:** 4 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-04-web-rexpaint-editor/claude-cp437-font-research.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#claude-cp437-font-research`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-04-web-rexpaint-editor/claude-embedded-editor-plan.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#claude-embedded-editor-plan`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-04-web-rexpaint-editor/claude-game-engine-research.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#claude-game-engine-research`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-04-web-rexpaint-editor/claude-grid-editor-integration.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#claude-grid-editor-integration`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-04-web-rexpaint-editor/claude-rexpaint-vs-workbench.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#claude-rexpaint-vs-workbench`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-04-web-rexpaint-editor/claude-web-rexpaint-design-brief.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#claude-web-rexpaint-design-brief`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-04-web-rexpaint-editor/claude-workbench-api-inventory.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#claude-workbench-api-inventory`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-04-web-rexpaint-editor/claude-workbench-architecture.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#claude-workbench-architecture`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-04-web-rexpaint-editor/claude-workbench-plans.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#claude-workbench-plans`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-04-web-rexpaint-editor/claude-workbench-spec-audit.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#claude-workbench-spec-audit`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-04-web-rexpaint-editor/claude-xp-format-deep-dive.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#claude-xp-format-deep-dive`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-04-web-rexpaint-editor/xp-editor-feature-inventory.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#xp-editor-feature-inventory`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-21-legacy-inspector-retirement-checklist.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-21-legacy-inspector-retirement-checklist`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 3 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-21-m2-png-fixture-inventory.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-21-m2-png-fixture-inventory`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 2 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-21-m2-source-panel-implementation-spec.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-21-m2-source-panel-implementation-spec`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 2 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-21-semantic-edit-api-design.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-21-semantic-edit-api-design`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-21-semantic-edit-test-matrix.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-21-semantic-edit-test-matrix`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 2 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/research/ascii/2026-03-01-claim-verification.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-01-claim-verification`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/research/ascii/2026-03-13-claim-verification.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-13-claim-verification`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 2 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/research/ascii/2026-03-15-four-audits-xp-editor.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-15-four-audits-xp-editor`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/research/ascii/2026-03-16-adhoc-proof-replay-plan.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-16-adhoc-proof-replay-plan`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/research/ascii/2026-03-16-verifier-audit.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-16-verifier-audit`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/research/ascii/2026-03-23-doc-index-and-drift-matrix.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-23-doc-index-and-drift-matrix`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/research/ascii/2026-03-23-full-codebase-verifier-architecture-audit.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-23-full-codebase-verifier-architecture-audit`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/research/ascii/verification/aab-causal-check-2026-03-01.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#aab-causal-check-2026-03-01`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/research/ascii/verification/ab-matrix-2026-03-01.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#ab-matrix-2026-03-01`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/research/ascii/verification/pre-vs-post-fix-comparison-2026-03-01.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#pre-vs-post-fix-comparison-2026-03-01`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## M2-B Source-to-Grid Workflow — 2026-03-23
+
+**Status:** COMMITTED PROOF — runner committed at `380edee`, rerun on committed code: 13/13 PASS root-hosted, 13/13 PASS /xpedit prefixed. Classification: UI-driven actions with read-only diagnostic observation layer.
+
+### Runner
+
+`scripts/xp_fidelity_test/run_source_to_grid_workflow_test.mjs` (committed at `380edee`)
+
+### Capabilities proven
+
+| Capability | Canon ID | Evidence |
+|-----------|----------|----------|
+| Drag source to grid (cross-panel drag/drop) | D1 | Step 12: d1_drag PASS — frame signature changed at target cell |
+| Add to selected row sequence (context menu) | D2/C2 | Steps 6, 8: add_to_row_a, add_to_row_b PASS — draft consumed, box committed, frame signature changed |
+| Select frame (click grid cell) | G1 | Step 3: grid_select PASS — selectedRow updated to target |
+| Grid population invariant | — | Step 9: PASS — 2 insertions in 2 distinct columns |
+| Source isolation invariant | — | Step 13: PASS — source-panel data state preserved across grid insertions |
+
+### Root-hosted evidence
+
+```
+node run_source_to_grid_workflow_test.mjs --out-dir output/source_to_grid_workflow
+```
+
+Result: 13/13 PASS, hosting_mode=root, url=http://127.0.0.1:5071/workbench
+Artifacts: `output/source_to_grid_workflow/report.json`, 14 screenshots, state snapshots, frame signatures
+
+### /xpedit prefixed evidence
+
+```
+node run_source_to_grid_workflow_test.mjs --url http://127.0.0.1:5072/xpedit/workbench --out-dir output/source_to_grid_workflow_prefixed_committed
+```
+
+Result: 13/13 PASS, hosting_mode=prefixed, url=http://127.0.0.1:5072/xpedit/workbench
+Artifacts: `output/source_to_grid_workflow_prefixed_committed/report.json`, 14 screenshots, state snapshots, frame signatures
+
+**Server precondition:** Port 5072 running with `PIPELINE_BASE_PATH=/xpedit` (verified: root path returns 404, `/xpedit/workbench` returns 200)
+
+### Hosting mode comparison
+
+Results identical across root and /xpedit for all 13 steps. No /xpedit-specific regressions.
+
+### Remaining M2-B gaps (unchanged)
+
+| Gap | Status |
+|-----|--------|
+| C5-C9 grid-bridging context menu | Deferred to M2-D |
+| S18/S19 undo/redo | Deferred — blocked by PB-01/PB-03 |
+
+### Reclassification summary
+
+- M2-R7: source-to-grid lane passes identically at root and /xpedit (UI-driven acceptance)
+- D1 promoted: WIRED → PROVEN
+- D2/C2 promoted: WIRED → PROVEN
+- G1 promoted: WIRED → PROVEN
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/API_CONTRACT.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#api-contract`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/ARCHITECTURE.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#architecture`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/REXPAINT_PARITY_EDITOR_SURFACE_SPEC.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#rexpaint-parity-editor-surface-spec`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/MVP_DEPLOYMENT.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#mvp-deployment`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 3 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `PLAYWRIGHT_STATUS.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#playwright-status`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `PLAYWRIGHT_TEST_REPORT.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#playwright-test-report`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `PLAYWRIGHT_TESTS_QUICKSTART.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#playwright-tests-quickstart`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `TEST_EXECUTION_GUIDE.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#test-execution-guide`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `progress.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#progress`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `INTEGRATION_STRATEGY_AND_REPLAN.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#integration-strategy-and-replan`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 3 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `REXPAINT_LIBRARY_AUDIT_FINDINGS.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#rexpaint-library-audit-findings`
+**Reason:** Completed/superseded — doc cleanup pass
+**References rewritten:** 6 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `findings/INDEX.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#index`
+**Reason:** Audit findings — archived in doc cleanup pass
+**References rewritten:** 2 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `findings/01-FINDING-pyrexpaint-usage.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#01-finding-pyrexpaint-usage`
+**Reason:** Audit findings — archived in doc cleanup pass
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `findings/02-FINDING-rs-rexpaint-FFI.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#02-finding-rs-rexpaint-ffi`
+**Reason:** Audit findings — archived in doc cleanup pass
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `findings/03-FINDING-asset-registry-hot-reload.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#03-finding-asset-registry-hot-reload`
+**Reason:** Audit findings — archived in doc cleanup pass
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `findings/04-FINDING-sprite-pipeline-dithering.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#04-finding-sprite-pipeline-dithering`
+**Reason:** Audit findings — archived in doc cleanup pass
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `findings/05-FINDING-editor-app-god-object.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#05-finding-editor-app-god-object`
+**Reason:** Audit findings — archived in doc cleanup pass
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `findings/06-FINDING-modal-css-ad-hoc.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#06-finding-modal-css-ad-hoc`
+**Reason:** Audit findings — archived in doc cleanup pass
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `findings/07-FINDING-state-mutation.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#07-finding-state-mutation`
+**Reason:** Audit findings — archived in doc cleanup pass
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `findings/08-FINDING-structural-gates.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#08-finding-structural-gates`
+**Reason:** Audit findings — archived in doc cleanup pass
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `findings/09-FINDING-rexpaint-manual-coverage.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#09-finding-rexpaint-manual-coverage`
+**Reason:** Audit findings — archived in doc cleanup pass
+**References rewritten:** 2 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `findings/10-FINDING-xp-editor-feature-audit.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#10-finding-xp-editor-feature-audit`
+**Reason:** Audit findings — archived in doc cleanup pass
+**References rewritten:** 2 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `findings/11-FINDING-manual-gaps-checker.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#11-finding-manual-gaps-checker`
+**Reason:** Audit findings — archived in doc cleanup pass
 **References rewritten:** 2 file(s)
 **Script:** `scripts/doc_lifecycle_stitch.sh`
 

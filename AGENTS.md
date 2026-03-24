@@ -55,7 +55,7 @@ Short version:
 ### Drift Guardrail
 
 - Do not build new M2 work on top of drifted verifier code or stale planning docs.
-- If `master` and `feat/base-path-support` disagree on verifier semantics, treat that as a blocker and reconcile it before adding new slices.
+- `feat/base-path-support` was fully merged into `master` at `e895298` and retired on 2026-03-23. All base-path work now lives on `master`.
 
 ### Acceptance vs Diagnostic Enforcement (MANDATORY)
 

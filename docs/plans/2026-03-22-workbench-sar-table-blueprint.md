@@ -4,8 +4,8 @@ Date: 2026-03-22
 Status: active
 Method: Code audit of `web/workbench.js` (7647 lines), `web/workbench.html`, `web/whole-sheet-init.js`, `config/template_registry.json`, and all governing contracts/plans.
 Depends on:
-- `docs/plans/2026-03-22-workbench-verifier-sar-model.md` (architecture context)
-- `docs/plans/2026-03-22-milestone-1-edge-case-verifier-plan.md` (M1 edge-case verifier)
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-22-workbench-verifier-sar-model` (architecture context)
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-22-milestone-1-edge-case-verifier-plan` (M1 edge-case verifier)
 - `docs/plans/2026-03-21-milestone-2-png-verifier-design.md` (M2 verifier design)
 - `docs/XP_EDITOR_ACCEPTANCE_CONTRACT.md` (canonical contract)
 

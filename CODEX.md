@@ -56,12 +56,12 @@ Short version:
 
 - Milestone 1 is closed on canonical root-hosted `master` as of 2026-03-23.
 - Base-path verification found no `/xpedit`-specific regressions for the M1 edge-workflow lane.
-- `feat/base-path-support` carries newer M2 verifier-foundation work, but branch docs and runner behavior may still drift from `master`.
 - `window.__wb_debug.getState()` is the preferred verifier state surface; `_state()` fallback should be treated as temporary and audited.
-- The project requirement is one coherent verifier architecture across canonical and base-path hosting. If worktrees disagree on verifier semantics, fix that before expanding M2 slices.
+- The project requirement is one coherent verifier architecture across canonical and base-path hosting.
+- Any doc still referencing `feat/base-path-support` as a live branch is stale — that branch was merged and retired on 2026-03-23.
 
 ## Drift Guardrail
 
 - Do not continue M2 implementation on top of stale planning docs or drifted verifier code.
-- If `master` and `feat/base-path-support` differ on waits, generated SAR coverage, state capture, route handling, or acceptance claims, reconcile them first.
+- `feat/base-path-support` was fully merged into `master` at `e895298` and retired on 2026-03-23. All base-path work now lives on `master`.
 - Do not describe the verifier as unified unless the shared library, active runners, and planning docs actually match.

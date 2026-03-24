@@ -1,7 +1,7 @@
 # M2 Capability Canon Inventory
 
 **Created:** 2026-03-23
-**Branch:** master @ b5034b5
+**Branch:** master @ 85ff3b8
 **Purpose:** Canonical answer to "what user-reachable workbench behaviors should be possible right now?" — distinguishing intent, code wiring, and verified proof.
 **Supersedes:** No prior canonical capability inventory existed. This doc synthesizes claims from the full doc set and measures them against code and failure-log reality.
 
@@ -107,7 +107,7 @@ Each capability row has five columns:
 | # | Action | Canon Source | Code Evidence | Proof Evidence | Status | M2 Scope |
 |---|--------|-------------|---------------|----------------|--------|----------|
 | C1 | Add as 1 sprite | SAR blueprint | `addSpriteFromSelectedBox()` — wired | M2-B runner step 4 | **PROVEN** | M2-B |
-| C2 | Add to selected row sequence | SAR blueprint | `addSpriteToRowSequence()` — wired | No verifier | WIRED | M2-B |
+| C2 | Add to selected row sequence | SAR blueprint | `addSpriteToRowSequence()` — wired | Source-to-grid runner steps 6, 8: add_to_row PASS (root + /xpedit) | **PROVEN** | M2-B |
 | C3 | Set as anchor for Find Sprites | SAR blueprint | `setAnchorBox()` — wired | M2-B runner step 6; PB-01 undo gap remains | **PROVEN** | M2-B |
 | C4 | Pad this bbox to anchor size | SAR blueprint | `padBoxToAnchorSize()` — wired | M2-B runner step 7; PB-02 CLOSED | **PROVEN** | M2-B |
 | C5 | Delete (source context) | SAR blueprint | `deleteSourceBox()` — wired | No verifier | WIRED | M2-D |
@@ -120,14 +120,14 @@ Each capability row has five columns:
 
 | # | Action | Canon Source | Code Evidence | Proof Evidence | Status | M2 Scope |
 |---|--------|-------------|---------------|----------------|--------|----------|
-| D1 | Drag source to grid | UX checklist §11, M2 plan | Drag/drop handler — wired | No verifier coverage | WIRED | M2-B |
-| D2 | Add to row sequence | UX checklist §12, M2 plan | `addSpriteToRowSequence()` — wired | No verifier coverage | WIRED | M2-B |
+| D1 | Drag source to grid | UX checklist §11, M2 plan | Drag/drop handler — wired | Source-to-grid runner step 12: d1_drag PASS (root + /xpedit) | **PROVEN** | M2-B |
+| D2 | Add to row sequence | UX checklist §12, M2 plan | `addSpriteToRowSequence()` — wired | Source-to-grid runner steps 6, 8: add_to_row PASS (root + /xpedit) | **PROVEN** | M2-B |
 
 ### Family 6: Grid Panel (14 actions)
 
 | # | Action | Canon Source | Code Evidence | Proof Evidence | Status | M2 Scope |
 |---|--------|-------------|---------------|----------------|--------|----------|
-| G1 | Select frame (click) | UI control ref §6 | Click handler on grid — wired | No verifier | WIRED | M2-D |
+| G1 | Select frame (click) | UI control ref §6 | Click handler on grid — wired | Source-to-grid runner step 3: grid_select PASS (root + /xpedit) | **PROVEN** | M2-B |
 | G2 | Shift-select (multi) | UI control ref §6 | Shift+click — wired | No verifier | WIRED | M2-D |
 | G3 | Move row up/down | UI control ref §6 | `moveSelectedRow()` — wired | No verifier | WIRED | M2-D |
 | G4 | Move col left/right | UI control ref §6 | `moveSelectedCols()` — wired | No verifier | WIRED | M2-D |
@@ -243,8 +243,8 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 | **XP import → edit → save → export → runtime** | T6 → edit → T3 → T4 → T7 | **PROVEN** | M1 full_recreation PASS, 7/7 edge workflows |
 | **Bundle: apply → per-action edit → save → test** | T1 → T2 → edit → T3 → T7 | **PROVEN** | M1 action_tab_hydration + partial_bundle_gating PASS |
 | **PNG upload → analyze → convert → session** | U1 → U2 → U3 → T3 | **PROVEN (structural-contract only, API-driven)** | M2-A 9/9 structural gates PASS via fetch() — does NOT prove UI button workflow |
-| **PNG → source panel → manual assembly → grid → WS → export** | U1 → S12 → S7 → D1 → W2 → T3 → T4 | **NOT PROVEN** | All steps WIRED but no end-to-end verifier coverage |
-| **Source panel → manual box draw → drag to grid** | S2 → S7 → D1 | **NOT PROVEN** | All steps WIRED, zero verifier coverage |
+| **PNG → source panel → manual assembly → grid → WS → export** | U1 → S12 → S7 → D1 → W2 → T3 → T4 | **PARTIAL** | U1→S12→S7→D1 PROVEN (source-to-grid runner); W2→T3→T4 still WIRED (WS tools unverified) |
+| **Source panel → manual box draw → drag to grid** | S2 → S7 → D1 | **PROVEN** | Source-to-grid runner: 13/13 PASS (root + /xpedit). D1 drag, D2/C2 context menu, G1 grid select all verified. |
 | **Whole-sheet correction → save → export** | W1 → W2-W8 → T3 → T4 | **NOT PROVEN** | WS tools WIRED, save/export PROVEN separately |
 | **Semantic editing (region-based)** | Dict lookup → W2 → T3 → T4 | **NOT PROVEN** | M2-E scope, dictionaries exist, no verifier |
 | **Base-path parity** | Any workflow at /xpedit | **PROVEN (structural-contract + M2-B UI)** | M2-A structural-contract PASS at both root + /xpedit; M2-B source-panel UI-driven PASS at both; base-path verification: 0 regressions |
@@ -255,25 +255,27 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 
 ### By Status
 
+> **Updated 2026-03-23** to reflect M2-B source-panel committed proof (5c67ef2, d12740c).
+
 | Status | Count | % of 96 SAR actions |
 |--------|-------|---------------------|
-| PROVEN | 10 | 10% |
+| PROVEN | 20 | 21% |
 | WIRED | 67 | 70% |
-| PARTIAL | 7 | 7% |
+| PARTIAL | 2 | 2% |
 | PLANNED | 4 | 4% |
 | BLOCKED | 1 | 1% |
 | DEFERRED | 2 | 2% |
-| *Outside SAR 96* | ~35 | (inspector, preview, recorder, bug report) |
+| *Outside SAR 96* | ~36 | (inspector, preview, recorder, bug report) |
 
 ### By M2 Sub-Phase
 
 | Sub-Phase | Total Actions | Proven | Wired | Partial/Blocked/Planned |
 |-----------|---------------|--------|-------|-------------------------|
-| M1-closed | ~18 | 10 | 8 | 0 |
-| M2-A (structural baseline) | 3 | 2 | 1 | 0 |
-| M2-B (source-panel assembly) | 6 | 0 | 6 | 0 |
-| M2-C (WS primary) | 12 | 0 | 5 | 7 |
-| M2-D (source/grid stability) | 49 | 0 | 42 | 7 |
+| M1-closed | 15 | 8 | 7 | 0 |
+| M2-A (structural baseline) | 2 | 2 | 0 | 0 |
+| M2-B (source-panel assembly) | 13 | 10 | 3 | 0 |
+| M2-C (WS primary) | 20 | 0 | 13 | 7 (3 PLANNED, 1 BLOCKED, 2 DEFERRED, 1 PARTIAL) |
+| M2-D (full SAR coverage) | 45 | 0 | 43 | 2 (1 PARTIAL, 1 PLANNED) |
 | M2-E (semantic dicts) | 0 | 0 | 0 | 0 (workflow-level, not action-level) |
 | M2-F (analyze assistive) | 1 | 0 | 1 | 0 |
 
@@ -281,13 +283,13 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 
 | Slice | Purpose | Acceptance? | Built? |
 |-------|---------|-------------|--------|
-| Slice 1 | PNG Structural Baseline | YES | **NO** (M2-A proven ad hoc but no automated slice) |
-| Slice 2 | Source-Panel Contract | diagnostic | NO |
+| Slice 1 | PNG Structural Baseline | YES | Ad-hoc proof only (M2-A 9/9 structural gates PASS via `run_structural_baseline_test.mjs`); not a formal unified-architecture slice |
+| Slice 2 | Source-Panel Contract | diagnostic | **YES** — committed runner `run_source_panel_workflow_test.mjs` (5c67ef2), 10/10 PASS; not yet a unified-architecture recipe but committed proof exists |
 | Slice 3 | Source-to-Grid Contract | diagnostic | NO |
 | Slice 4 | Whole-Sheet Correction | diagnostic | NO |
 | Slice 5 | Manual Assembly E2E | YES | NO |
 
-**0 of 5 M2 verifier slices are built** (VB-04). The structural baseline is proven through ad-hoc failure-log evidence, not through an automated verifier slice.
+**2 of 5 slices have committed proof** (Slice 1 structural, Slice 2 source-panel), but neither is built as a unified-architecture recipe+runner yet. The remaining 3 slices have zero proof. The unified M2 verifier architecture (canonical spec §5) will replace ad-hoc runners with generated recipes.
 
 ---
 
@@ -336,8 +338,8 @@ Ranked by M2 acceptance importance:
    - This is THE critical M2 acceptance workflow.
 
 2. **Source panel full cycle** (draw box → commit → select → move → resize → delete)
-   - All modes WIRED. Zero verifier coverage for any source panel operation.
-   - 19 actions, 0 tested.
+   - 7 of 19 source-panel actions PROVEN via M2-B runner (S1, S2, S7, S8, S12, S15, S16).
+   - 12 remaining actions WIRED but unverified (move, resize, row/col drag, cut, delete, zoom).
 
 3. **Whole-sheet correction** (focus → paint → eyedropper → erase → save)
    - 6 tools WIRED. Per-stroke undo NOT connected. 3 tools NOT wired (Select, Oval, Text).
@@ -372,13 +374,79 @@ This is the single workflow that, if proven, demonstrates M2-B/C/D are functiona
 - Lifecycle (L1, T3, T4)
 - Runtime (T7)
 
-### Priority 2: Source Panel Contract (Slice 2)
+### Priority 2: Source Panel Contract (Slice 2) — expand coverage
 
-The source panel has 19 actions with zero verifier coverage. A minimal contract verifier proving box CRUD (create, read, update, delete) + Find Sprites would cover the highest-risk gap.
+The source panel has 7 of 19 actions PROVEN via committed M2-B runner (`run_source_panel_workflow_test.mjs`, 5c67ef2). The remaining 12 actions (move, resize, row/col drag, cut, delete, zoom) have zero verifier coverage. A contract expansion proving box CRUD (move, resize, delete) would close the highest remaining gap.
 
 ### Priority 3: Fix Anchor Undo Gaps (PB-01/02/03)
 
 3 code locations where `pushHistory()` is missing. Blocks undo verification for the entire source panel.
+
+---
+
+## Part 8: Generator Readiness by Family
+
+> **Purpose:** This section classifies each action family's readiness for extraction into `action_registry.json` — the first stage of the unified M2 verifier architecture (see canonical spec §5).
+
+### Generator Readiness Key
+
+- **READY** — All actions in this family have: (a) known DOM selector, (b) known handler, (c) clear preconditions/postconditions. Can be extracted to action_registry.json now.
+- **MOSTLY READY** — Most actions have selectors/handlers, but 1-2 have canvas-coordinate or drag-gesture complexity requiring a selector abstraction.
+- **NEEDS DESIGN** — Actions require new selector patterns (canvas coordinates, drag gestures, keyboard shortcuts) or state observation not yet in `getState()`.
+- **DEFERRED** — Not in M2 scope or blocked.
+
+### Readiness Assessment
+
+| Family | # Actions | Generator Readiness | Blocking Issue |
+|--------|-----------|--------------------|----|
+| F1: Template/Bundle (T1-T8) | 8 | **READY** | None — all are button clicks with known DOM IDs |
+| F2: Upload/Convert (U1-U3) | 3 | **READY** | None — file input + button clicks |
+| F3: Source Panel (S1-S19) | 19 | **MOSTLY READY** | S7 draw-box, S9 move, S10 resize require canvas-coordinate gesture abstraction; S13-S14 row/col drag likewise |
+| F4: Context Menu (C1-C9) | 9 | **READY** | All are right-click → menu-item click with known DOM IDs |
+| F5: Source-to-Grid (D1-D2) | 2 | **PROVEN** | D1 drag and D2/C2 context menu verified by source-to-grid runner (13/13 PASS root + /xpedit) |
+| F6: Grid Panel (G1-G14) | 14 | **MOSTLY READY** | G1 click, G2 shift-click, G14 drag-select need canvas-coordinate patterns; rest are button clicks |
+| F7: Whole-Sheet Editor (W1-W18) | 18 | **NEEDS DESIGN** | All painting tools require canvas-coordinate gestures; keyboard shortcuts (W9) need key-event pattern; layer ops (W12-W14) have no code yet |
+| F8: Jitter/Alignment (J1-J6) | 6 | **READY** | All are button clicks with known DOM IDs |
+| F9: Lifecycle (L1-L3) | 3 | **READY** | All are button clicks or keyboard shortcuts |
+| F10: Runtime Dock (R1-R7) | 7 | **READY** | All are button clicks; iframe observation needs design |
+| F11: Bug Report (B1-B7) | 7 | **READY** | All are button clicks or modal interactions |
+| F12: XP Preview (P1-P4) | 4 | **READY** | Button clicks + input changes |
+
+**Summary by family (SAR 96 = F1-F11; F12 is outside SAR count):**
+
+| Readiness | Families | Action Count (of 96 SAR) |
+|-----------|---------|--------------------------|
+| READY | F1(8), F2(3), F4(9), F8(6), F9(3), F10(7), F11(7) | **43** |
+| MOSTLY READY | F3(19), F6(14) — ~8 individual actions need canvas-coordinate design, rest are button clicks | **33** |
+| NEEDS DESIGN | F5(2), F7(18) — canvas painting, cross-panel drag, keyboard shortcuts, or missing code | **20** |
+
+43 actions in READY families can be extracted to `action_registry.json` immediately. Within the 33 MOSTLY READY actions, ~25 are individually ready (button clicks) and ~8 need canvas-coordinate gesture abstraction. The 20 NEEDS DESIGN actions require new selector patterns before extraction.
+
+### DOM Selector Authority
+
+This inventory absorbs and supersedes the control-level selector truth from these source documents:
+
+| Source Doc | Role | What This Inventory Absorbs | Remaining Role |
+|-----------|------|---------------------------|----------------|
+| `docs/COMPLETE_UI_CONTROL_REFERENCE.md` | 189-element control inventory (2026-03-08) | DOM IDs, handler names, bundle-mode notes per element | **Reference** — control-level detail beyond what the action families need; does not claim active workflow state |
+| `docs/WORKBENCH_SOURCE_PANEL_UX_CHECKLIST.md` | Source panel feature tracking (2026-02-23) | IMPLEMENTED status per feature; proof-status caveat (2026-03-23 update) | **Reference** — UX design intent and acceptance criteria per feature |
+| `docs/WORKBENCH_DOCS_ARCHIVE.md#claude-workbench-ui-inventory` | 189-element inventory (historical) | Superseded by COMPLETE_UI_CONTROL_REFERENCE.md; no additional truth | **Archived** (2026-03-23) |
+| `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-22-workbench-verifier-sar-model` | SAR architecture explanation | Architecture absorbed into canonical spec §5; enumeration absorbed here | **Archived** (2026-03-23) |
+| `docs/plans/2026-03-22-workbench-sar-table-blueprint.md` | Exhaustive SAR field mapping | State field inventory (getState/\_state coverage) informs action_registry.json design | **Reference** — state-field detail needed during action_registry implementation; retain until action_registry.json is built |
+
+### State/Debug Debt Affecting Generator
+
+The following `getState()` gaps block full generator autonomy:
+
+| Field | Current Access | Impact | Resolution Path |
+|-------|---------------|--------|----------------|
+| `actionStates` | `_state()` only | Tab-switch postconditions require raw state access | Add curated `actionStates` to `getState()` P3 batch |
+| `sourceCutsV` / `sourceCutsH` | `_state()` only | Vertical/horizontal cut postconditions unavailable via safe API | Add to `getState()` P3 batch |
+| `sourceCanvasZoom` | `_state()` only | Zoom postconditions unavailable | Add to `getState()` P3 batch |
+| `templateSetKey`, `bundleId`, `activeActionKey` | `_state()` only per SAR blueprint (but `getState()` has them per state-capture contract P1) | **Already resolved** — state-capture contract confirms P1 additions | No action needed |
+| `gridCols`, `gridRows`, `sessionDirty` | `_state()` only per SAR blueprint (but `getState()` has them per state-capture contract P1) | **Already resolved** | No action needed |
+
+> **Note:** The SAR table blueprint (2026-03-22) listed several fields as not in `getState()` that the state-capture contract (2026-03-23) confirms were added in the P1 batch. The contract is authoritative for current `getState()` coverage; the blueprint is authoritative for the full state surface.
 
 ---
 
@@ -387,11 +455,91 @@ The source panel has 19 actions with zero verifier coverage. A minimal contract 
 | Doc | Role in Canon | Freshness | Key Update Needed |
 |-----|---------------|-----------|-------------------|
 | CLAUDE.md | Entry point, milestone status | Current (2026-03-23) | None |
-| docs/INDEX.md | Navigation hub, milestone definitions | **STALE** on M1 status | Append M1 closure note |
+| docs/INDEX.md | Navigation hub, milestone definitions | Updated 2026-03-23: M1 closure note, M2-B committed, doc classification table, restructured Active High-Signal Docs | None |
 | PLAYWRIGHT_FAILURE_LOG.md | Reality/proof ground truth | Current (2026-03-23) | None |
-| docs/COMPLETE_UI_CONTROL_REFERENCE.md | Control-level inventory | Current (2026-03-08) | Append scope clarification |
-| docs/WORKBENCH_SOURCE_PANEL_UX_CHECKLIST.md | Source panel feature tracking | Current (2026-02-23) | Append proof-status note |
-| docs/plans/2026-03-04-web-rexpaint-editor/claude-workbench-ui-inventory.md | Historical UI inventory | Superseded by COMPLETE_UI_CONTROL_REFERENCE.md | Append supersession note |
+| docs/COMPLETE_UI_CONTROL_REFERENCE.md | Control-level inventory | Updated 2026-03-23: scope clarification appended by stitch script | None |
+| docs/WORKBENCH_SOURCE_PANEL_UX_CHECKLIST.md | Source panel feature tracking | Updated 2026-03-23: proof-status note added, provisional/uncommitted language removed | None |
+| docs/WORKBENCH_DOCS_ARCHIVE.md#claude-workbench-ui-inventory | Historical UI inventory | Archived 2026-03-23 | N/A |
 | docs/plans/2026-03-22-workbench-sar-table-blueprint.md | SAR action enumeration | Current (2026-03-22) | None |
 | docs/plans/2026-03-23-milestone-2-bug-gap-index.md | Bug/gap tracking | Current (2026-03-23) | None |
 | **This doc** | Canonical capability inventory | Created 2026-03-23 | — |
+
+---
+
+## Appendix B: Non-Canonical Doc Inventory
+
+> **Purpose:** Explicit classification of all non-canonical docs with archive-readiness assessment. See also `docs/INDEX.md` for the navigation view.
+
+### Classification Tiers
+
+| Tier | Count | Rule |
+|------|-------|------|
+| Canonical | 3 | Protected — never archive |
+| Structural Contract | 2 | Protected — update only on milestone boundary |
+| Reference | ~12 | Stable reference — retain as long as content is not fully absorbed into canon |
+| Active Plan | ~8 | In-progress implementation guidance — retain until completed or superseded |
+| Worksheet | ~80 | Historical — retire via stitch when safe |
+
+### Tier 1: Structural Contracts (retain)
+
+| Path | Why Not Archived | Archive When |
+|------|-----------------|-------------|
+| `docs/XP_EDITOR_ACCEPTANCE_CONTRACT.md` | Normative contract for full XP-editor parity; still live acceptance criteria | When all parity goals are met or explicitly descoped |
+| `docs/PNG_STRUCTURAL_BASELINE_CONTRACT.md` | Non-regression contract for PNG ingest; actively referenced by M2-A verifier | When M2-A structural slice is automated and passes continuously |
+
+### Tier 2: Reference Docs (retain)
+
+| Path | Classification | Why Not Archived | Archive When |
+|------|---------------|-----------------|-------------|
+| `docs/COMPLETE_UI_CONTROL_REFERENCE.md` | Reference | 189-element control inventory with DOM IDs and handlers; needed as implementation reference for `action_registry.json` and `selectors.mjs` | After action_registry.json fully absorbs selector truth |
+| `docs/WORKBENCH_SOURCE_PANEL_UX_CHECKLIST.md` | Reference | UX design intent and acceptance criteria per source-panel feature; still the spec for unverified features | After all source-panel features are PROVEN in capability canon |
+| `docs/REXPAINT_UI_COMPLETE_INDEX.md` | Reference | REXPaint v1.70 UI reference implementation; stable, external product reference | Retain indefinitely — external reference, not repo-specific |
+| `docs/WORKBENCH_DOCS_ARCHIVE.md#feature-button-index-with-rexpaint-manual` | Reference | Feature button reference + REXPaint manual text | Retain — reference material |
+| `docs/research/ascii/2026-03-15-xp-data-contract.md` | Reference | Code-backed XP binary format contract | Retain — format reference not duplicated elsewhere |
+| `docs/research/ascii/2026-03-20-bundle-animation-types.md` | Reference | Bundle/animation type map | Retain — animation reference not duplicated elsewhere |
+| `docs/research/ascii/2026-03-21-player-sprite-semantic-dictionary-seed.md` | Reference | Semantic dictionary seed | Retain — M2-E prerequisite |
+| `docs/plans/2026-03-22-workbench-sar-table-blueprint.md` | Reference | Exhaustive SAR state-field mapping from code; needed during action_registry.json implementation | After action_registry.json is built and state-capture contract absorbs remaining fields |
+| `docs/plans/2026-03-23-state-capture-contract.md` | Reference | getState/\_state API contract; normative for all verifier code | Retain — live verifier contract |
+| `docs/plans/2026-03-23-milestone-2-bug-gap-index.md` | Reference | Active bug/gap tracking | Archive when all tracked bugs are resolved |
+| `docs/WORKBENCH_DOCS_ARCHIVE.md#mvp-deployment` | Reference | Deployment architecture truth | Retain — deployment reference |
+| `docs/WORKBENCH_DOCS_ARCHIVE.md#reskin-prep` | Reference | Safe reskin surface definition | Retain — UI constraint reference |
+
+### Tier 3: Active Plans (retain until completed/superseded)
+
+| Path | Why Not Archived | Archive When |
+|------|-----------------|-------------|
+| `docs/plans/2026-03-21-milestone-2-practical-png-ingest-plan.md` | Strategic M2 plan — still the active roadmap for M2 phases | After M2 closes or plan is superseded |
+| `docs/plans/2026-03-21-milestone-2-png-verifier-design.md` | M2 verifier design — architecture input for canonical spec §5 | After unified M2 verifier architecture is fully built (action_registry + dom_runner) |
+| `docs/plans/2026-03-21-milestone-2-implementation-checklist.md` | Implementation checklist with EXISTS/PARTIAL/MISSING status | After all M2-B/C/D items are PROVEN |
+| `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-22-base-path-support-plan` | Base-path implementation plan — partially implemented | After base-path work is complete |
+| `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-22-milestone-1-edge-case-verifier-plan` | M1 edge-case verifier design — M1 is closed but plan informed M2 architecture | Safe to archive now (M1 closed, architecture absorbed into spec §5) |
+| `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-23-milestone-2-base-path-unified-verifier-plan` | Unified verifier plan | After verifier_lib.mjs fully supports all M2 slices |
+| `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-15-xp-editor-hard-fail-plan` | Hard-fail plan — still active for verifier discipline | After M2 verifier architecture replaces ad-hoc hard-fail patterns |
+| `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-21-legacy-inspector-retirement-checklist` | Inspector demotion checklist — M2-C.1 scope | After legacy inspector is demoted to debug-only |
+
+### Tier 4: Worksheets — Retired (2026-03-23)
+
+These 4 docs were archived via `scripts/doc_lifecycle_stitch.sh` during the 2026-03-23 canon-absorption session:
+
+| Path | Superseded By | Safe to Retire? |
+|------|--------------|----------------|
+| `docs/WORKBENCH_DOCS_ARCHIVE.md#claude-workbench-ui-inventory` | `docs/COMPLETE_UI_CONTROL_REFERENCE.md` | **YES** — fully superseded, no unique truth |
+| `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-22-workbench-verifier-sar-model` | Canonical spec §5 (unified M2 verifier architecture) + this doc Part 8 | **YES** — architecture absorbed into canonical spec; enumeration absorbed here |
+| `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-21-claude-handoff-m2-png-verifier-design` | `docs/plans/2026-03-21-milestone-2-png-verifier-design.md` (completed design) | **YES** — handoff for completed deliverable |
+| `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-22-edge-case-verifier-impl-plan` | M1 closed; implementation details no longer active | **YES** — M1 implementation complete |
+
+### Tier 5: Worksheets — Historical Handoffs (bulk classification)
+
+~11 `CLAUDE-HANDOFF-*.md` files from 2026-03-10 through 2026-03-20. These are session handoffs that predate the 3-doc canonical model. They contain historical context but no unique normative truth not captured in the canon.
+
+**Why not archived yet:** Bulk retirement requires verifying no remaining doc links point to them as active references. The `doc_lifecycle_stitch.sh` script handles link rewriting, but 11 files is a large batch.
+
+**Archive when:** After this canon-absorption session, as a separate batch retirement pass. The stitch script should be run per-file to ensure safe link rewriting.
+
+### Tier 6: Worksheets — Old Plans and Research (bulk classification)
+
+~30 files in `docs/plans/2026-02-*`, `docs/plans/2026-03-04-web-rexpaint-editor/claude-*.md` (except UI inventory), `docs/plans/2026-03-08-*`, `docs/plans/2026-03-10-*`, and miscellaneous `docs/` root files (audit reports, gap analyses, execution summaries).
+
+**Why not archived yet:** Pre-M1 historical material. No unique normative truth. Bulk retirement blocked only by volume and link-rewriting safety.
+
+**Archive when:** Same batch retirement pass as Tier 5. Prioritize docs that are still referenced from INDEX.md's "Active High-Signal Docs" section (which needs cleanup — see INDEX.md update below).

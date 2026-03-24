@@ -269,7 +269,7 @@
 ## SECTION 14: XP EDITOR / CELL INSPECTOR PANEL — 62 Elements (**WILL BE REPLACED**)
 ## SECTION 15: TOP-LEVEL ELEMENTS — 1 Element
 
-*(Full details in original inventory document, see `docs/plans/2026-03-04-web-rexpaint-editor/claude-workbench-ui-inventory.md`)*
+*(Full details in original inventory document, see `docs/WORKBENCH_DOCS_ARCHIVE.md#claude-workbench-ui-inventory`)*
 
 ---
 
@@ -500,3 +500,19 @@
 **Last Updated:** 2026-03-08
 **Status:** Append-only (ready for Web REXPaint planning)
 **Next Step:** Detailed architecture plan for full-page modal editor
+
+---
+
+## 2026-03-23 Audit Note: Scope Clarification
+
+> **This document is a control-level inventory, not a capability-truth document.**
+>
+> It catalogs 189 UI elements (buttons, inputs, handlers, display areas) and their wiring in `workbench.html` / `workbench.js`. The presence of a control in this inventory does NOT prove that the workflow it belongs to is functional, verified, or acceptance-ready.
+>
+> For capability proof status — distinguishing "control exists" from "workflow is verified" — see:
+> - `docs/plans/2026-03-23-m2-capability-canon-inventory.md` — canonical M2 capability inventory with per-action proof status
+> - `PLAYWRIGHT_FAILURE_LOG.md` — ground-truth evidence for what has been verified end-to-end
+>
+> This doc remains the authoritative control-level precursor to the SAR (State/Action/Response) truth table defined in `docs/plans/2026-03-22-workbench-sar-table-blueprint.md`. The SAR model adds state transitions, response invariants, and isolation contracts on top of this control inventory.
+>
+> Key gap as of this audit: 70% of the 96 SAR-enumerated actions are WIRED (handler exists) but have zero verifier proof. Only 10% are PROVEN.

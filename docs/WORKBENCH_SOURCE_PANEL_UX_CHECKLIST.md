@@ -14,7 +14,7 @@ Status vocabulary:
 - `VERIFIED`
 - `DEFERRED`
 
-> **2026-03-23 update:** M2-B source-panel runner (`run_source_panel_workflow_test.mjs`) produced 10/10 PASS evidence for: draw mode switch, draw box, commit as sprite, select box, set anchor, pad to anchor, find sprites, and clear all. PB-02 (setDraftBox anchor override) fixed. Delete Box clear-all UX fixed. **CAVEAT: runner and product fixes are uncommitted. Treat as provisional, not acceptance-grade, until committed and independently reverified.** Items below marked IMPLEMENTED have code-audit evidence only.
+> **2026-03-23 update:** M2-B source-panel runner (`run_source_panel_workflow_test.mjs`) produced 10/10 PASS evidence for: draw mode switch, draw box, commit as sprite, select box, set anchor, pad to anchor, find sprites, and clear all. PB-02 (setDraftBox anchor override) fixed. Delete Box clear-all UX fixed. Runner and product fixes are **committed** (5c67ef2, d12740c). Items below marked IMPLEMENTED have code-audit evidence only; for proof-level status per action, see `docs/plans/2026-03-23-m2-capability-canon-inventory.md` Family 3.
 
 ---
 
@@ -345,11 +345,7 @@ Notes:
 
 ## 2026-03-23 Audit Note: Proof Status and Canon Alignment
 
-> **All 20 items in this checklist are marked IMPLEMENTED, but none are VERIFIED on committed code.**
->
-> As of this audit (master @ b5034b5), code inspection confirms all 20 source-panel features have wired handlers in `workbench.js`. However, zero source-panel operations have acceptance-grade verifier proof on committed code. The IMPLEMENTED status in this doc means "code exists and is wired," not "tested and proven."
->
-> An M2-B source-panel runner produced 10/10 PASS evidence from uncommitted code (see line 17 caveat above and `PLAYWRIGHT_FAILURE_LOG.md`). That evidence is provisional — not acceptance-grade until the runner and product fixes are committed and independently reverified.
+> **This checklist uses IMPLEMENTED to mean "code is wired" — it does not track proof-level verification.** 7 of 19 source-panel actions now have committed proof via the M2-B runner (`run_source_panel_workflow_test.mjs`, 5c67ef2, d12740c): draw mode, draw box, commit sprite, select box, set anchor, pad to anchor, find sprites. The remaining 12 actions are wired but unverified. For per-action proof status, the canonical source is `docs/plans/2026-03-23-m2-capability-canon-inventory.md` Family 3.
 >
 > Known bugs affecting this checklist:
 > - **PB-01/02/03:** Three anchor operations do not call `pushHistory()`, making them non-undoable. This affects items §5 (Anchor Box) and §13 (Undo/Redo Participation).

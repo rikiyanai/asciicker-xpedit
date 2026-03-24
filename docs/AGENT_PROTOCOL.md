@@ -59,8 +59,8 @@ Use sources in this order:
 5. current live branch/worktree state
 6. latest task-relevant handoff
 7. focused bug handoff docs such as:
-   - `docs/WORKBENCH_IFRAME_KEYBOARD_STUCK_HANDOFF.md`
-   - `docs/CLAUDE_RESEARCH_DUMP_WORKBENCH_MOVE_FREEZE_2026-02-27.md`
+   - `docs/WORKBENCH_DOCS_ARCHIVE.md#workbench-iframe-keyboard-stuck-handoff`
+   - `docs/WORKBENCH_DOCS_ARCHIVE.md#claude-research-dump-workbench-move-freeze-2026-02-27`
    - relevant docs under `docs/plans/`
 
 Old summary docs are supporting evidence, not branch truth.
@@ -259,8 +259,8 @@ Start with the canonical hub and then pick the task-specific handoff:
 
 For editor/doc status work on audited `master`, read:
 
-- [2026-03-13-CLAUDE-HANDOFF-EDITOR-DOC-ALIGNMENT.md](/Users/r/Downloads/asciicker-pipeline-v2/docs/2026-03-13-CLAUDE-HANDOFF-EDITOR-DOC-ALIGNMENT.md)
-- [2026-03-13 claim verification](/Users/r/Downloads/asciicker-pipeline-v2/docs/research/ascii/2026-03-13-claim-verification.md)
+- [2026-03-13-CLAUDE-HANDOFF-EDITOR-DOC-ALIGNMENT.md](docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-13-claude-handoff-editor-doc-alignment)
+- [2026-03-13 claim verification](docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-13-claim-verification)
 
 Do not use any deleted or historical "XP fidelity harness" plan as current truth. If XP-editor
 verification work resumes, it must load real XP through the product path and hard-fail on
@@ -268,11 +268,11 @@ metadata, layer, visual, export, and Skin Dock/runtime mismatches.
 
 Current restart handoff:
 
-- [2026-03-15-CLAUDE-HANDOFF-FOUR-AUDITS-XP-EDITOR.md](/Users/r/Downloads/asciicker-pipeline-v2/docs/2026-03-15-CLAUDE-HANDOFF-FOUR-AUDITS-XP-EDITOR.md)
+- [2026-03-15-CLAUDE-HANDOFF-FOUR-AUDITS-XP-EDITOR.md](docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-15-claude-handoff-four-audits-xp-editor)
 
 For the branch confusion and restore/bundle history, read:
 
-- [2026-03-11-CLAUDE-HANDOFF-CURRENT-STATE.md](/Users/r/Downloads/asciicker-pipeline-v2/docs/2026-03-11-CLAUDE-HANDOFF-CURRENT-STATE.md#L1)
+- [2026-03-11-CLAUDE-HANDOFF-CURRENT-STATE.md](docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-11-claude-handoff-current-state#L1)
 
 That older handoff explains:
 

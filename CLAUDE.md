@@ -57,7 +57,7 @@ Short version:
 ### Drift Guardrail
 
 - Do not continue M2 implementation on top of drifted verifier code or stale planning docs.
-- If `master` and `feat/base-path-support` differ on verifier waits, generated SAR coverage, state capture, or route handling, reconcile that first.
+- `feat/base-path-support` was fully merged into `master` at `e895298` and retired on 2026-03-23. All base-path work now lives on `master`.
 
 ## Current Milestone
 
@@ -81,14 +81,12 @@ Short version:
 - Base-path verification found no `/xpedit`-specific regressions for the M1 edge-workflow lane.
 - M2-A structural PNG baseline: **structural-contract proof only** (API-driven, not UI-driven). Valid per `PNG_STRUCTURAL_BASELINE_CONTRACT.md`. Does NOT prove the bundle UI workflow. See PLAYWRIGHT_FAILURE_LOG.md process failure entry.
 - M2-B source-panel workflow: **committed proof** at `5c67ef2`. 10/10 PASS on both hosting modes on committed code. UI-driven actions with read-only diagnostic observation layer. PB-02 + Delete Box UX fixed.
-- `feat/base-path-support` has newer M2 verifier-foundation work, but it may still drift from canonical `master` on runner behavior and docs.
 - `window.__wb_debug.getState()` is the preferred verifier state surface; `_state()` fallback should be treated as a temporary exception, not the long-term contract.
-- Any doc claiming M1 is still open, or claiming the 9 P1 `getState()` gaps or hosted-test gaps are still unresolved on `feat/base-path-support`, should be re-audited before being trusted.
+- Any doc still referencing `feat/base-path-support` as a live branch is stale — that branch was merged and retired on 2026-03-23.
 
 ## Do Not Assume
 
 - Do not assume old plan status text is current.
-- Do not assume `feat/base-path-support` verifier behavior matches `master`; check the runner code directly.
 - Do not claim M2 verifier foundation is unified unless the shared library, runners, and docs actually agree.
 - Do not call any lane acceptance-grade unless it uses user-reachable actions and the contract explicitly allows that lane as acceptance evidence.
 - Do not reference sibling repos or external absolute paths for runtime/build/test fixes; self-containment is enforced by `scripts/self_containment_audit.py`.
@@ -99,6 +97,6 @@ Short version:
 - PNG structural baseline contract: `docs/PNG_STRUCTURAL_BASELINE_CONTRACT.md`
 - M2 practical plan: `docs/plans/2026-03-21-milestone-2-practical-png-ingest-plan.md`
 - M2 verifier design: `docs/plans/2026-03-21-milestone-2-png-verifier-design.md`
-- Workbench SAR model: `docs/plans/2026-03-22-workbench-verifier-sar-model.md`
+- Workbench SAR model: `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-22-workbench-verifier-sar-model`
 - Unified SAR blueprint: `docs/plans/2026-03-22-workbench-sar-table-blueprint.md`
 - Failure log / M1 closeout: `PLAYWRIGHT_FAILURE_LOG.md`

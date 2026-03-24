@@ -20,7 +20,7 @@
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && python3 -c 'import os; print(os.path.realpath("."))')"
 ARCHIVE="$REPO_ROOT/docs/WORKBENCH_DOCS_ARCHIVE.md"
 FAILURE_LOG="$REPO_ROOT/PLAYWRIGHT_FAILURE_LOG.md"
 
@@ -119,10 +119,11 @@ stitch_worksheet() {
   local reason="${2:-superseded}"
 
   # Resolve to absolute then relative-to-repo-root
+  # Use os.path.realpath to resolve macOS case-insensitive paths correctly
   local abs_path
-  abs_path="$(python3 -c "import os; print(os.path.abspath('$worksheet'))")"
+  abs_path="$(python3 -c "import os; print(os.path.realpath('$worksheet'))")"
   local rel_path
-  rel_path="$(python3 -c "import os; print(os.path.relpath('$abs_path', '$REPO_ROOT'))")"
+  rel_path="$(python3 -c "import os; print(os.path.relpath('$abs_path', os.path.realpath('$REPO_ROOT')))")"
   # Guard: rel_path must not escape the repo (no leading ../)
   if [[ "$rel_path" == ../* ]]; then
     echo "ERROR: $worksheet resolves outside the repo: $rel_path" >&2

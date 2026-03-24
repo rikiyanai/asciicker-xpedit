@@ -2,34 +2,21 @@
 
 Greenfield rebuild of main sprite-sheet pipeline features currently still broken in the main Asciicker-Y9-2 Fork. This repo is intentionally independent of the main Asciicker and Asciicker-Y9-2 Fork codebase. This is a browser-based XP sprite editor and functional alternative to the Windows-only REXPaint Editor, adapted specifically for the Asciicker Game Engine. Features include: convert PNG sprite sheets to `.xp` files, edit cells in a whole-sheet editor with true REXPaint parity, and test skins live in the game engine. More features to come, please report any bugs or complaints.
 
-## Canonical Bundle Baseline
+## Run
 
-`origin/master` now includes the verified Workbench bundle/runtime baseline:
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+PYTHONPATH=src python3 -m pipeline_v2.app
+```
 
-- self-contained original-game runtime payload under `runtime/termpp-skin-lab-static`
-- uploaded `Attack`, `Death`, and `Idle / Walk` bundle playback in live manual use
-- preserved in-workbench recorder flow and canonical recorded watchdog order
+Open:
 
-![Workbench bundle/runtime baseline demo](docs/artifacts/bundle-baseline-2026-03-12/workbench-bundle-baseline.gif)
+- Live: `https://rikiworld.com/xpedit`
+- Local (default): `http://127.0.0.1:5071/` (redirects to `/workbench`)
+- Local (direct): `http://127.0.0.1:5071/workbench`
 
-Reference artifacts:
-
-- [Bundle baseline summary](docs/WORKBENCH_DOCS_ARCHIVE.md#readme)
-- [Saved manual recording](docs/artifacts/bundle-baseline-2026-03-12/workbench-ui-recording-2026-03-11T13-27-24-653Z.json)
-- [Promoted watchdog result](docs/artifacts/bundle-baseline-2026-03-12/integrate-watchdog-result.json)
-- [Promoted watchdog UI capture](docs/artifacts/bundle-baseline-2026-03-12/integrate-watchdog-ui-recorder.json)
-
-## MVP Goal
-
-Convert a sprite sheet PNG into a valid `.xp`, load it into Workbench with populated cells, and export `.xp` back out.
-
-Golden flow:
-
-1. Upload
-2. Analyze
-3. Run
-4. Open Workbench from job
-5. Export XP
 
 ## Required Inputs
 
@@ -71,20 +58,6 @@ All failures return:
 }
 ```
 
-## Run
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
-PYTHONPATH=src python3 -m pipeline_v2.app
-```
-
-Open:
-
-- Live: `https://rikiworld.com/xpedit`
-- Local (default): `http://127.0.0.1:5071/` (redirects to `/workbench`)
-- Local (direct): `http://127.0.0.1:5071/workbench`
 
 ## Tests
 

@@ -2984,6 +2984,10 @@ Results identical across root and /xpedit for all 13 steps. No /xpedit-specific 
 - D2/C2 promoted: WIRED → PROVEN
 - G1 promoted: WIRED → PROVEN
 
+### Commit hygiene note
+
+The D1/D2/G1 proof promotion edits were committed as part of `a39f589` (105-file doc-archive batch) rather than in a dedicated narrow commit. This was caused by a concurrent doc-lifecycle stitch operation that swept all dirty working-tree changes into a single commit. The proof content is correct and verifiable; the commit boundary is a hygiene issue, not a correctness issue. Accepted and moving on per user decision (2026-03-24).
+
 
 ---
 

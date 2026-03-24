@@ -146,13 +146,13 @@ Each capability row has five columns:
 
 | # | Action | Canon Source | Code Evidence | Proof Evidence | Status | M2 Scope |
 |---|--------|-------------|---------------|----------------|--------|----------|
-| W1 | Focus whole-sheet | M2 plan, UI ref | `openInspectorForSelectedFrame()` → WS hydration | No verifier | WIRED | M2-C |
+| W1 | Focus whole-sheet | M2 plan, UI ref | `openInspectorForSelectedFrame()` → WS hydration | WS tools runner: dblclick grid frame cell → WS mounted PASS (root + /xpedit) | **PROVEN** | M2-C |
 | W2 | Paint cell (Cell tool) | REXPaint parity spec | whole-sheet-init.js Cell tool — wired | Fidelity runner ws_paint_cell PASS (root + /xpedit, acceptance mode) | **PROVEN** | M2-C |
 | W3 | Eyedropper | REXPaint parity spec | whole-sheet-init.js Eyedropper — wired | Fidelity runner ws_eyedropper_sample PASS (root + /xpedit, acceptance mode) | **PROVEN** | M2-C |
-| W4 | Erase cell | REXPaint parity spec | whole-sheet-init.js Erase — wired | No verifier (no current recipe generates ws_erase_cell) | WIRED | M2-C |
+| W4 | Erase cell | REXPaint parity spec | whole-sheet-init.js Erase — wired | WS tools runner: erase click → glyph=0 PASS (root + /xpedit) | **PROVEN** | M2-C |
 | W5 | Erase drag | REXPaint parity spec | whole-sheet-init.js Erase (drag) — wired | Fidelity runner ws_erase_drag PASS (root + /xpedit, acceptance mode) | **PROVEN** | M2-C |
-| W6 | Flood fill | REXPaint parity spec | whole-sheet-init.js Fill tool — wired | No verifier (recipe generator never emits ws_flood_fill) | WIRED | M2-C |
-| W7 | Rectangle tool | REXPaint parity spec | whole-sheet-init.js Rect tool — wired | No verifier (no fixture triggers ws_draw_rect pattern) | WIRED | M2-C |
+| W6 | Flood fill | REXPaint parity spec | whole-sheet-init.js Fill tool — wired | WS tools runner: fill click → glyph changed PASS (root + /xpedit) | **PROVEN** | M2-C |
+| W7 | Rectangle tool | REXPaint parity spec | whole-sheet-init.js Rect tool — wired | WS tools runner: drag rect → corner glyphs painted PASS (root + /xpedit) | **PROVEN** | M2-C |
 | W8 | Line tool | REXPaint parity spec | whole-sheet-init.js Line tool — wired | Fidelity runner ws_draw_line PASS (root + /xpedit, acceptance mode) | **PROVEN** | M2-C |
 | W9 | Switch tool (keyboard) | REXPaint parity spec | Keyboard shortcuts C/E/D/L/R/I — wired | Fidelity runner ws_tool_activate PASS (root + /xpedit, acceptance mode) | **PROVEN** | M2-C |
 | W10 | Switch layer | UI control ref §7 | `switchToLayer()` — wired | Layer runner step 2: w10_switch PASS (root + /xpedit) | **PROVEN** | M2-C |

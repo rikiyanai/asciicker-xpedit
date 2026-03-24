@@ -3104,6 +3104,42 @@ Artifacts: `output/ws_layer_test_prefixed/report.json`, 7 screenshots
 
 ---
 
+## M2-C Whole-Sheet Slice 3: WS Tools (W1, W4, W6, W7) — 2026-03-24
+
+**Status:** COMMITTED PROOF — runner committed at `daf161b`, 6/6 PASS on both root and /xpedit. Classification: UI-driven with diagnostic observation layer.
+
+### Runner
+
+`scripts/xp_fidelity_test/run_whole_sheet_tools_test.mjs` (committed at `daf161b`)
+
+### Capabilities proven
+
+| Step | Capability | Canon ID | Gesture | Evidence |
+|------|-----------|----------|---------|----------|
+| 2 | Focus whole-sheet | W1 | Double-click `.frame-cell[data-row="0"][data-col="0"]` | WS editor mounted=true after dblclick |
+| 3+4 | Erase cell (single click) | W4 | Click `#wsToolErase` + click canvas cell | glyph changed to 0 after erase |
+| 5 | Rectangle tool | W7 | Drag on canvas with `#wsToolRect` active | Corner cells have drawn glyph |
+| 6 | Flood fill | W6 | Click `#wsToolFill` + click canvas cell | Cell glyph changed to fill value |
+
+### W1 user gesture definition
+
+The exact shipped user gesture for W1 is **double-click on a grid frame cell** (`.frame-cell[data-row="N"][data-col="M"]`). This fires the `dblclick` handler at workbench.js:5999 which calls `focusWholeSheetFrame(row, col)`. Two alternative shipped gestures also exist (grid context menu `#ctxOpenInspector`, button `#openInspectorBtn`) but were not used in this proof.
+
+### Evidence
+
+Root: 6/6 PASS at `output/ws_tools_test/report.json`
+/xpedit: 6/6 PASS at `output/ws_tools_test_prefixed/report.json`
+
+### Reclassification
+
+- W1 promoted: WIRED → PROVEN (dblclick gesture)
+- W4 promoted: WIRED → PROVEN (erase click)
+- W6 promoted: WIRED → PROVEN (flood fill)
+- W7 promoted: WIRED → PROVEN (rectangle drag)
+
+
+---
+
 ## Doc Lifecycle: Worksheet Retired
 
 **Date:** 2026-03-23

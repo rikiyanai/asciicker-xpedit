@@ -40,7 +40,7 @@ Placeholder. No milestone beyond M2 is currently defined.
 |-------|-------|-----------|--------|
 | **M2-A** | Structural PNG baseline (dims, layers, metadata gates) | M1 closed | ESTABLISHED |
 | **M2-B** | Source panel + grid assembly (draw box, find sprites, drag-to-grid) | M2-A | ESTABLISHED — source-panel 10/10 PASS (5c67ef2); source-to-grid 13/13 PASS (380edee) at root + /xpedit. D1, D2/C2, G1 PROVEN. |
-| **M2-C** | Whole-sheet editor coverage (tools, layers, undo) | M2-A | ESTABLISHED — 14/18 W-actions PROVEN: Slice 1 (W2/W3/W5/W8/W9), Slice 2 (W10-W14), Slice 3 (W1/W4/W6/W7). Only W15-W18 remain (blocked/deferred/partial). |
+| **M2-C** | Whole-sheet editor coverage (tools, layers, undo) | M2-A | ESTABLISHED — 16/18 W-actions PROVEN. W15 (SelectTool) wired + proven (25dc204, 8f79b35). W18 (undo Ctrl+Z) wired + proven. Only W16 (OvalTool) and W17 (TextTool) remain DEFERRED. |
 | **M2-D** | Full SAR workflow coverage (all remaining WIRED actions get verifier proof) | M2-B, M2-C | NOT STARTED |
 | **M2-E** | Semantic editing (region-based dictionary-driven edits) | M2-D | NOT STARTED |
 | **M2-F** | Analyze/auto-slice (assistive, not authoritative) | M2-D | NOT STARTED |
@@ -56,7 +56,7 @@ Execute in dependency order. M2-B and M2-C may run in parallel after M2-A.
 1. **MVP deployment to `rikiworld.com/xpedit`** — base-path hosting is proven locally; the missing piece is real server deployment automation plus post-deploy smoke verification.
 2. **M2-D full SAR workflow coverage** — M2-B and M2-C are established. Remaining WIRED actions outside the whole-sheet blocked/deferred set need committed proof.
 3. **PB-01/02/03 undo gaps** in source panel anchor ops — small fixes that affect M2-D completeness.
-4. **PB-06 SelectTool wiring + W18 undo/redo** — the remaining whole-sheet product gaps if parity beyond the current 14/18 proven set is needed.
+4. ~~**PB-06 SelectTool wiring + W18 undo/redo**~~ — **CLOSED**. SelectTool wired (25dc204), Ctrl+Z/Y wired (25dc204), both proven (8f79b35). Only W16 (OvalTool) and W17 (TextTool) remain deferred.
 
 This stack is execution priority, not timeless truth. Re-evaluate when any sub-phase status changes.
 

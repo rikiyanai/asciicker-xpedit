@@ -160,17 +160,17 @@ Each capability row has five columns:
 | W12 | Add layer | SAR blueprint | `_addLayer()` whole-sheet-init.js:1168, `.ws-layer-add-btn` click handler | Layer runner step 4: w12_add PASS (root + /xpedit) | **PROVEN** | M2-C |
 | W13 | Delete layer | SAR blueprint | `_deleteActiveLayer()` whole-sheet-init.js:1178, delete btn click handler | Layer runner step 6: w13_delete PASS (root + /xpedit) | **PROVEN** | M2-C |
 | W14 | Move layer | SAR blueprint | `_moveLayerUp/Down()` whole-sheet-init.js:1189/1198, up/down btn handlers | Layer runner step 5: w14_move PASS (root + /xpedit) | **PROVEN** | M2-C |
-| W15 | Select tool | Implementation checklist | Code exists on disk but NOT wired (PB-06) | No evidence | BLOCKED | M2-C |
+| W15 | Select tool | Implementation checklist | SelectToolAdapter wired (25dc204), button #wsToolSelect, shortcut 'S' | WS tools runner: activeTool=select PASS (root + /xpedit) | **PROVEN** | M2-C |
 | W16 | Oval tool | Implementation checklist | Code exists on disk but NOT wired (PB-05) | No evidence | DEFERRED | M2-C |
 | W17 | Text tool | Implementation checklist | Code exists on disk but NOT wired (PB-07) | No evidence | DEFERRED | M2-C |
-| W18 | Per-stroke undo/redo | SAR blueprint, implementation checklist | Undo stubs at editor-app.js:950-960; WS has stroke-complete detection | No evidence | PARTIAL | M2-C |
+| W18 | Per-stroke undo/redo | SAR blueprint, implementation checklist | Ctrl+Z/Y wired to workbench undo/redo (25dc204, b497090); sidebar buttons already worked | WS tools runner: paint→Ctrl+Z→glyph reverted PASS (root + /xpedit) | **PROVEN** | M2-C |
 
 **Whole-Sheet Known Gaps:**
 - PB-05: OvalTool exists on disk, not wired — DEFERRED
-- PB-06: SelectTool exists on disk, not wired — BLOCKED (M2-C.2 priority)
+- ~~PB-06~~: **CLOSED** — SelectTool wired at 25dc204, proven at 8f79b35
 - PB-07: TextTool exists on disk, not wired — DEFERRED
-- ~~W12-W14~~: **CORRECTED + PROVEN** — code exists at whole-sheet-init.js:1168-1204. Prior audit missed these. Now PROVEN via layer runner (7bdab92).
-- W18: Undo stubs exist but per-stroke undo is not connected end-to-end
+- ~~W12-W14~~: **CORRECTED + PROVEN** — code exists at whole-sheet-init.js:1168-1204. Now PROVEN via layer runner (7bdab92).
+- ~~W18~~: **PROVEN** — Ctrl+Z/Y keyboard shortcuts wired at 25dc204, sidebar buttons already worked. Proven via tools runner paint→Ctrl+Z→revert at 8f79b35. Note: editor-app.js internal undo stack stubs remain (line 950-960) but workbench snapshot undo works end-to-end.
 
 ### Family 8: Jitter/Alignment (6 actions)
 
@@ -286,7 +286,7 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 | Slice 1 | PNG Structural Baseline | YES | Ad-hoc proof only (M2-A 9/9 structural gates PASS via `run_structural_baseline_test.mjs`); not a formal unified-architecture slice |
 | Slice 2 | Source-Panel Contract | diagnostic | **YES** — committed runner `run_source_panel_workflow_test.mjs` (5c67ef2), 10/10 PASS; not yet a unified-architecture recipe but committed proof exists |
 | Slice 3 | Source-to-Grid Contract | YES | **YES** — committed runner `run_source_to_grid_workflow_test.mjs` (380edee), 13/13 PASS root + /xpedit; D1/D2/G1 PROVEN |
-| Slice 4 | Whole-Sheet Tools + Layers | YES | **YES** — 14/18 W-actions PROVEN: fidelity rerun (46fe06f) W2/W3/W5/W8/W9; layer runner (7bdab92) W10-W14; tools runner (daf161b) W1/W4/W6/W7. Only W15-W18 remain (blocked/deferred/partial). |
+| Slice 4 | Whole-Sheet Tools + Layers | YES | **YES** — 16/18 W-actions PROVEN: fidelity rerun (46fe06f) W2/W3/W5/W8/W9; layer runner (7bdab92) W10-W14; tools runner (daf161b→8f79b35) W1/W4/W6/W7/W15/W18. Only W16 (OvalTool) and W17 (TextTool) remain DEFERRED. |
 | Slice 5 | Manual Assembly E2E | YES | NO |
 
 **4 of 5 slices have committed proof** (Slice 1 structural, Slice 2 source-panel, Slice 3 source-to-grid, Slice 4 whole-sheet). Only Slice 5 (manual assembly E2E) has zero proof. The unified M2 verifier architecture (canonical spec §5) will replace ad-hoc runners with generated recipes.

@@ -50,7 +50,7 @@
       "generatorReadiness": "PARTIALLY_PROVEN",
       "canonActionCount": 18,
       "registryActionCount": 0,
-      "blockingIssue": "14/18 PROVEN: W2/W3/W5/W8/W9 (fidelity rerun), W10-W14 (layer runner), W1/W4/W6/W7 (tools runner). Only W15-W18 remain (blocked/deferred/partial). Registry entries not yet populated."
+      "blockingIssue": "16/18 PROVEN: W2/W3/W5/W8/W9 (fidelity), W10-W14 (layer), W1/W4/W6/W7/W15/W18 (tools). Only W16 (OvalTool) and W17 (TextTool) remain DEFERRED. Registry entries not yet populated."
     },
     "F8": {
       "name": "Jitter/Alignment",

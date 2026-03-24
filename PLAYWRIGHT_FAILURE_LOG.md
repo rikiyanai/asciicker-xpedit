@@ -3140,6 +3140,35 @@ Root: 6/6 PASS at `output/ws_tools_test/report.json`
 
 ---
 
+## M2-C Whole-Sheet Slice 4: W15 (SelectTool) + W18 (Undo) — 2026-03-24
+
+**Status:** COMMITTED PROOF — product fix at `25dc204`, keyboard fix at `b497090`+`4689448`, proof runner updated at `8f79b35`. 8/8 PASS on both root and /xpedit.
+
+### Product fixes
+
+1. **W15 (SelectTool, PB-06):** Wired via SelectToolAdapter in whole-sheet-init.js. Import, adapter, editorState, mount instantiation, sidebar button `#wsToolSelect`, `_switchTool('select')` case, `_updateToolUI`, keyboard shortcut 'S'. Deactivation on tool switch clears stale selection.
+
+2. **W18 (Undo keyboard):** Ctrl+Z/Ctrl+Y in `_onKeyDown` call `editorState.onUndo/onRedo` → workbench `undo()/redo()`. `e.stopPropagation()` prevents double-fire with workbench window handler. All tool shortcuts guarded against Ctrl/Cmd to avoid swallowing Ctrl+C/R/L/S/etc.
+
+### Proof evidence
+
+| Step | Capability | Canon ID | Evidence |
+|------|-----------|----------|----------|
+| 7 | Select tool activation | W15 | activeTool === 'select' after button click |
+| 8 | Undo via Ctrl+Z | W18 | Paint glyph=72, Ctrl+Z, glyph reverted to original |
+
+Root: 8/8 PASS at `output/ws_tools_test_w15w18/report.json`
+/xpedit: 8/8 PASS at `output/ws_tools_test_w15w18_prefixed/report.json`
+
+### Reclassification
+
+- W15 promoted: BLOCKED → **PROVEN** (PB-06 closed)
+- W18 promoted: PARTIAL → **PROVEN** (Ctrl+Z keyboard path; sidebar buttons already worked)
+- M2-C now at 16/18 W-actions PROVEN. Only W16 (OvalTool) and W17 (TextTool) remain DEFERRED.
+
+
+---
+
 ## Doc Lifecycle: Worksheet Retired
 
 **Date:** 2026-03-23

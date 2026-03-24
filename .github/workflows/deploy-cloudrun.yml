@@ -12,6 +12,11 @@ env:
   GCP_REGION: us-central1
   SERVICE_NAME: asciicker-xpedit
   AR_REPO: asciicker-xpedit
+  GCP_SERVICE_ACCOUNT: github-deploy@yuzu-agent.iam.gserviceaccount.com
+
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
   # ── Job 1: Build, test, push image ──
@@ -42,7 +47,8 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -72,7 +78,8 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
 
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v2
@@ -91,10 +98,6 @@ jobs:
           env_vars: |
             PIPELINE_BASE_PATH=/xpedit
             PIPELINE_HOST=0.0.0.0
-            BUG_REPORT_DELIVERY=github
-            BUG_REPORT_GITHUB_REPO=${{ github.repository }}
-          secrets: |
-            BUG_REPORT_GITHUB_TOKEN=BUG_REPORT_GITHUB_TOKEN:latest
 
   # ── Job 3: Post-deploy smoke test ──
   smoke-test:
@@ -106,7 +109,8 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2

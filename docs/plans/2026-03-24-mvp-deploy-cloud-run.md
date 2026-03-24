@@ -4,7 +4,7 @@
 
 **Goal:** Deploy the xpedit workbench to Google Cloud Run so it's live at `rikiworld.com/xpedit`, using GitHub Actions for CI/CD and Cloudflare Workers for path-based routing.
 
-**Architecture:** The Flask app runs as a Docker container on Cloud Run (free tier), constrained to a single instance (`--max-instances=1`) because all session/upload/export state is filesystem-based and ephemeral. GitHub Actions builds the image, pushes to Artifact Registry with a deterministic SHA tag, and deploys that exact tag to Cloud Run on manual trigger. A Cloudflare Worker routes `rikiworld.com/xpedit/*` requests to the Cloud Run service URL while all other paths continue to GitHub Pages. Post-deploy verification includes both stateless health checks and a stateful upload round-trip (POST PNG → verify upload_id).
+**Architecture:** The Flask app runs as a Docker container on Cloud Run (free tier), constrained to a single instance (`--max-instances=1`) because all session/upload/export state is filesystem-based and ephemeral. GitHub Actions authenticates to GCP via GitHub OIDC + Workload Identity Federation, builds the image, pushes to Artifact Registry with a deterministic SHA tag, and deploys that exact tag to Cloud Run on manual trigger. A Cloudflare Worker routes `rikiworld.com/xpedit/*` requests to the Cloud Run service URL while all other paths continue to GitHub Pages. Post-deploy verification includes both stateless health checks and a stateful upload check (POST PNG → verify upload_id).
 
 **Tech Stack:** Docker, Google Cloud Run, Artifact Registry, GitHub Actions (`google-github-actions/deploy-cloudrun`), Cloudflare Workers, existing Flask + Gunicorn app
 
@@ -20,7 +20,7 @@ The app stores uploads, sessions, bundles, exports, and bug reports under `data/
 |---------|-----------|
 | Cross-instance inconsistency | `--max-instances=1` — all requests hit the same container |
 | Data loss on redeploy | Accepted for MVP — the workbench workflow is upload→edit→export/download in one session; persistence across deploys is not needed |
-| Bug report durability | Set `BUG_REPORT_DELIVERY=github` — the app still writes a local copy first (ephemeral on Cloud Run), then delivers to GitHub Issues synchronously during the request. The GitHub Issue is the durable record; the local copy is a transient fallback |
+| Bug report durability | Deferred for first launch — current workflow does not wire GitHub Issue delivery. Local bug-report files remain ephemeral on Cloud Run |
 | Scale-to-zero cold data loss | Accepted — user re-uploads after idle timeout; no long-lived sessions expected at MVP scale |
 
 ### Post-MVP upgrade path
@@ -297,6 +297,11 @@ env:
   GCP_REGION: us-central1
   SERVICE_NAME: asciicker-xpedit
   AR_REPO: asciicker-xpedit
+  GCP_SERVICE_ACCOUNT: github-deploy@yuzu-agent.iam.gserviceaccount.com
+
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
   # ── Job 1: Build, test, push image ──
@@ -327,7 +332,8 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -357,7 +363,8 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
 
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v2
@@ -376,14 +383,10 @@ jobs:
           env_vars: |
             PIPELINE_BASE_PATH=/xpedit
             PIPELINE_HOST=0.0.0.0
-            BUG_REPORT_DELIVERY=github
-            BUG_REPORT_GITHUB_REPO=${{ github.repository }}
-          secrets: |
-            BUG_REPORT_GITHUB_TOKEN=BUG_REPORT_GITHUB_TOKEN:latest
 
   # ── Job 3: Post-deploy smoke test ──
   smoke-test:
-    needs: deploy
+    needs: [deploy, build-and-push]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -391,7 +394,8 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -426,7 +430,7 @@ jobs:
 
 Note on `--max-instances=1`: this is the critical constraint that makes ephemeral filesystem safe — see the Storage Limitations section above. Do not increase without adding shared persistent storage.
 
-Note on `secrets:` block: if you don't want bug reports going to GitHub Issues yet, remove the `BUG_REPORT_DELIVERY`, `BUG_REPORT_GITHUB_REPO`, and `secrets:` lines. Bug reports will fall back to local-only (ephemeral on Cloud Run, which is fine for MVP since users can screenshot).
+Note on auth: this workflow uses GitHub OIDC + Workload Identity Federation, not a long-lived JSON key. This avoids org policies that disable service-account key creation.
 
 **Step 2: Remove SSH-based artifacts**
 
@@ -489,30 +493,41 @@ for ROLE in roles/run.admin roles/artifactregistry.writer roles/iam.serviceAccou
     --member="serviceAccount:${SA_EMAIL}" \
     --role="$ROLE"
 done
-
-# Create key
-gcloud iam service-accounts keys create /tmp/github-deploy-key.json \
-  --iam-account="${SA_EMAIL}"
-
-echo "Key saved to /tmp/github-deploy-key.json — add its contents to GitHub Secrets as GCP_SA_KEY"
 ```
 
-**Step 4: (Optional) Create Secret Manager secret for bug report token**
-
-Only needed if you want `BUG_REPORT_DELIVERY=github`:
+**Step 4: Create Workload Identity Federation for GitHub Actions**
 
 ```bash
-echo -n "ghp_YOUR_GITHUB_PAT" | gcloud secrets create BUG_REPORT_GITHUB_TOKEN \
-  --data-file=- \
-  --replication-policy=automatic
+PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
+POOL_ID="github-actions"
+PROVIDER_ID="github-oidc"
+REPO="rikiyanai/asciicker-xpedit"
 
-# Grant the Cloud Run service account access
-gcloud secrets add-iam-policy-binding BUG_REPORT_GITHUB_TOKEN \
-  --member="serviceAccount:${PROJECT_ID}-compute@developer.gserviceaccount.com" \
-  --role="roles/secretmanager.secretAccessor"
+gcloud iam workload-identity-pools create "$POOL_ID" \
+  --location="global" \
+  --display-name="GitHub Actions"
+
+gcloud iam workload-identity-pools providers create-oidc "$PROVIDER_ID" \
+  --location="global" \
+  --workload-identity-pool="$POOL_ID" \
+  --display-name="GitHub OIDC" \
+  --issuer-uri="https://token.actions.githubusercontent.com" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.ref=assertion.ref" \
+  --attribute-condition="assertion.repository=='${REPO}'"
+
+gcloud iam service-accounts add-iam-policy-binding "${SA_EMAIL}" \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL_ID}/attribute.repository/${REPO}"
 ```
 
-If you skip this, remove the `secrets:` and `BUG_REPORT_*` lines from the workflow.
+Fetch the provider resource name for GitHub Secrets:
+
+```bash
+gcloud iam workload-identity-pools providers describe "$PROVIDER_ID" \
+  --location="global" \
+  --workload-identity-pool="$POOL_ID" \
+  --format='value(name)'
+```
 
 **Step 5: Add GitHub Secrets**
 
@@ -521,7 +536,7 @@ Go to GitHub repo → Settings → Secrets → Actions:
 | Secret | Value |
 |--------|-------|
 | `GCP_PROJECT_ID` | Your GCP project ID |
-| `GCP_SA_KEY` | Contents of `/tmp/github-deploy-key.json` |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | Output of `gcloud iam workload-identity-pools providers describe ... --format='value(name)'` |
 
 **Step 6: Create GitHub Environment**
 
@@ -715,19 +730,13 @@ git commit -m "docs: update INDEX, canonical spec, and CLAUDE.md for Cloud Run M
 | Secret | Source | Purpose |
 |--------|--------|---------|
 | `GCP_PROJECT_ID` | GCP Console | Identifies the GCP project |
-| `GCP_SA_KEY` | `gcloud iam service-accounts keys create` | Service account JSON key |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | `gcloud iam workload-identity-pools providers describe ... --format='value(name)'` | GitHub OIDC provider resource used by `google-github-actions/auth` |
 
 ### Cloudflare
 
 | Secret | Source | Purpose |
 |--------|--------|---------|
 | `CLOUDFLARE_API_TOKEN` | Cloudflare Dashboard → API Tokens | Deploy the xpedit-router Worker. Add to GitHub Secrets if using CI, or use `wrangler login` for manual deploy. |
-
-### GCP Secret Manager (optional, for bug report delivery)
-
-| Secret | Source | Purpose |
-|--------|--------|---------|
-| `BUG_REPORT_GITHUB_TOKEN` | GitHub PAT with `issues:write` | Post bug reports as GitHub Issues |
 
 ### Cloud Run Environment Variables
 
@@ -736,8 +745,6 @@ git commit -m "docs: update INDEX, canonical spec, and CLAUDE.md for Cloud Run M
 | `PIPELINE_BASE_PATH` | `/xpedit` | URL prefix for all routes |
 | `PIPELINE_HOST` | `0.0.0.0` | Bind address |
 | `PORT` | `8080` (set by Cloud Run) | Gunicorn bind port |
-| `BUG_REPORT_DELIVERY` | `github` | Route bug reports to Issues, not ephemeral disk |
-| `BUG_REPORT_GITHUB_REPO` | `rikiyanai/asciicker-pipeline-v2` | Target repo for bug report Issues |
 
 ---
 

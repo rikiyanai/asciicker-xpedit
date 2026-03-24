@@ -1,7 +1,8 @@
 # M2 Capability Canon Inventory
 
 **Created:** 2026-03-23
-**Branch:** master @ bf0a7cf
+**Last updated:** 2026-03-24
+**Branch:** master @ f967a21
 **Purpose:** Canonical answer to "what user-reachable workbench behaviors should be possible right now?" — distinguishing intent, code wiring, and verified proof.
 **Supersedes:** No prior canonical capability inventory existed. This doc synthesizes claims from the full doc set and measures them against code and failure-log reality.
 
@@ -207,9 +208,9 @@ Each capability row has five columns:
 
 | # | Action | Canon Source | Code Evidence | Proof Evidence | Status | M2 Scope |
 |---|--------|-------------|---------------|----------------|--------|----------|
-| B1 | Open bug report | UI control ref §14 | `openBugReportModal()` — wired | No specific proof | WIRED | M1-closed |
-| B2 | Submit bug report | UI control ref §14 | `submitBugReport()` → `/api/workbench/report-bug` | No specific proof | WIRED | M1-closed |
-| B3 | Dismiss bug report | UI control ref §14 | Modal close handler — wired | No specific proof | WIRED | M1-closed |
+| B1 | Open bug report | UI control ref §14 | `openBugReportModal()` — wired | Playwright browser test on live `rikiworld.com/xpedit`: modal opens on click (2026-03-24) | **PROVEN** | M1-closed |
+| B2 | Submit bug report | UI control ref §14 | `submitBugReport()` → `/api/workbench/report-bug` | Playwright browser test: GitHub Issue #7 created via live Cloud Run (2026-03-24). API test: Issue #6 created. GitHub delivery wired via Secret Manager. | **PROVEN** | M1-closed |
+| B3 | Dismiss bug report | UI control ref §14 | Modal close handler — wired | Playwright browser test: modal auto-closes after submit (2026-03-24) | **PROVEN** | M1-closed |
 | B4 | Start UI recording | UI control ref §15 | `startUiRecorder()` — wired | No specific proof | WIRED | M1-closed |
 | B5 | Stop UI recording | UI control ref §15 | `stopUiRecorder()` — wired | No specific proof | WIRED | M1-closed |
 | B6 | Clear recording | UI control ref §15 | `clearUiRecorder()` — wired | No specific proof | WIRED | M1-closed |

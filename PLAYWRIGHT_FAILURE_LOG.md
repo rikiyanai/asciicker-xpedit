@@ -3442,3 +3442,53 @@ Root: 8/8 PASS at `output/ws_tools_test_w15w18/report.json`
 **References rewritten:** 2 file(s)
 **Script:** `scripts/doc_lifecycle_stitch.sh`
 
+
+---
+
+## Cloud Run MVP Deploy: LIVE
+
+**Date:** 2026-03-24
+**Branch / HEAD:** `master` @ `c6fa5cb`
+**Workflow run:** `Deploy to Cloud Run` run `23479759126`
+**Result:** `build-and-push` PASS, `deploy` PASS, `smoke-test` PASS
+**Cloud Run URL:** `https://asciicker-xpedit-6abo3pnlfa-uc.a.run.app`
+**Public URL:** `https://rikiworld.com/xpedit`
+
+### Evidence
+
+- GitHub Actions deploy workflow passed end-to-end on committed code.
+- Smoke-test job log recorded 5/5 PASS against `https://asciicker-xpedit-6abo3pnlfa-uc.a.run.app/xpedit`:
+  - `healthz`
+  - `workbench`
+  - `templates-api`
+  - `runtime-index`
+  - `stateful-upload`
+- Manual/public verification also passed at `https://rikiworld.com/xpedit`.
+
+### Fixes Required During Launch
+
+- `5c7b783` — allow `termpp-stream/start` dry-run on non-macOS so CI/Linux can pass `tests/test_workbench_flow.py`
+- `d665f64` — use `env.GCP_PROJECT_ID` in workflow image metadata to avoid GitHub masking the project id in job outputs
+- project-level IAM/org-policy intervention was required before public smoke would pass:
+  - inherited or project-applied policy blocked unauthenticated `allUsers` access
+  - Cloud Run invoker access was restored so `--allow-unauthenticated` could work for smoke/public traffic
+
+### Post-Launch Fixes (same session, 2026-03-24)
+
+- `8ede2c6` — add bare `/xpedit` route to Cloudflare Worker. The wildcard pattern `rikiworld.com/xpedit/*` did not match the bare `/xpedit` path (no trailing slash), returning 404 from GitHub Pages. Added explicit route entry in `wrangler.toml`.
+- `f1714bf` — wire GitHub Issue delivery for bug reports on Cloud Run. Token stored in GCP Secret Manager (`bug-report-github-token`), mounted as `BUG_REPORT_GITHUB_TOKEN`. Env vars `BUG_REPORT_DELIVERY=github` and `BUG_REPORT_GITHUB_REPO=rikiyanai/asciicker-xpedit` set on Cloud Run.
+- Verification: Issues #6 (API test) and #7 (browser UI test) created successfully and closed. Any visitor to `rikiworld.com/xpedit` can now file bug reports that create GitHub Issues.
+- Second green deploy run `23479759126` confirmed all 3 jobs pass with the bug report wiring in the workflow.
+
+### Cloud Run Free Tier Performance
+
+- Pipeline run (`/api/run`) on Cloud Run free tier exceeds 5 minutes for a single `cat_sheet.png` fixture. Full M1/M2 verifier tests that require pipeline runs are impractical against the live deployment without increased CPU/memory resources.
+- UI-only smoke tests, bug report flows, and API-level checks work fine.
+
+### Operational Notes
+
+- The deploy workflow now uses GitHub OIDC / Workload Identity Federation, not a JSON key.
+- `GCP_PROJECT_ID` is a workflow env var (not a secret) to avoid GitHub Actions masking job outputs that contain the project ID.
+- Cloudflare Worker routes `rikiworld.com/xpedit` (bare) and `rikiworld.com/xpedit/*` (wildcard) are both active. Config in `deploy/cloudflare-worker/wrangler.toml`.
+- Bug report GitHub Issue delivery is configured via Secret Manager. Fine-grained PAT named "XPedit Issues" with Issues R/W on `rikiyanai/asciicker-xpedit`.
+- GitHub Actions still emits Node 20 deprecation warnings for several actions; this is non-blocking today but needs follow-up before GitHub's Node 24 cutoff.

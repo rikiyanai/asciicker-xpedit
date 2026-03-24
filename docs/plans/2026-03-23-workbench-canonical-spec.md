@@ -3,7 +3,7 @@
 **Authority:** This is one of the 3 canonical authority docs for this repo. See Section 6 below.
 
 **Last updated:** 2026-03-24
-**Branch:** master @ bf0a7cf
+**Branch:** master @ f967a21
 
 ---
 
@@ -53,7 +53,7 @@ Execute in dependency order. M2-B and M2-C may run in parallel after M2-A.
 
 **Last reviewed:** 2026-03-24
 
-1. **MVP deployment to `rikiworld.com/xpedit`** — deploy automation is implemented: Dockerfile, `deploy-cloudrun.yml` (GitHub Actions → Cloud Run), Cloudflare Worker routing, post-deploy smoke tests. Remaining: one-time GCP setup + first deploy.
+1. **MVP deployment to `rikiworld.com/xpedit`** — LIVE. GitHub Actions runs `23479759126` and `23479759126` passed all 3 jobs. Bug report → GitHub Issue delivery wired via Secret Manager (verified: Issues #6, #7). Bare `/xpedit` route fixed (`8ede2c6`). Remaining follow-up: refresh Node-20-based GitHub Actions before GitHub's Node 24 cutoff. Pipeline runs on Cloud Run free tier are too slow (>5 min) for verifier tests — UI-only flows work fine.
 2. **M2-D full SAR workflow coverage** — M2-B and M2-C are established. Remaining WIRED actions outside the whole-sheet blocked/deferred set need committed proof.
 3. **PB-01/02/03 undo gaps** in source panel anchor ops — small fixes that affect M2-D completeness.
 4. **PB-06 SelectTool visualization** — tool activates but canvas.setSelectionTool() never called, marching-ants not rendered, drag→bounds unverified. W18 (undo) is PROVEN. W16/W17 remain deferred.

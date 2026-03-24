@@ -37,11 +37,11 @@ This repo uses a 3-doc canonical authority model. Agents must treat ONLY these 3
 
 ## Current Branch Truth
 
-- Audit date: 2026-03-23
+- Audit date: 2026-03-24
 - Audited worktree: `/Users/r/Downloads/asciicker-pipeline-v2`
 - Audited branch: `master`
-- Audited HEAD: `d12740c`
-- Current branch role: active M2 acceptance and verifier architecture line
+- Audited HEAD: `f967a21`
+- Current branch role: active M2 acceptance and verifier architecture line; MVP deployment live at `rikiworld.com/xpedit`
 - **Self-containment**: This repo must be 100% self-contained. No runtime, test, or build-time dependency on external folders (e.g. `/Users/r/Downloads/asciicker-Y9-2`, `/Users/r/Downloads/n`). Run `python3 scripts/self_containment_audit.py` at startup.
 
 Do not assume `master` is the canonical restore/bundle line. For bundle/runtime issues, read the branch-history handoff below before making fix claims.
@@ -168,11 +168,14 @@ Related docs:
 Summary:
 - MVP is server-backed Flask, not static GitHub Pages
 - committed runtime payload under `runtime/termpp-skin-lab-static` is part of the deployable product
-- `/xpedit` subpath hosting is implemented and locally proven; deploy automation (Dockerfile, `deploy-cloudrun.yml`, Cloudflare Worker) is committed and ready for first live deploy to `rikiworld.com/xpedit`
+- `/xpedit` subpath hosting is live at `https://rikiworld.com/xpedit`; Cloud Run deploy run `23479759126` passed and both direct + public smoke checks passed on 2026-03-24
 - GitHub Actions `deploy-cloudrun.yml` handles build → push → deploy → smoke test
+- Bug report → GitHub Issue delivery is live via GCP Secret Manager (`bug-report-github-token`). Any visitor can file bugs from the workbench UI. Verified with Issues #6 and #7 (2026-03-24).
+- Cloudflare Worker routes both bare `/xpedit` and `/xpedit/*` to Cloud Run; all other paths pass through to GitHub Pages
 - VPS/nginx/systemd configs remain in `deploy/` as documented alternatives
 - The runtime payload must remain committed inside this repo. Do not reintroduce any dependency on external runtime folders.
-- For the first manual MVP launch, verifier scripts are offline QA tools, not required production-host dependencies.
+- Pipeline runs on Cloud Run free tier are very slow (>5 min for cat_sheet.png). Verifier tests requiring pipeline runs are impractical against the live deployment without increased resources.
+- Verifier scripts remain offline QA tools, not required production-host dependencies.
 
 ## UI Reskin Constraint
 
@@ -365,14 +368,15 @@ No distinct palette asset files (`.pal`, `palette.json`, etc.) exist in the repo
 
 > A canonical M2 capability inventory exists at `docs/plans/2026-03-23-m2-capability-canon-inventory.md`. It cross-references every doc in this index against current code wiring and failure-log proof to classify each user-reachable behavior as PROVEN, WIRED, PARTIAL, PLANNED, BLOCKED, or DEFERRED.
 >
-> Key findings (updated 2026-03-23, post M2-B commit):
+> Key findings (updated 2026-03-24):
 > - M1 is closed (see status correction above)
-> - 96 SAR-enumerated actions: **20 PROVEN** on committed code, 67 WIRED, 2 PARTIAL, 4 PLANNED, 1 BLOCKED, 2 DEFERRED
+> - 96 SAR-enumerated actions: **23 PROVEN** on committed code (was 20 — B1/B2/B3 bug report actions now PROVEN via live Cloud Run browser test), 64 WIRED, 2 PARTIAL, 4 PLANNED, 1 BLOCKED, 2 DEFERRED
 > - M2-B source-panel proof is **committed** (5c67ef2, d12740c): 10/10 PASS at root + /xpedit; PB-02 fixed, Delete Box UX fixed
 > - 0 of 5 M2 verifier slices are automated; structural baseline and source-panel proof are ad-hoc failure-log evidence
 > - The manual-assembly end-to-end workflow (PNG → source → grid → WS → export) is fully wired but has zero proof
 > - **Unified M2 verifier architecture** is now documented in `docs/plans/2026-03-23-workbench-canonical-spec.md` §5: capability canon → action_registry.json → recipe generator → DOM runner → observation → proof
-> - Next implementation target: `action_registry.json`, `selectors.mjs`, recipe/action schema
+> - MVP deployment live at `rikiworld.com/xpedit` with GitHub Issue delivery for bug reports (Secret Manager, verified Issues #6/#7)
+> - Next implementation target: M2-D full SAR workflow coverage
 >
 > For reality/proof status on any capability claim in this repo, always check:
 > 1. `PLAYWRIGHT_FAILURE_LOG.md` (ground truth)

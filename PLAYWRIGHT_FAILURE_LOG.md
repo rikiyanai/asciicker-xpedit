@@ -2991,6 +2991,72 @@ The D1/D2/G1 proof promotion edits were committed as part of `a39f589` (105-file
 
 ---
 
+## M2-C Whole-Sheet Editor Slice 1 — 2026-03-24
+
+**Status:** COMMITTED PROOF — fidelity runner rerun at HEAD (`fa1f470`) in acceptance mode, 9/9 gates PASS on both root and /xpedit. Fixture: `attack-0001.xp`. Classification: UI-driven with diagnostic observation layer.
+
+### Runner
+
+`scripts/xp_fidelity_test/run_fidelity_test.mjs` via `run.sh` (recipe-driven, acceptance mode)
+
+### Recipe action coverage → W-family mapping
+
+| Recipe Action | Count | W-Family | Proven? |
+|---|---|---|---|
+| `ws_paint_cell` | 27 | W2 (Cell tool) | **YES** |
+| `ws_eyedropper_sample` | 1 | W3 (Eyedropper) | **YES** |
+| `ws_erase_drag` | 10 | W5 (Erase drag) | **YES** |
+| `ws_draw_line` | 18 | W8 (Line tool) | **YES** |
+| `ws_tool_activate` | 16 | W9 (Switch tool) | **YES** |
+| `ws_set_draw_state` | 22 | (prerequisite) | — |
+| `ws_ensure_apply` | 3 | (prerequisite) | — |
+
+### W-family actions NOT covered by this slice
+
+| Action | Reason |
+|---|---|
+| W1 (Focus WS) | Exact shipped user gesture not yet defined for verifier |
+| W4 (Erase cell) | No current recipe generates `ws_erase_cell` for this fixture |
+| W6 (Flood fill) | Recipe generator never emits `ws_flood_fill` |
+| W7 (Rectangle) | No fixture triggers qualifying `ws_draw_rect` pattern |
+| W10-W14 (Layer ops) | Need bounded standalone runner |
+| W15-W17 | BLOCKED/DEFERRED |
+| W18 (Undo/redo) | PARTIAL — out of scope |
+
+### Root-hosted evidence
+
+```
+bash scripts/xp_fidelity_test/run.sh sprites/attack-0001.xp --mode acceptance --url http://127.0.0.1:5071/workbench
+```
+
+Result: 9/9 gates PASS, 0 failures, mode=acceptance
+Artifacts: `output/xp-fidelity-test/run-2026-03-24T04-25-59Z/result.json`
+
+### /xpedit prefixed evidence
+
+```
+bash scripts/xp_fidelity_test/run.sh sprites/attack-0001.xp --mode acceptance --url http://127.0.0.1:5072/xpedit/workbench
+```
+
+Result: 9/9 gates PASS, 0 failures, mode=acceptance
+Artifacts: `output/xp-fidelity-test/run-2026-03-24T04-26-28Z/result.json`
+
+### Canon corrections (same session)
+
+- W12-W14: PLANNED → WIRED. Code found at whole-sheet-init.js:1168-1204. Prior audit incorrectly reported "no code found."
+
+### Reclassification summary
+
+- W2 promoted: WIRED → PROVEN (ws_paint_cell, acceptance mode)
+- W3 promoted: WIRED → PROVEN (ws_eyedropper_sample, acceptance mode)
+- W5 promoted: WIRED → PROVEN (ws_erase_drag, acceptance mode)
+- W8 promoted: WIRED → PROVEN (ws_draw_line, acceptance mode)
+- W9 promoted: WIRED → PROVEN (ws_tool_activate, acceptance mode)
+- W12-W14 corrected: PLANNED → WIRED (code audit correction, no proof claim)
+
+
+---
+
 ## Doc Lifecycle: Worksheet Retired
 
 **Date:** 2026-03-23

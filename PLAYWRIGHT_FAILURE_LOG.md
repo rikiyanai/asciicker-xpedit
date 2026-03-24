@@ -3057,6 +3057,53 @@ Artifacts: `output/xp-fidelity-test/run-2026-03-24T04-26-28Z/result.json`
 
 ---
 
+## M2-C Whole-Sheet Slice 2: Layer Operations — 2026-03-24
+
+**Status:** COMMITTED PROOF — runner committed at `7bdab92`, 6/6 PASS on both root and /xpedit. Classification: UI-driven with diagnostic observation layer.
+
+### Runner
+
+`scripts/xp_fidelity_test/run_whole_sheet_layer_test.mjs` (committed at `7bdab92`)
+
+### Capabilities proven
+
+| Step | Capability | Canon ID | Evidence |
+|------|-----------|----------|----------|
+| 2 | Switch layer (click layer row) | W10 | activeLayerIndex changed to target |
+| 3 | Toggle layer visibility | W11 | Visible layer count changed |
+| 4 | Add layer | W12 | layerCount increased by 1 |
+| 5 | Move layer (up button) | W14 | Layer name order changed |
+| 6 | Delete layer | W13 | layerCount decreased by 1 |
+
+### Root-hosted evidence
+
+```
+node run_whole_sheet_layer_test.mjs --xp sprites/attack-0001.xp --out-dir output/ws_layer_test --url http://127.0.0.1:5071/workbench
+```
+
+Result: 6/6 PASS, hosting_mode=root
+Artifacts: `output/ws_layer_test/report.json`, 7 screenshots
+
+### /xpedit prefixed evidence
+
+```
+node run_whole_sheet_layer_test.mjs --xp sprites/attack-0001.xp --out-dir output/ws_layer_test_prefixed --url http://127.0.0.1:5072/xpedit/workbench
+```
+
+Result: 6/6 PASS, hosting_mode=prefixed
+Artifacts: `output/ws_layer_test_prefixed/report.json`, 7 screenshots
+
+### Reclassification summary
+
+- W10 promoted: WIRED → PROVEN
+- W11 promoted: WIRED → PROVEN
+- W12 promoted: WIRED → PROVEN
+- W13 promoted: WIRED → PROVEN
+- W14 promoted: WIRED → PROVEN
+
+
+---
+
 ## Doc Lifecycle: Worksheet Retired
 
 **Date:** 2026-03-23

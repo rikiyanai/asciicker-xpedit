@@ -155,11 +155,11 @@ Each capability row has five columns:
 | W7 | Rectangle tool | REXPaint parity spec | whole-sheet-init.js Rect tool — wired | No verifier (no fixture triggers ws_draw_rect pattern) | WIRED | M2-C |
 | W8 | Line tool | REXPaint parity spec | whole-sheet-init.js Line tool — wired | Fidelity runner ws_draw_line PASS (root + /xpedit, acceptance mode) | **PROVEN** | M2-C |
 | W9 | Switch tool (keyboard) | REXPaint parity spec | Keyboard shortcuts C/E/D/L/R/I — wired | Fidelity runner ws_tool_activate PASS (root + /xpedit, acceptance mode) | **PROVEN** | M2-C |
-| W10 | Switch layer | UI control ref §7 | `switchToLayer()` — wired | No verifier | WIRED | M2-C |
-| W11 | Toggle layer visibility | UI control ref §7 | Layer visibility checkboxes — wired | No verifier | WIRED | M2-C |
-| W12 | Add layer | SAR blueprint | `_addLayer()` whole-sheet-init.js:1168, `.ws-layer-add-btn` click handler | No verifier | WIRED | M2-C |
-| W13 | Delete layer | SAR blueprint | `_deleteActiveLayer()` whole-sheet-init.js:1178, delete btn click handler | No verifier | WIRED | M2-C |
-| W14 | Move layer | SAR blueprint | `_moveLayerUp/Down()` whole-sheet-init.js:1189/1198, up/down btn handlers | No verifier | WIRED | M2-C |
+| W10 | Switch layer | UI control ref §7 | `switchToLayer()` — wired | Layer runner step 2: w10_switch PASS (root + /xpedit) | **PROVEN** | M2-C |
+| W11 | Toggle layer visibility | UI control ref §7 | Layer visibility checkboxes — wired | Layer runner step 3: w11_visibility PASS (root + /xpedit) | **PROVEN** | M2-C |
+| W12 | Add layer | SAR blueprint | `_addLayer()` whole-sheet-init.js:1168, `.ws-layer-add-btn` click handler | Layer runner step 4: w12_add PASS (root + /xpedit) | **PROVEN** | M2-C |
+| W13 | Delete layer | SAR blueprint | `_deleteActiveLayer()` whole-sheet-init.js:1178, delete btn click handler | Layer runner step 6: w13_delete PASS (root + /xpedit) | **PROVEN** | M2-C |
+| W14 | Move layer | SAR blueprint | `_moveLayerUp/Down()` whole-sheet-init.js:1189/1198, up/down btn handlers | Layer runner step 5: w14_move PASS (root + /xpedit) | **PROVEN** | M2-C |
 | W15 | Select tool | Implementation checklist | Code exists on disk but NOT wired (PB-06) | No evidence | BLOCKED | M2-C |
 | W16 | Oval tool | Implementation checklist | Code exists on disk but NOT wired (PB-05) | No evidence | DEFERRED | M2-C |
 | W17 | Text tool | Implementation checklist | Code exists on disk but NOT wired (PB-07) | No evidence | DEFERRED | M2-C |

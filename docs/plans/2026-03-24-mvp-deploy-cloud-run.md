@@ -4,6 +4,8 @@
 
 **Goal:** Deploy the xpedit workbench to Google Cloud Run so it's live at `rikiworld.com/xpedit`, using GitHub Actions for CI/CD and Cloudflare Workers for path-based routing.
 
+**2026-03-24 execution status:** completed. First live deploy succeeded via GitHub Actions run `23479759126`. Cloud Run URL: `https://asciicker-xpedit-6abo3pnlfa-uc.a.run.app`. Public route: `https://rikiworld.com/xpedit`. GitHub Issue delivery for bug reports wired via Secret Manager (`bug-report-github-token`) — verified with Issues #6 and #7.
+
 **Architecture:** The Flask app runs as a Docker container on Cloud Run (free tier), constrained to a single instance (`--max-instances=1`) because all session/upload/export state is filesystem-based and ephemeral. GitHub Actions authenticates to GCP via GitHub OIDC + Workload Identity Federation, builds the image, pushes to Artifact Registry with a deterministic SHA tag, and deploys that exact tag to Cloud Run on manual trigger. A Cloudflare Worker routes `rikiworld.com/xpedit/*` requests to the Cloud Run service URL while all other paths continue to GitHub Pages. Post-deploy verification includes both stateless health checks and a stateful upload check (POST PNG → verify upload_id).
 
 **Tech Stack:** Docker, Google Cloud Run, Artifact Registry, GitHub Actions (`google-github-actions/deploy-cloudrun`), Cloudflare Workers, existing Flask + Gunicorn app
@@ -345,7 +347,7 @@ jobs:
         id: meta
         run: |
           SHA="$(git rev-parse --short HEAD)"
-          IMAGE="${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/xpedit"
+          IMAGE="${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/xpedit"
           echo "image_tag=${SHA}" >> "$GITHUB_OUTPUT"
           echo "image_url=${IMAGE}:${SHA}" >> "$GITHUB_OUTPUT"
 
@@ -549,6 +551,8 @@ Go to GitHub repo → Actions → "Deploy to Cloud Run" → Run workflow → use
 Expected: all 3 jobs pass (build-and-push → deploy → smoke-test).
 The Cloud Run service URL appears in the workflow summary.
 
+**Observed in `yuzu-agent`:** run `23479759126` passed after two workflow/code fixes (`5c7b783`, `d665f64`) and one manual IAM/org-policy correction described below.
+
 **Step 8: Verify manually**
 
 ```bash
@@ -557,6 +561,28 @@ The Cloud Run service URL appears in the workflow summary.
 ```
 
 Expected: all checks PASS (including stateful upload)
+
+**Step 9: If smoke test gets `403 Forbidden`, check org policy / invoker access**
+
+The first live deploy in `yuzu-agent` hit this after the workflow itself succeeded. Root cause: project/org policy blocked unauthenticated `allUsers` access, so Cloud Run returned `403` despite `--allow-unauthenticated`.
+
+Required remediation:
+
+- clear the effective project override for `iam.allowedPolicyMemberDomains` if it blocks unauthenticated access in this project
+- then grant invoker access explicitly:
+
+```bash
+gcloud run services add-iam-policy-binding asciicker-xpedit \
+  --region=us-central1 \
+  --member="allUsers" \
+  --role="roles/run.invoker"
+```
+
+Then rerun:
+
+```bash
+./scripts/deploy/smoke_test.sh https://asciicker-xpedit-6abo3pnlfa-uc.a.run.app /xpedit
+```
 
 ---
 
@@ -729,7 +755,7 @@ git commit -m "docs: update INDEX, canonical spec, and CLAUDE.md for Cloud Run M
 
 | Secret | Source | Purpose |
 |--------|--------|---------|
-| `GCP_PROJECT_ID` | GCP Console | Identifies the GCP project |
+| `GCP_PROJECT_ID` | Now a workflow env var (not a secret — was causing output masking) | Identifies the GCP project |
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | `gcloud iam workload-identity-pools providers describe ... --format='value(name)'` | GitHub OIDC provider resource used by `google-github-actions/auth` |
 
 ### Cloudflare
@@ -738,6 +764,12 @@ git commit -m "docs: update INDEX, canonical spec, and CLAUDE.md for Cloud Run M
 |--------|--------|---------|
 | `CLOUDFLARE_API_TOKEN` | Cloudflare Dashboard → API Tokens | Deploy the xpedit-router Worker. Add to GitHub Secrets if using CI, or use `wrangler login` for manual deploy. |
 
+### GCP Secret Manager
+
+| Secret | Purpose |
+|--------|---------|
+| `bug-report-github-token` | Fine-grained GitHub PAT ("XPedit Issues") with Issues R/W on `rikiyanai/asciicker-xpedit`. Accessed by Cloud Run runtime SA `1035941900626-compute@developer.gserviceaccount.com`. |
+
 ### Cloud Run Environment Variables
 
 | Variable | Value | Purpose |
@@ -745,6 +777,14 @@ git commit -m "docs: update INDEX, canonical spec, and CLAUDE.md for Cloud Run M
 | `PIPELINE_BASE_PATH` | `/xpedit` | URL prefix for all routes |
 | `PIPELINE_HOST` | `0.0.0.0` | Bind address |
 | `PORT` | `8080` (set by Cloud Run) | Gunicorn bind port |
+| `BUG_REPORT_DELIVERY` | `github` | Bug reports create GitHub Issues |
+| `BUG_REPORT_GITHUB_REPO` | `rikiyanai/asciicker-xpedit` | Target repo for issue creation |
+
+### Cloud Run Secrets (mounted from Secret Manager)
+
+| Env Var | Secret Name | Purpose |
+|---------|-------------|---------|
+| `BUG_REPORT_GITHUB_TOKEN` | `bug-report-github-token:latest` | GitHub PAT for issue creation |
 
 ---
 

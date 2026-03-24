@@ -1845,3 +1845,51 @@ for honest M2 acceptance claims on the bundle pipeline.
 **References rewritten:** 0 file(s)
 **Script:** `scripts/doc_lifecycle_stitch.sh`
 
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-04-web-rexpaint-editor/claude-workbench-ui-inventory.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#claude-workbench-ui-inventory`
+**Reason:** Fully superseded by docs/COMPLETE_UI_CONTROL_REFERENCE.md (189 elements). Capability canon Part 8 absorbs generator-relevant selector truth.
+**References rewritten:** 3 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-22-workbench-verifier-sar-model.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-22-workbench-verifier-sar-model`
+**Reason:** Architecture absorbed into canonical spec §5 (unified M2 verifier architecture). SAR domain enumeration absorbed into capability canon Part 8.
+**References rewritten:** 7 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/2026-03-21-CLAUDE-HANDOFF-M2-PNG-VERIFIER-DESIGN.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-21-claude-handoff-m2-png-verifier-design`
+**Reason:** Handoff for completed M2 verifier design. Design doc exists at docs/plans/2026-03-21-milestone-2-png-verifier-design.md.
+**References rewritten:** 2 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-23
+**Worksheet:** `docs/plans/2026-03-22-edge-case-verifier-impl-plan.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-22-edge-case-verifier-impl-plan`
+**Reason:** M1 closed (commit 14e8e95). Implementation details no longer active. Edge-case verifier plan retained separately.
+**References rewritten:** 2 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+

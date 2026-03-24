@@ -1,0 +1,1030 @@
+{
+  "$schema": "./action_registry_schema.json",
+  "version": "0.1.0",
+  "generated": "2026-03-23",
+  "families": {
+    "F1": {
+      "name": "Template/Bundle",
+      "generatorReadiness": "READY",
+      "canonActionCount": 8,
+      "registryActionCount": 8,
+      "blockingIssue": null
+    },
+    "F2": {
+      "name": "Upload/Convert",
+      "generatorReadiness": "READY",
+      "canonActionCount": 3,
+      "registryActionCount": 3,
+      "blockingIssue": null
+    },
+    "F3": {
+      "name": "Source Panel",
+      "generatorReadiness": "MOSTLY_READY",
+      "canonActionCount": 19,
+      "registryActionCount": 0,
+      "blockingIssue": "S7 draw-box, S9 move, S10 resize, S13-S14 row/col drag require canvas-coordinate gesture abstraction; button-click actions individually ready but deferred to MOSTLY_READY pass"
+    },
+    "F4": {
+      "name": "Context Menu",
+      "generatorReadiness": "READY",
+      "canonActionCount": 9,
+      "registryActionCount": 9,
+      "blockingIssue": null
+    },
+    "F5": {
+      "name": "Source-to-Grid",
+      "generatorReadiness": "NEEDS_DESIGN",
+      "canonActionCount": 2,
+      "registryActionCount": 0,
+      "blockingIssue": "D1/D2 require cross-panel drag-coordinate abstraction; root-hosted proof only (380edee), /xpedit parity still blocked"
+    },
+    "F6": {
+      "name": "Grid Panel",
+      "generatorReadiness": "MOSTLY_READY",
+      "canonActionCount": 14,
+      "registryActionCount": 0,
+      "blockingIssue": "G1 click, G2 shift-click, G14 drag-select need canvas-coordinate patterns; button-click actions individually ready but deferred to MOSTLY_READY pass"
+    },
+    "F7": {
+      "name": "Whole-Sheet Editor",
+      "generatorReadiness": "NEEDS_DESIGN",
+      "canonActionCount": 18,
+      "registryActionCount": 0,
+      "blockingIssue": "All painting tools require canvas-coordinate gestures; keyboard shortcuts need key-event pattern; layer ops W12-W14 have no code; _state() fallback for actionStates"
+    },
+    "F8": {
+      "name": "Jitter/Alignment",
+      "generatorReadiness": "READY",
+      "canonActionCount": 6,
+      "registryActionCount": 6,
+      "blockingIssue": null
+    },
+    "F9": {
+      "name": "Lifecycle",
+      "generatorReadiness": "READY",
+      "canonActionCount": 3,
+      "registryActionCount": 3,
+      "blockingIssue": null
+    },
+    "F10": {
+      "name": "Runtime Dock",
+      "generatorReadiness": "READY",
+      "canonActionCount": 7,
+      "registryActionCount": 7,
+      "blockingIssue": null
+    },
+    "F11": {
+      "name": "Bug Report / UI Recorder",
+      "generatorReadiness": "READY",
+      "canonActionCount": 7,
+      "registryActionCount": 7,
+      "blockingIssue": null
+    },
+    "F12": {
+      "name": "XP Preview",
+      "generatorReadiness": "READY",
+      "canonActionCount": 4,
+      "registryActionCount": 4,
+      "blockingIssue": null
+    }
+  },
+  "actions": {
+    "T1": {
+      "id": "T1",
+      "name": "Apply template",
+      "family": "F1",
+      "status": "PROVEN",
+      "m2Scope": "M1-closed",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "templateApplyBtn",
+      "gestureType": "click",
+      "preconditions": {},
+      "postconditions": {
+        "templateSetKey": {
+          "op": "changed",
+          "value": null
+        }
+      },
+      "blockers": [],
+      "paramBindings": [
+        {
+          "selectorKey": "templateSelect",
+          "gestureType": "selectOption",
+          "paramKey": "templateValue"
+        }
+      ]
+    },
+    "T2": {
+      "id": "T2",
+      "name": "Switch action tab",
+      "family": "F1",
+      "status": "PROVEN",
+      "m2Scope": "M1-closed",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "bundleActionTabs",
+      "gestureType": "click",
+      "preconditions": {
+        "bundleId": {
+          "op": "truthy",
+          "value": null
+        }
+      },
+      "postconditions": {
+        "activeActionKey": {
+          "op": "changed",
+          "value": null
+        }
+      },
+      "blockers": [],
+      "paramBindings": []
+    },
+    "T3": {
+      "id": "T3",
+      "name": "Save session",
+      "family": "F1",
+      "status": "PROVEN",
+      "m2Scope": "M1-closed",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "btnSave",
+      "gestureType": "click",
+      "preconditions": {
+        "sessionId": {
+          "op": "truthy",
+          "value": null
+        }
+      },
+      "postconditions": {
+        "sessionDirty": false
+      },
+      "blockers": [],
+      "paramBindings": []
+    },
+    "T4": {
+      "id": "T4",
+      "name": "Export XP",
+      "family": "F1",
+      "status": "PROVEN",
+      "m2Scope": "M1-closed",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "btnExport",
+      "gestureType": "click",
+      "preconditions": {
+        "sessionId": {
+          "op": "truthy",
+          "value": null
+        }
+      },
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "T5": {
+      "id": "T5",
+      "name": "New XP",
+      "family": "F1",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "btnNewXp",
+      "gestureType": "click",
+      "preconditions": {},
+      "postconditions": {
+        "sessionId": {
+          "op": "changed",
+          "value": null
+        }
+      },
+      "blockers": [],
+      "paramBindings": []
+    },
+    "T6": {
+      "id": "T6",
+      "name": "Import XP",
+      "family": "F1",
+      "status": "PROVEN",
+      "m2Scope": "M1-closed",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "xpImportBtn",
+      "gestureType": "click",
+      "preconditions": {},
+      "postconditions": {
+        "sessionId": {
+          "op": "truthy",
+          "value": null
+        }
+      },
+      "blockers": [],
+      "paramBindings": [
+        {
+          "selectorKey": "xpImportFile",
+          "gestureType": "setInputFiles",
+          "paramKey": "filePath"
+        }
+      ]
+    },
+    "T7": {
+      "id": "T7",
+      "name": "Test skin (Skin Dock)",
+      "family": "F1",
+      "status": "PROVEN",
+      "m2Scope": "M1-closed",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "webbuildQuickTestBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "sessionId": {
+          "op": "truthy",
+          "value": null
+        }
+      },
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "T8": {
+      "id": "T8",
+      "name": "Delete action",
+      "family": "F1",
+      "status": "PLANNED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "DEFERRED",
+      "acceptanceEligible": false,
+      "selectorKey": null,
+      "gestureType": "click",
+      "preconditions": {
+        "bundleId": {
+          "op": "truthy",
+          "value": null
+        }
+      },
+      "postconditions": {},
+      "blockers": [
+        "No handler found — PLANNED status, no DOM element exists yet"
+      ],
+      "paramBindings": []
+    },
+    "U1": {
+      "id": "U1",
+      "name": "Upload PNG",
+      "family": "F2",
+      "status": "PROVEN",
+      "m2Scope": "M2-B",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "wbUpload",
+      "gestureType": "click",
+      "preconditions": {},
+      "postconditions": {
+        "sourceImageLoaded": true
+      },
+      "blockers": [],
+      "paramBindings": [
+        {
+          "selectorKey": "wbFile",
+          "gestureType": "setInputFiles",
+          "paramKey": "filePath"
+        }
+      ]
+    },
+    "U2": {
+      "id": "U2",
+      "name": "Analyze",
+      "family": "F2",
+      "status": "WIRED",
+      "m2Scope": "M2-F",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "wbAnalyze",
+      "gestureType": "click",
+      "preconditions": {
+        "sourceImageLoaded": true
+      },
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "U3": {
+      "id": "U3",
+      "name": "Convert to XP (Run pipeline)",
+      "family": "F2",
+      "status": "PROVEN",
+      "m2Scope": "M2-A",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "wbRun",
+      "gestureType": "click",
+      "preconditions": {
+        "sourceImageLoaded": true
+      },
+      "postconditions": {
+        "sessionId": {
+          "op": "truthy",
+          "value": null
+        }
+      },
+      "blockers": [],
+      "paramBindings": []
+    },
+    "C1": {
+      "id": "C1",
+      "name": "Add as 1 sprite",
+      "family": "F4",
+      "status": "PROVEN",
+      "m2Scope": "M2-B",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "srcCtxAddSprite",
+      "gestureType": "click",
+      "preconditions": {
+        "sourceContextMenu": "visible",
+        "drawCurrent": {
+          "op": "truthy",
+          "value": null
+        }
+      },
+      "postconditions": {
+        "extractedBoxes": {
+          "op": "changed",
+          "value": null
+        }
+      },
+      "blockers": [],
+      "paramBindings": []
+    },
+    "C2": {
+      "id": "C2",
+      "name": "Add to selected row sequence",
+      "family": "F4",
+      "status": "WIRED",
+      "m2Scope": "M2-B",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "srcCtxAddToRow",
+      "gestureType": "click",
+      "preconditions": {
+        "sourceContextMenu": "visible",
+        "selectedRow": {
+          "op": "gte",
+          "value": 0
+        }
+      },
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "C3": {
+      "id": "C3",
+      "name": "Set as anchor for Find Sprites",
+      "family": "F4",
+      "status": "PROVEN",
+      "m2Scope": "M2-B",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "srcCtxSetAnchor",
+      "gestureType": "click",
+      "preconditions": {
+        "sourceContextMenu": "visible"
+      },
+      "postconditions": {
+        "anchorBox": {
+          "op": "truthy",
+          "value": null
+        }
+      },
+      "blockers": [],
+      "paramBindings": []
+    },
+    "C4": {
+      "id": "C4",
+      "name": "Pad this bbox to anchor size",
+      "family": "F4",
+      "status": "PROVEN",
+      "m2Scope": "M2-B",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "srcCtxPadAnchor",
+      "gestureType": "click",
+      "preconditions": {
+        "sourceContextMenu": "visible",
+        "anchorBox": {
+          "op": "truthy",
+          "value": null
+        }
+      },
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "C5": {
+      "id": "C5",
+      "name": "Delete (source context)",
+      "family": "F4",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "srcCtxDelete",
+      "gestureType": "click",
+      "preconditions": {
+        "sourceContextMenu": "visible"
+      },
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "C6": {
+      "id": "C6",
+      "name": "Copy frame (grid context)",
+      "family": "F4",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "ctxCopy",
+      "gestureType": "click",
+      "preconditions": {
+        "gridContextMenu": "visible",
+        "selectedRow": {
+          "op": "gte",
+          "value": 0
+        }
+      },
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "C7": {
+      "id": "C7",
+      "name": "Paste frame (grid context)",
+      "family": "F4",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "ctxPaste",
+      "gestureType": "click",
+      "preconditions": {
+        "gridContextMenu": "visible"
+      },
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "C8": {
+      "id": "C8",
+      "name": "Focus Whole-Sheet (grid context)",
+      "family": "F4",
+      "status": "WIRED",
+      "m2Scope": "M2-C",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "ctxOpenInspector",
+      "gestureType": "click",
+      "preconditions": {
+        "gridContextMenu": "visible",
+        "selectedRow": {
+          "op": "gte",
+          "value": 0
+        }
+      },
+      "postconditions": {
+        "wholeSheetMounted": true
+      },
+      "blockers": [],
+      "paramBindings": []
+    },
+    "C9": {
+      "id": "C9",
+      "name": "Delete (grid context)",
+      "family": "F4",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "ctxDelete",
+      "gestureType": "click",
+      "preconditions": {
+        "gridContextMenu": "visible",
+        "selectedRow": {
+          "op": "gte",
+          "value": 0
+        }
+      },
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "J1": {
+      "id": "J1",
+      "name": "Nudge left",
+      "family": "F8",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "jitterLeftBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "selectedRow": {
+          "op": "gte",
+          "value": 0
+        }
+      },
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "J2": {
+      "id": "J2",
+      "name": "Nudge right",
+      "family": "F8",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "jitterRightBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "selectedRow": {
+          "op": "gte",
+          "value": 0
+        }
+      },
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "J3": {
+      "id": "J3",
+      "name": "Nudge up",
+      "family": "F8",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "jitterUpBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "selectedRow": {
+          "op": "gte",
+          "value": 0
+        }
+      },
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "J4": {
+      "id": "J4",
+      "name": "Nudge down",
+      "family": "F8",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "jitterDownBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "selectedRow": {
+          "op": "gte",
+          "value": 0
+        }
+      },
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "J5": {
+      "id": "J5",
+      "name": "Auto-align selected",
+      "family": "F8",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "autoAlignSelectedBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "selectedRow": {
+          "op": "gte",
+          "value": 0
+        }
+      },
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "J6": {
+      "id": "J6",
+      "name": "Auto-align row",
+      "family": "F8",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "autoAlignRowBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "selectedRow": {
+          "op": "gte",
+          "value": 0
+        }
+      },
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "L1": {
+      "id": "L1",
+      "name": "Save session",
+      "family": "F9",
+      "status": "PROVEN",
+      "m2Scope": "M1-closed",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "btnSave",
+      "gestureType": "click",
+      "preconditions": {
+        "sessionId": {
+          "op": "truthy",
+          "value": null
+        }
+      },
+      "postconditions": {
+        "sessionDirty": false
+      },
+      "blockers": [],
+      "paramBindings": []
+    },
+    "L2": {
+      "id": "L2",
+      "name": "Undo",
+      "family": "F9",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "undoBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "historyDepth": {
+          "op": "gt",
+          "value": 0
+        }
+      },
+      "postconditions": {
+        "historyDepth": {
+          "op": "changed",
+          "value": null
+        },
+        "futureDepth": {
+          "op": "changed",
+          "value": null
+        }
+      },
+      "blockers": [],
+      "paramBindings": []
+    },
+    "L3": {
+      "id": "L3",
+      "name": "Redo",
+      "family": "F9",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "redoBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "futureDepth": {
+          "op": "gt",
+          "value": 0
+        }
+      },
+      "postconditions": {
+        "historyDepth": {
+          "op": "changed",
+          "value": null
+        },
+        "futureDepth": {
+          "op": "changed",
+          "value": null
+        }
+      },
+      "blockers": [],
+      "paramBindings": []
+    },
+    "R1": {
+      "id": "R1",
+      "name": "Test This Skin",
+      "family": "F10",
+      "status": "PROVEN",
+      "m2Scope": "M1-closed",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "webbuildQuickTestBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "sessionId": {
+          "op": "truthy",
+          "value": null
+        }
+      },
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "R2": {
+      "id": "R2",
+      "name": "Apply In Place",
+      "family": "F10",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": false,
+      "selectorKey": "webbuildApplyInPlaceBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "sessionId": {
+          "op": "truthy",
+          "value": null
+        }
+      },
+      "postconditions": {},
+      "blockers": [
+        "Element has class=\"hidden\" in shipped HTML — not user-reachable; usable for diagnostic automation only"
+      ],
+      "paramBindings": []
+    },
+    "R3": {
+      "id": "R3",
+      "name": "Apply + Restart",
+      "family": "F10",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": false,
+      "selectorKey": "webbuildApplyRestartBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "sessionId": {
+          "op": "truthy",
+          "value": null
+        }
+      },
+      "postconditions": {},
+      "blockers": [
+        "Element has class=\"hidden\" in shipped HTML — not user-reachable; usable for diagnostic automation only"
+      ],
+      "paramBindings": []
+    },
+    "R4": {
+      "id": "R4",
+      "name": "Open Preview",
+      "family": "F10",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "webbuildOpenBtn",
+      "gestureType": "click",
+      "preconditions": {},
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "R5": {
+      "id": "R5",
+      "name": "Reload Preview",
+      "family": "F10",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "webbuildReloadBtn",
+      "gestureType": "click",
+      "preconditions": {},
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "R6": {
+      "id": "R6",
+      "name": "Upload Skin (file)",
+      "family": "F10",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "webbuildUploadTestBtn",
+      "gestureType": "click",
+      "preconditions": {},
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": [
+        {
+          "selectorKey": "webbuildUploadTestInput",
+          "gestureType": "setInputFiles",
+          "paramKey": "filePath"
+        }
+      ]
+    },
+    "R7": {
+      "id": "R7",
+      "name": "Apply Current XP (Advanced)",
+      "family": "F10",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "webbuildApplySkinBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "sessionId": {
+          "op": "truthy",
+          "value": null
+        }
+      },
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "B1": {
+      "id": "B1",
+      "name": "Open bug report",
+      "family": "F11",
+      "status": "WIRED",
+      "m2Scope": "M1-closed",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "reportBugBtn",
+      "gestureType": "click",
+      "preconditions": {},
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "B2": {
+      "id": "B2",
+      "name": "Submit bug report",
+      "family": "F11",
+      "status": "WIRED",
+      "m2Scope": "M1-closed",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "bugReportSubmitBtn",
+      "gestureType": "click",
+      "preconditions": {},
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "B3": {
+      "id": "B3",
+      "name": "Dismiss bug report",
+      "family": "F11",
+      "status": "WIRED",
+      "m2Scope": "M1-closed",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "bugReportCloseBtn",
+      "gestureType": "click",
+      "preconditions": {},
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "B4": {
+      "id": "B4",
+      "name": "Start UI recording",
+      "family": "F11",
+      "status": "WIRED",
+      "m2Scope": "M1-closed",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "uiRecorderStartBtn",
+      "gestureType": "click",
+      "preconditions": {},
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "B5": {
+      "id": "B5",
+      "name": "Stop UI recording",
+      "family": "F11",
+      "status": "WIRED",
+      "m2Scope": "M1-closed",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "uiRecorderStopBtn",
+      "gestureType": "click",
+      "preconditions": {},
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "B6": {
+      "id": "B6",
+      "name": "Clear recording",
+      "family": "F11",
+      "status": "WIRED",
+      "m2Scope": "M1-closed",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "uiRecorderClearBtn",
+      "gestureType": "click",
+      "preconditions": {},
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "B7": {
+      "id": "B7",
+      "name": "Download recording JSON",
+      "family": "F11",
+      "status": "WIRED",
+      "m2Scope": "M1-closed",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "uiRecorderDownloadBtn",
+      "gestureType": "click",
+      "preconditions": {},
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "P1": {
+      "id": "P1",
+      "name": "Play animation preview",
+      "family": "F12",
+      "status": "WIRED",
+      "m2Scope": "M1-closed",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "playBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "sessionId": {
+          "op": "truthy",
+          "value": null
+        }
+      },
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "P2": {
+      "id": "P2",
+      "name": "Stop animation preview",
+      "family": "F12",
+      "status": "WIRED",
+      "m2Scope": "M1-closed",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "stopBtn",
+      "gestureType": "click",
+      "preconditions": {},
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "P3": {
+      "id": "P3",
+      "name": "Change FPS",
+      "family": "F12",
+      "status": "WIRED",
+      "m2Scope": "M1-closed",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "fpsInput",
+      "gestureType": "fill",
+      "preconditions": {},
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "P4": {
+      "id": "P4",
+      "name": "Change angle/direction",
+      "family": "F12",
+      "status": "WIRED",
+      "m2Scope": "M1-closed",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "previewAngle",
+      "gestureType": "fill",
+      "preconditions": {},
+      "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    }
+  }
+}

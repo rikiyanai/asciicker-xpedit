@@ -1,0 +1,240 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "action_registry_schema.json",
+  "title": "M2 Action Registry",
+  "description": "Schema for the machine-readable action inventory (action_registry.json) and recipe steps. Validates the structure required by the unified M2 verifier architecture (canonical spec §5).",
+  "type": "object",
+  "required": ["version", "generated", "families", "actions"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional self-reference to this schema file."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semver version of the registry format."
+    },
+    "generated": {
+      "type": "string",
+      "description": "ISO date when the registry was generated or last updated."
+    },
+    "families": {
+      "type": "object",
+      "description": "Family metadata keyed by family code (F1, F2, etc.).",
+      "patternProperties": {
+        "^F\\d+$": { "$ref": "#/definitions/family" }
+      },
+      "additionalProperties": false
+    },
+    "actions": {
+      "type": "object",
+      "description": "Action entries keyed by action ID (T1, U2, S7, etc.).",
+      "patternProperties": {
+        "^[A-Z]+\\d+$": { "$ref": "#/definitions/action" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "definitions": {
+    "family": {
+      "type": "object",
+      "required": ["name", "generatorReadiness", "canonActionCount", "registryActionCount"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable family name."
+        },
+        "generatorReadiness": {
+          "type": "string",
+          "enum": ["READY", "MOSTLY_READY", "NEEDS_DESIGN", "DEFERRED"],
+          "description": "Family-level generator readiness from capability canon Part 8."
+        },
+        "canonActionCount": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Total actions in this family per capability canon inventory."
+        },
+        "registryActionCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of actions from this family present in the actions map of this registry file."
+        },
+        "blockingIssue": {
+          "type": ["string", "null"],
+          "description": "Family-level blocking issue, or null if READY."
+        }
+      }
+    },
+    "action": {
+      "type": "object",
+      "required": [
+        "id", "name", "family", "status", "m2Scope",
+        "generatorReadiness", "acceptanceEligible",
+        "selectorKey", "paramBindings", "gestureType",
+        "preconditions", "postconditions", "blockers"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Z]+\\d+$",
+          "description": "Unique action identifier matching capability canon (T1, U2, S7, etc.)."
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable action name."
+        },
+        "family": {
+          "type": "string",
+          "pattern": "^F\\d+$",
+          "description": "Family code reference."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["PROVEN", "WIRED", "PARTIAL", "PLANNED", "BLOCKED", "DEFERRED"],
+          "description": "Capability status from canon inventory."
+        },
+        "m2Scope": {
+          "type": "string",
+          "description": "M2 sub-phase or M1-closed."
+        },
+        "generatorReadiness": {
+          "type": "string",
+          "enum": ["READY", "MOSTLY_READY", "NEEDS_DESIGN", "DEFERRED"],
+          "description": "Whether this specific action can be extracted to a generated recipe."
+        },
+        "acceptanceEligible": {
+          "type": "boolean",
+          "description": "True if the action uses only user-reachable UI gestures (no page.evaluate action driving)."
+        },
+        "selectorKey": {
+          "type": ["string", "null"],
+          "description": "Key into selectors.mjs, or null if the action has no single DOM trigger (e.g., canvas gestures)."
+        },
+        "paramBindings": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/paramBinding" },
+          "description": "Preparatory input steps the runner must execute before the main gesture. Each binding maps a recipe param to a DOM input element and the gesture used to set it. Empty array if the action needs no preparatory inputs."
+        },
+        "gestureType": {
+          "type": "string",
+          "enum": ["click", "rightClick", "setInputFiles", "selectOption", "fill", "check", "inputRange", "canvasClick", "canvasDrag", "canvasRightClick", "keypress"],
+          "description": "Key into selectors.mjs gestureTypes. Must match a defined gesture."
+        },
+        "preconditions": {
+          "$ref": "#/definitions/stateConditions",
+          "description": "State conditions that must hold before executing this action."
+        },
+        "postconditions": {
+          "$ref": "#/definitions/stateConditions",
+          "description": "Expected state changes after executing this action."
+        },
+        "blockers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Specific blockers preventing generator extraction. Empty array if READY."
+        }
+      }
+    },
+    "paramBinding": {
+      "type": "object",
+      "description": "A preparatory input step: set a DOM input element to a value before the main action gesture. The runtime value comes from recipe step params[paramKey].",
+      "required": ["selectorKey", "gestureType", "paramKey"],
+      "additionalProperties": false,
+      "properties": {
+        "selectorKey": {
+          "type": "string",
+          "description": "Key into selectors.mjs for the input element to set."
+        },
+        "gestureType": {
+          "type": "string",
+          "enum": ["setInputFiles", "selectOption", "fill", "check", "inputRange"],
+          "description": "Gesture used to set the input value. Only input-setting gestures are valid here."
+        },
+        "paramKey": {
+          "type": "string",
+          "description": "Key in the recipe step's params object that provides the runtime value."
+        }
+      }
+    },
+    "stateConditions": {
+      "type": "object",
+      "description": "State field assertions. Keys are getState() field names. Values describe expected states.",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "string" },
+          { "type": "number" },
+          { "type": "boolean" },
+          { "type": "null" },
+          {
+            "type": "object",
+            "description": "Comparison operator object, e.g. { \"op\": \"gt\", \"value\": 0 }.",
+            "required": ["op", "value"],
+            "properties": {
+              "op": {
+                "type": "string",
+                "enum": ["eq", "neq", "gt", "gte", "lt", "lte", "truthy", "falsy", "changed"]
+              },
+              "value": {}
+            },
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "recipeStep": {
+      "type": "object",
+      "description": "A single step in a workflow recipe (for future recipe_generator.mjs).",
+      "required": ["actionId", "expectedOutcome"],
+      "additionalProperties": false,
+      "properties": {
+        "actionId": {
+          "type": "string",
+          "pattern": "^[A-Z]+\\d+$",
+          "description": "Action to execute."
+        },
+        "params": {
+          "type": "object",
+          "description": "Action-specific parameters (file path, coordinates, option value, etc.).",
+          "additionalProperties": true
+        },
+        "expectedOutcome": {
+          "$ref": "#/definitions/stateConditions",
+          "description": "Post-step state assertions."
+        }
+      }
+    },
+    "recipe": {
+      "type": "object",
+      "description": "A complete workflow recipe (for future recipe_generator.mjs).",
+      "required": ["id", "name", "family", "steps"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique recipe identifier."
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable recipe name."
+        },
+        "family": {
+          "type": "string",
+          "description": "Primary action family this recipe exercises."
+        },
+        "steps": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/recipeStep" },
+          "minItems": 1
+        },
+        "preconditions": {
+          "$ref": "#/definitions/stateConditions",
+          "description": "State required before recipe begins."
+        }
+      }
+    }
+  }
+}

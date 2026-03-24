@@ -196,7 +196,7 @@ Add after the last F2 entry (U3) and before the first F4 entry (C1):
   "acceptanceEligible": true,
   "selectorKey": "extractBtn",
   "gestureType": "click",
-  "preconditions": { "sourceImageLoaded": true, "anchorBox": { "op": "truthy", "value": null } },
+  "preconditions": { "sourceImageLoaded": true },
   "postconditions": { "extractedBoxes": { "op": "gt", "value": 0 } },
   "blockers": [],
   "paramBindings": []
@@ -345,7 +345,7 @@ git commit -m "feat(registry): add 5 F6 grid-panel button-click actions (G5-G6, 
 
 **Step 1: Update F7 family metadata**
 
-Change F7's `registryActionCount` from `0` to `18`. Update `generatorReadiness` to `"PARTIALLY_PROVEN"`. Update `blockingIssue`.
+Change F7's `registryActionCount` from `0` to `18`. Update `generatorReadiness` to `"NEEDS_DESIGN"` (most F7 actions require canvas/keyboard/dynamic-row gestures not in runner; only W12/W13 are READY). Update `blockingIssue`.
 
 **Step 2: Add the 18 F7 action entries**
 

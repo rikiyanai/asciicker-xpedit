@@ -47,7 +47,7 @@
     },
     "F7": {
       "name": "Whole-Sheet Editor",
-      "generatorReadiness": "PARTIALLY_PROVEN",
+      "generatorReadiness": "NEEDS_DESIGN",
       "canonActionCount": 18,
       "registryActionCount": 0,
       "blockingIssue": "15/18 PROVEN: W2/W3/W5/W8/W9 (fidelity), W10-W14 (layer), W1/W4/W6/W7/W18 (tools). W15 WIRED (activation only, visualization not connected). W16/W17 DEFERRED. Registry entries not yet populated."

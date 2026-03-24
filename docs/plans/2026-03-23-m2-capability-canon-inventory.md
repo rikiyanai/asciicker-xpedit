@@ -286,7 +286,7 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 | Slice 1 | PNG Structural Baseline | YES | Ad-hoc proof only (M2-A 9/9 structural gates PASS via `run_structural_baseline_test.mjs`); not a formal unified-architecture slice |
 | Slice 2 | Source-Panel Contract | diagnostic | **YES** — committed runner `run_source_panel_workflow_test.mjs` (5c67ef2), 10/10 PASS; not yet a unified-architecture recipe but committed proof exists |
 | Slice 3 | Source-to-Grid Contract | YES | **YES** — committed runner `run_source_to_grid_workflow_test.mjs` (380edee), 13/13 PASS root + /xpedit; D1/D2/G1 PROVEN |
-| Slice 4 | Whole-Sheet Tools + Layers | YES | **YES** — fidelity rerun (46fe06f) proves W2/W3/W5/W8/W9; layer runner `run_whole_sheet_layer_test.mjs` (7bdab92) proves W10-W14. 10/18 W-actions PROVEN. |
+| Slice 4 | Whole-Sheet Tools + Layers | YES | **YES** — 14/18 W-actions PROVEN: fidelity rerun (46fe06f) W2/W3/W5/W8/W9; layer runner (7bdab92) W10-W14; tools runner (daf161b) W1/W4/W6/W7. Only W15-W18 remain (blocked/deferred/partial). |
 | Slice 5 | Manual Assembly E2E | YES | NO |
 
 **4 of 5 slices have committed proof** (Slice 1 structural, Slice 2 source-panel, Slice 3 source-to-grid, Slice 4 whole-sheet). Only Slice 5 (manual assembly E2E) has zero proof. The unified M2 verifier architecture (canonical spec §5) will replace ad-hoc runners with generated recipes.

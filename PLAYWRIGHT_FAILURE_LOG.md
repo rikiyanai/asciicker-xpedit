@@ -3162,9 +3162,9 @@ Root: 8/8 PASS at `output/ws_tools_test_w15w18/report.json`
 
 ### Reclassification
 
-- W15 promoted: BLOCKED → **PROVEN** (PB-06 closed)
+- W15: BLOCKED → **WIRED** (activation works, visualization not connected — canvas.setSelectionTool() never called, marching-ants inactive, drag→bounds unverified. Overclaimed as PROVEN in initial commit; corrected here.)
 - W18 promoted: PARTIAL → **PROVEN** (Ctrl+Z keyboard path; sidebar buttons already worked)
-- M2-C now at 16/18 W-actions PROVEN. Only W16 (OvalTool) and W17 (TextTool) remain DEFERRED.
+- M2-C now at 15/18 W-actions PROVEN. W15 WIRED. W16/W17 DEFERRED.
 
 
 ---

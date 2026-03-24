@@ -17,6 +17,7 @@ import { CellTool } from './rexpaint-editor/tools/cell-tool.js';
 import { LineTool } from './rexpaint-editor/tools/line-tool.js';
 import { RectTool } from './rexpaint-editor/tools/rect-tool.js';
 import { FillTool } from './rexpaint-editor/tools/fill-tool.js';
+import { SelectTool } from './rexpaint-editor/tools/select-tool.js';
 
 const _BP = String(window.__WB_BASE_PATH || '');
 const FONT_URL = _BP + '/termpp-web-flat/fonts/cp437_12x12.png';
@@ -148,6 +149,17 @@ class FillToolAdapter {
   endDrag() {}
 }
 
+class SelectToolAdapter {
+  constructor() { this._tool = new SelectTool(); }
+  setCanvas(c) { this._tool.setCanvas(c); }
+  startDrag(x, y) { this._tool.startSelection(x, y); }
+  drag(x, y) { this._tool.updateSelection(x, y); }
+  endDrag() { this._tool.endSelection(); }
+  getSelectionBounds() { return this._tool.getSelectionBounds(); }
+  clearSelection() { this._tool.clearSelection(); }
+  deactivate() { this._tool.deactivate(); }
+}
+
 function _forEachTool(fn) {
   for (const t of [editorState.cellTool, editorState.lineTool, editorState.rectTool, editorState.fillTool]) {
     if (t) fn(t);
@@ -167,6 +179,7 @@ let editorState = {
   lineTool: null,
   rectTool: null,
   fillTool: null,
+  selectTool: null,
   activeTool: 'cell',
   gridCols: 0,
   gridRows: 0,
@@ -328,6 +341,7 @@ async function mount({ container, gridCols, gridRows, layers, layerNames, active
   editorState.lineTool = new LineToolAdapter();
   editorState.rectTool = new RectToolAdapter();
   editorState.fillTool = new FillToolAdapter();
+  editorState.selectTool = new SelectToolAdapter();
   for (const t of [editorState.lineTool, editorState.rectTool, editorState.fillTool]) {
     t.setGlyph(editorState.drawGlyph);
     t.setColors(editorState.drawFg, editorState.drawBg);
@@ -448,6 +462,10 @@ function _switchTool(name) {
       editorState.canvas.toolActivated(editorState.fillTool);
       if (canvasEl) canvasEl.style.cursor = 'crosshair';
       break;
+    case 'select':
+      editorState.canvas.toolActivated(editorState.selectTool);
+      if (canvasEl) canvasEl.style.cursor = 'cell';
+      break;
     default:
       return;
   }
@@ -455,11 +473,11 @@ function _switchTool(name) {
 }
 
 function _updateToolUI() {
-  const names = { cell: 'Cell', eyedropper: 'Eyedropper', erase: 'Erase', line: 'Line', rect: 'Rect', fill: 'Fill' };
+  const names = { cell: 'Cell', eyedropper: 'Eyedropper', erase: 'Erase', line: 'Line', rect: 'Rect', fill: 'Fill', select: 'Select' };
   const toolEl = document.getElementById('wsActiveTool');
   if (toolEl) toolEl.textContent = names[editorState.activeTool] || editorState.activeTool;
 
-  for (const id of ['wsToolCell', 'wsToolEyedropper', 'wsToolErase', 'wsToolLine', 'wsToolRect', 'wsToolFill']) {
+  for (const id of ['wsToolCell', 'wsToolEyedropper', 'wsToolErase', 'wsToolLine', 'wsToolRect', 'wsToolFill', 'wsToolSelect']) {
     const btn = document.getElementById(id);
     if (!btn) continue;
     const toolName = id.replace('wsTool', '').toLowerCase();
@@ -498,6 +516,22 @@ function _onKeyDown(e) {
     case 'i':
       _switchTool('fill');
       e.preventDefault();
+      break;
+    case 's':
+      _switchTool('select');
+      e.preventDefault();
+      break;
+    case 'z':
+      if (e.ctrlKey || e.metaKey) {
+        if (editorState.onUndo) editorState.onUndo();
+        e.preventDefault();
+      }
+      break;
+    case 'y':
+      if (e.ctrlKey || e.metaKey) {
+        if (editorState.onRedo) editorState.onRedo();
+        e.preventDefault();
+      }
       break;
   }
 }
@@ -864,6 +898,14 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   toolFillBtn.title = 'Flood fill tool (I)';
   toolFillBtn.addEventListener('click', () => _switchTool('fill'));
   drawCol.appendChild(toolFillBtn);
+
+  const toolSelectBtn = document.createElement('button');
+  toolSelectBtn.id = 'wsToolSelect';
+  toolSelectBtn.textContent = 'Select';
+  toolSelectBtn.className = 'ws-tool-btn';
+  toolSelectBtn.title = 'Selection tool (S)';
+  toolSelectBtn.addEventListener('click', () => _switchTool('select'));
+  drawCol.appendChild(toolSelectBtn);
 
   idCols.appendChild(imageCol);
   idCols.appendChild(drawCol);

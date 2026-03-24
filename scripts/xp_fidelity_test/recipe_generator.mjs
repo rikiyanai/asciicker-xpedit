@@ -286,6 +286,7 @@ function recipeGridFrameManagement() {
     family: 'F6',
     preconditions: {
       sessionId: { op: 'truthy', value: null },
+      selectedRow: { op: 'gte', value: 0 },
     },
     steps: [
       step('G5'),

@@ -50,7 +50,7 @@
       "generatorReadiness": "NEEDS_DESIGN",
       "canonActionCount": 18,
       "registryActionCount": 18,
-      "blockingIssue": "W12/W13 READY (stable header buttons). 13/18 NEEDS_DESIGN (canvas/keyboard/dynamic-row gesture abstractions). W15 WIRED (visualization gap). W16/W17 DEFERRED. W18 PROVEN but deferred (dual-button schema gap)."
+      "blockingIssue": "W12/W13 READY (stable header buttons). 13/18 NEEDS_DESIGN (canvas/keyboard/dynamic-row gesture abstractions). W15 WIRED — visualization connected (960974f) but needs verifier proof + canvas gesture abstraction for generator. W16/W17 DEFERRED. W18 PROVEN but deferred (dual-button schema gap)."
     },
     "F8": {
       "name": "Jitter/Alignment",
@@ -1563,7 +1563,7 @@
       },
       "postconditions": {},
       "blockers": [
-        "Multi-step action: (1) click wsToolSelect to activate, (2) canvasDrag to create selection. No single DOM trigger. Also: canvas.setSelectionTool() not called — visualization gap (Task 5 fix)."
+        "Multi-step action: (1) click wsToolSelect to activate, (2) canvasDrag to create selection. No single DOM trigger. Visualization connected (960974f) but needs verifier proof of drag→bounds→marching-ants + canvas gesture abstraction for generator."
       ],
       "paramBindings": []
     },

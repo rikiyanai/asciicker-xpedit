@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+from unittest.mock import patch
 
 
 def _upload(client, path: Path, prefix: str = ""):
@@ -168,6 +170,56 @@ def test_run_to_workbench_to_export(client):
     assert "missing_files" in runtime_preflight
     assert "invalid_files" in runtime_preflight
     assert "maps_found" in runtime_preflight
+
+
+def test_termpp_stream_dry_run_works_off_darwin(client):
+    """Regression: dry_run=True must succeed on non-macOS (CI/Linux)."""
+    fixture = Path(__file__).parent / "fixtures" / "known_good" / "cat_sheet.png"
+    up = _upload(client, fixture).get_json()
+    run_resp = client.post(
+        "/api/run",
+        data=json.dumps({
+            "source_path": up["source_path"],
+            "name": "cat",
+            "angles": 1,
+            "frames": "8",
+            "source_projs": 1,
+            "render_resolution": 24,
+            "native_compat": False,
+        }),
+        content_type="application/json",
+    )
+    wb_resp = client.post(
+        "/api/workbench/load-from-job",
+        data=json.dumps({"job_id": run_resp.get_json()["job_id"]}),
+        content_type="application/json",
+    )
+    session_id = wb_resp.get_json()["session_id"]
+
+    fake_uname = os.uname_result(("Linux", "ci", "6.5.0", "#1", "x86_64"))
+    with patch("pipeline_v2.service.os.uname", return_value=fake_uname):
+        dry_resp = client.post(
+            "/api/workbench/termpp-stream/start",
+            data=json.dumps({
+                "session_id": session_id,
+                "x": 0, "y": 0, "w": 320, "h": 240,
+                "fps": 2, "dry_run": True,
+            }),
+            content_type="application/json",
+        )
+        assert dry_resp.status_code == 200
+        assert dry_resp.get_json()["dry_run"] is True
+
+        real_resp = client.post(
+            "/api/workbench/termpp-stream/start",
+            data=json.dumps({
+                "session_id": session_id,
+                "x": 0, "y": 0, "w": 320, "h": 240,
+                "fps": 2, "dry_run": False,
+            }),
+            content_type="application/json",
+        )
+        assert real_resp.status_code == 422
 
 
 # --- Base-path-parameterized test (root + /xpedit) ---

@@ -2645,8 +2645,6 @@ def workbench_termpp_stream_start(
     p = _session_path(session_id)
     if not p.exists():
         raise ApiError("session not found", "session_not_found", "workbench", req_id, 404)
-    if os.uname().sysname != "Darwin":
-        raise ApiError("TERM++ embed stream currently supports macOS screencapture only", "termpp_stream_unsupported_os", "workbench", req_id, 422)
 
     x = int(region_x)
     y = int(region_y)
@@ -2679,6 +2677,9 @@ def workbench_termpp_stream_start(
                 "This is a view-only embed stream (no input forwarding yet)",
             ],
         }
+
+    if os.uname().sysname != "Darwin":
+        raise ApiError("TERM++ embed stream currently supports macOS screencapture only", "termpp_stream_unsupported_os", "workbench", req_id, 422)
 
     stop_evt = threading.Event()
     rec = {

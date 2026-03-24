@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
 /**
- * run_whole_sheet_tools_test.mjs — M2-C: WS Tool Verification (W1, W4, W6, W7)
+ * run_whole_sheet_tools_test.mjs — M2-C: WS Tool Verification (W1, W4, W6, W7, W15, W18)
  *
  * CLASSIFICATION: UI-driven with diagnostic observation layer
- * ACTION PATH:    All actions via DOM clicks and canvas mouse events
- * OBSERVATION:    Cell verification via readFrameCell() (diagnostic observation layer)
+ * ACTION PATH:    All actions via DOM clicks, canvas mouse events, keyboard shortcuts
+ * OBSERVATION:    Cell verification via readFrameCell(), state via getState() (diagnostic)
  * ELIGIBLE FOR:   UI-driven acceptance evidence
  *
  * Validates:
@@ -13,6 +13,8 @@
  *   W4:  Erase cell (single click with erase tool)
  *   W6:  Flood fill (single click with fill tool)
  *   W7:  Rectangle tool (drag on canvas)
+ *   W15: Select tool (activate via button click, verify activeTool state)
+ *   W18: Undo via Ctrl+Z keyboard shortcut (paint cell, undo, verify reverted)
  *
  * Strategy:
  *   1. Import XP → session with grid + WS editor
@@ -21,6 +23,8 @@
  *   4. W4: Activate erase tool, click a painted cell → verify cell is cleared
  *   5. W7: Activate rect tool, drag a 3x3 rect → verify perimeter cells painted
  *   6. W6: Activate fill tool, click inside rect → verify fill spreads
+ *   7. W15: Click Select tool button → verify activeTool === 'select'
+ *   8. W18: Paint cell, Ctrl+Z → verify cell reverted
  *
  * Usage:
  *   node run_whole_sheet_tools_test.mjs --xp sprites/attack-0001.xp --out-dir output/ws_tools_test
@@ -290,6 +294,59 @@ async function main() {
   );
   steps.w6_fill = { step: 'flood_fill', pass: fillPass, preFill, postFill };
   if (!fillPass) allPass = false;
+
+  // Step 7: W15 — Select tool (activate via button, verify state)
+  console.log('=== Step 7: W15 Select tool ===');
+  await activateTool(page, '#wsToolSelect');
+  const wsAfterSelect = await getWsState(page);
+  await screenshot(page, outDir, 'step07_w15_select');
+
+  const selectPass = assert(
+    wsAfterSelect?.activeTool === 'select',
+    fail, 'w15_select', `activeTool should be "select", got "${wsAfterSelect?.activeTool}"`,
+    { wsAfterSelect }
+  );
+  steps.w15_select = { step: 'select_tool', pass: selectPass, activeTool: wsAfterSelect?.activeTool };
+  if (!selectPass) allPass = false;
+
+  // Step 8: W18 — Undo via Ctrl+Z
+  // Paint a cell, then Ctrl+Z, verify it reverts.
+  console.log('=== Step 8: W18 Undo (Ctrl+Z) ===');
+  await activateTool(page, '#wsToolCell');
+  await setDrawState(page, 72, '#ff00ff', '#00ffff'); // glyph=72 ('H')
+
+  // Pick a fresh cell that we haven't touched yet
+  const undoX = 7, undoY = 3;
+  const preUndo = await readFrameCell(page, 0, 0, undoX, undoY);
+  const preUndoGlyph = preUndo?.cell?.glyph ?? -1;
+
+  // Paint it
+  await clickCell(page, undoX, undoY);
+  await page.waitForTimeout(300);
+  const afterPaint = await readFrameCell(page, 0, 0, undoX, undoY);
+  const paintedGlyph = afterPaint?.cell?.glyph ?? -1;
+
+  // Verify paint landed (prerequisite for undo test)
+  if (paintedGlyph !== 72) {
+    fail('w18_undo', `Prerequisite paint failed: expected glyph=72 at (${undoX},${undoY}), got ${paintedGlyph}`);
+    steps.w18_undo = { step: 'undo_ctrl_z', pass: false, preUndoGlyph, paintedGlyph };
+    allPass = false;
+  } else {
+    // Trigger Ctrl+Z
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(500);
+    const afterUndo = await readFrameCell(page, 0, 0, undoX, undoY);
+    const undoneGlyph = afterUndo?.cell?.glyph ?? -1;
+    await screenshot(page, outDir, 'step08_w18_undo');
+
+    const undoPass = assert(
+      undoneGlyph === preUndoGlyph,
+      fail, 'w18_undo', `Cell (${undoX},${undoY}) should revert to glyph=${preUndoGlyph} after Ctrl+Z, got ${undoneGlyph}`,
+      { preUndoGlyph, paintedGlyph, undoneGlyph }
+    );
+    steps.w18_undo = { step: 'undo_ctrl_z', pass: undoPass, preUndoGlyph, paintedGlyph, undoneGlyph };
+    if (!undoPass) allPass = false;
+  }
 
   // Final
   const finalState = await captureState(page, 'final');

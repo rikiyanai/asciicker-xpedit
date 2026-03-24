@@ -4,7 +4,7 @@
 
 **Goal:** Deploy the xpedit workbench to Google Cloud Run so it's live at `rikiworld.com/xpedit`, using GitHub Actions for CI/CD and Cloudflare Workers for path-based routing.
 
-**Architecture:** The Flask app runs as a Docker container on Cloud Run (free tier), constrained to a single instance (`--max-instances=1`) because all session/upload/export state is filesystem-based and ephemeral. GitHub Actions builds the image, pushes to Artifact Registry with a deterministic SHA tag, and deploys that exact tag to Cloud Run on manual trigger. A Cloudflare Worker routes `rikiworld.com/xpedit/*` requests to the Cloud Run service URL while all other paths continue to GitHub Pages. Post-deploy verification includes both stateless health checks and a stateful upload→session round-trip.
+**Architecture:** The Flask app runs as a Docker container on Cloud Run (free tier), constrained to a single instance (`--max-instances=1`) because all session/upload/export state is filesystem-based and ephemeral. GitHub Actions builds the image, pushes to Artifact Registry with a deterministic SHA tag, and deploys that exact tag to Cloud Run on manual trigger. A Cloudflare Worker routes `rikiworld.com/xpedit/*` requests to the Cloud Run service URL while all other paths continue to GitHub Pages. Post-deploy verification includes both stateless health checks and a stateful upload round-trip (POST PNG → verify upload_id).
 
 **Tech Stack:** Docker, Google Cloud Run, Artifact Registry, GitHub Actions (`google-github-actions/deploy-cloudrun`), Cloudflare Workers, existing Flask + Gunicorn app
 
@@ -20,7 +20,7 @@ The app stores uploads, sessions, bundles, exports, and bug reports under `data/
 |---------|-----------|
 | Cross-instance inconsistency | `--max-instances=1` — all requests hit the same container |
 | Data loss on redeploy | Accepted for MVP — the workbench workflow is upload→edit→export/download in one session; persistence across deploys is not needed |
-| Bug report durability | Set `BUG_REPORT_DELIVERY=github` so reports go to GitHub Issues, not local files |
+| Bug report durability | Set `BUG_REPORT_DELIVERY=github` — the app still writes a local copy first (ephemeral on Cloud Run), then delivers to GitHub Issues synchronously during the request. The GitHub Issue is the durable record; the local copy is a transient fallback |
 | Scale-to-zero cold data loss | Accepted — user re-uploads after idle timeout; no long-lived sessions expected at MVP scale |
 
 ### Post-MVP upgrade path
@@ -549,7 +549,7 @@ Expected: all checks PASS (including stateful upload)
 
 ### Task 6: Create Cloudflare Worker for path-based routing
 
-**Context:** `rikiworld.com` currently points to GitHub Pages (serves the asciicker-Y9-2 game). We need `/xpedit/*` to go to Cloud Run while everything else stays on GitHub Pages. A Cloudflare Worker does this — matching the pattern from `deploy-multiplayer.yml`.
+**Context:** `rikiworld.com` currently points to GitHub Pages (serves the asciicker-Y9-2 game). We need `/xpedit/*` to go to Cloud Run while everything else stays on GitHub Pages. A Cloudflare Worker does this — the user already has Cloudflare Workers in use for the asciicker-Y9-2 multiplayer server (separate repo).
 
 **Files:**
 - Create: `deploy/cloudflare-worker/xpedit-router.js`

@@ -397,30 +397,31 @@ The source panel has 7 of 19 actions PROVEN via committed M2-B runner (`run_sour
 
 ### Readiness Assessment
 
-| Family | # Actions | Generator Readiness | Blocking Issue |
-|--------|-----------|--------------------|----|
-| F1: Template/Bundle (T1-T8) | 8 | **READY** | None — all are button clicks with known DOM IDs |
-| F2: Upload/Convert (U1-U3) | 3 | **READY** | None — file input + button clicks |
-| F3: Source Panel (S1-S19) | 19 | **MOSTLY READY** | S7 draw-box, S9 move, S10 resize require canvas-coordinate gesture abstraction; S13-S14 row/col drag likewise |
-| F4: Context Menu (C1-C9) | 9 | **READY** | All are right-click → menu-item click with known DOM IDs |
-| F5: Source-to-Grid (D1-D2) | 2 | **PROVEN** | D1 drag and D2/C2 context menu verified by source-to-grid runner (13/13 PASS root + /xpedit) |
-| F6: Grid Panel (G1-G14) | 14 | **MOSTLY READY** | G1 click, G2 shift-click, G14 drag-select need canvas-coordinate patterns; rest are button clicks |
-| F7: Whole-Sheet Editor (W1-W18) | 18 | **PARTIALLY PROVEN** | W1-W14 are now PROVEN across fidelity, layer, and WS tools runners. Remaining gaps are W15 BLOCKED, W16-W17 DEFERRED, and W18 PARTIAL. Registry entries are still not populated for the W-family. |
-| F8: Jitter/Alignment (J1-J6) | 6 | **READY** | All are button clicks with known DOM IDs |
-| F9: Lifecycle (L1-L3) | 3 | **READY** | All are button clicks or keyboard shortcuts |
-| F10: Runtime Dock (R1-R7) | 7 | **READY** | All are button clicks; iframe observation needs design |
-| F11: Bug Report (B1-B7) | 7 | **READY** | All are button clicks or modal interactions |
-| F12: XP Preview (P1-P4) | 4 | **READY** | Button clicks + input changes |
+| Family | # Actions | Generator Readiness | Registry Status | Blocking Issue |
+|--------|-----------|--------------------|-----------------|----|
+| F1: Template/Bundle (T1-T8) | 8 | **READY** | 8/8 in registry (85ff3b8) | None |
+| F2: Upload/Convert (U1-U3) | 3 | **READY** | 3/3 in registry (85ff3b8) | None |
+| F3: Source Panel (S1-S19) | 19 | **MOSTLY READY** | 7/19 in M2-D pass (S1-S6, S12) | S7-S10/S13-S14/S17 need canvas gestures; S18 needs inputRange in runner; S11 duplicate of S6; S15/S16 deferred alias rows (=C3/C4); S19 PARTIAL |
+| F4: Context Menu (C1-C9) | 9 | **READY** | 9/9 in registry (85ff3b8) | None |
+| F5: Source-to-Grid (D1-D2) | 2 | **PROVEN** | 0/2 — cross-panel drag abstraction needed | D1 drag and D2/C2 context menu verified but gestureType not in registry model |
+| F6: Grid Panel (G1-G14) | 14 | **MOSTLY READY** | 5/14 in M2-D pass (G5-G6, G9-G11) | G3/G4 dual-button schema gap; G7/G8 deferred alias rows (=C6/C7); G13 needs inputRange; G1/G2/G12/G14 need canvas gestures |
+| F7: Whole-Sheet Editor (W1-W18) | 18 | **PARTIALLY PROVEN** | 2/18 executable (W12-W13) + 16 stubs in M2-D pass | 15/18 PROVEN but most need canvas/keyboard/dynamic-row gesture abstractions. W15 WIRED (visualization gap). W16-W17 DEFERRED. W18 PROVEN but deferred (dual-button schema gap). |
+| F8: Jitter/Alignment (J1-J6) | 6 | **READY** | 6/6 in registry (85ff3b8) | None |
+| F9: Lifecycle (L1-L3) | 3 | **READY** | 3/3 in registry (85ff3b8) | None |
+| F10: Runtime Dock (R1-R7) | 7 | **READY** | 7/7 in registry (85ff3b8) | None |
+| F11: Bug Report (B1-B7) | 7 | **READY** | 7/7 in registry (85ff3b8) | None |
+| F12: XP Preview (P1-P4) | 4 | **READY** | 4/4 in registry (85ff3b8) | None |
 
-**Summary by family (SAR 96 = F1-F11; F12 is outside SAR count):**
+**Registry coverage summary (after M2-D pass):**
 
-| Readiness | Families | Action Count (of 96 SAR) |
-|-----------|---------|--------------------------|
-| READY | F1(8), F2(3), F4(9), F8(6), F9(3), F10(7), F11(7) | **43** |
-| MOSTLY READY | F3(19), F6(14) — ~8 individual actions need canvas-coordinate design, rest are button clicks | **33** |
-| NEEDS DESIGN | F5(2), F7(18) — canvas painting, cross-panel drag, keyboard shortcuts, or missing code | **20** |
+| Category | Families | Action Count |
+|----------|---------|-------------|
+| Fully in registry | F1(8), F2(3), F4(9), F8(6), F9(3), F10(7), F11(7), F12(4) | **47** |
+| Partially in registry (M2-D) | F3(7/19), F6(5/14), F7(2+16 stubs/18) | **30 new** |
+| Not in registry | F5(0/2) | **2** |
+| **Total registry entries after M2-D** | | **77** (61 executable + 16 stubs) |
 
-43 actions in READY families can be extracted to `action_registry.json` immediately. Within the 33 MOSTLY READY actions, ~25 are individually ready (button clicks) and ~8 need canvas-coordinate gesture abstraction. The 20 NEEDS DESIGN actions require new selector patterns before extraction.
+**Deferred to schema evolution:** G3/G4/W18 (dual-button), S18/G13 (inputRange), S15/S16/G7/G8 (alias rows), S7-S10/S13-S14/S17/G1/G2/G12/G14/W1-W9 (canvas/keyboard gestures), W10-W11/W14 (dynamic row selectors).
 
 ### DOM Selector Authority
 

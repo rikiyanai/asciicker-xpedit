@@ -147,17 +147,17 @@ The M2 verifier is a pipeline with five stages:
 
 **Stage 1 — Capability Canon** is human-curated and already exists (`m2-capability-canon-inventory.md`). It classifies every action as PROVEN/WIRED/PARTIAL/PLANNED/BLOCKED/DEFERRED and tracks code evidence and proof evidence.
 
-**Stage 2 — Action Registry** (`action_registry.json`) does not yet exist. It is the machine-readable extraction of the capability canon: one entry per action with `id`, `family`, `domSelector` (the CSS selector or canvas coordinate method to trigger it), `preconditions` (required state), `postconditions` (expected state changes), and `acceptanceEligible` (boolean — only UI-driven actions are acceptance-eligible).
+**Stage 2 — Action Registry** (`action_registry.json`) exists (committed 85ff3b8, expanded in M2-D). Machine-readable extraction of the capability canon: one entry per action with `id`, `family`, `selectorKey` (reference into `selectors.mjs`), `gestureType` (constrained enum), `paramBindings` (preparatory input steps), `preconditions`, `postconditions`, `acceptanceEligible`, and `generatorReadiness`. Schema: `action_registry_schema.json` (JSON Schema draft-07). Current coverage: 47 READY-family actions; M2-D pass adds 30 more (14 executable + 16 stubs).
 
-**Stage 3 — Recipe Generator** (`recipe_generator.mjs`) does not yet exist. It reads the action registry and composes bounded workflow sequences. A recipe is an ordered list of `{ actionId, params, expectedOutcome }` steps. The generator can produce fixed regression recipes (hardcoded sequences for known workflows) and bounded-random exploration recipes (random action sequences within SAR constraints).
+**Stage 3 — Recipe Generator** (`recipe_generator.mjs`) exists (committed 85ff3b8). Reads the action registry and composes bounded workflow sequences. A recipe is an ordered list of `{ actionId, params, expectedOutcome }` steps with `_derived` metadata for runner consumption. Currently produces 6 fixed regression recipes for READY-family workflows. Import-safe (no side effects on module import). Bounded-random generation is future work.
 
-**Stage 4 — DOM Runner** (`dom_runner.mjs`) does not yet exist but `verifier_lib.mjs` provides the foundation. The runner executes each recipe step as a Playwright DOM action (click, drag, type, file-choose) — never `page.evaluate()` for action driving. It uses `verifier_lib.mjs` for `openWorkbench()`, `captureState()`, base-path resolution, and structured reporting.
+**Stage 4 — DOM Runner** (`dom_runner.mjs`) exists (committed 85ff3b8). Executes recipe steps via Playwright DOM actions — never `page.evaluate()` for action driving. Supports gestures: click, setInputFiles, selectOption, fill. Enforces recipe-level precondition gates, refuses blocked gestures, constrains main gestures to value-less types (click, rightClick). Uses `verifier_lib.mjs` for `openWorkbench()`, `captureState()`, base-path resolution, and structured reporting. Proof: 3 recipes pass (bundle_template_apply, bug_report_dismiss, xp_import_roundtrip).
 
-**Stage 5 — Observation Layer** already partially exists via `getState()` and the state-capture contract. Known debt: `actionStates` still requires `_state()` fallback (see state-capture contract). The observation layer reads state after each recipe step and compares against postconditions. Failures become structured report entries and failure-log candidates.
+**Stage 5 — Observation Layer** exists via `getState()` and the state-capture contract. Known debt: `actionStates` still requires `_state()` fallback (see state-capture contract §4). The DOM runner captures state after each recipe step and evaluates postconditions using operator-based assertions (eq, gt, truthy, changed, etc.).
 
 ### Selector Infrastructure
 
-A shared `selectors.mjs` module is needed to centralize DOM selectors used by both the action registry and runners. This prevents selector drift between the registry and execution. Current runners hard-code selectors inline.
+`selectors.mjs` (committed 85ff3b8) centralizes DOM selectors used by both the action registry and runners. 102+ selector keys verified against `web/workbench.html`. Gesture types defined with blocked flags for canvas/keyboard. M2-D pass adds 31 whole-sheet selectors.
 
 ### Relationship to Existing Infrastructure
 
@@ -175,13 +175,20 @@ A shared `selectors.mjs` module is needed to centralize DOM selectors used by bo
 - `actionStates` not yet in `getState()` — requires `_state()` fallback (state-capture contract §4)
 - Tab hydration readiness uses `_state().activeActionKey` — should migrate to `getState()` P3 batch
 - Canvas-coordinate actions (source panel drawing, grid drag) need a selector abstraction beyond CSS — likely `{ type: "canvas", target: "sourceCanvas", gesture: "drag", from: [x1,y1], to: [x2,y2] }`
+- Dual-button branching: G3 (row up/down), G4 (col left/right), W18 (undo/redo) each map one canon ID to two physical buttons. Current schema's `paramBindings` only supports input-setting gestures, not conditional click dispatch. Needs schema evolution or canon ID split.
+- inputRange gesture: S18 (source zoom), G13 (grid zoom) need `inputRange` added to dom_runner.mjs gesture executors.
+- Alias rows: S15=C3, S16=C4, G7=C6, G8=C7 are distinct canon IDs sharing selectors/gestures. Schema allows separate entries; deferred to alias-row pass.
 
-### Implementation Order
+### Implementation Status
 
-1. `action_registry.json` — machine-readable action inventory (extracted from capability canon)
-2. `selectors.mjs` — shared DOM selector module
-3. Recipe/action schema — JSON schema for recipe format
-4. `recipe_generator.mjs` — fixed regression recipes first, bounded-random later
+| # | Component | Status | Commit |
+|---|-----------|--------|--------|
+| 1 | `selectors.mjs` | **Done** | 85ff3b8 |
+| 2 | `action_registry_schema.json` | **Done** | 85ff3b8 |
+| 3 | `action_registry.json` | **Done** (47 entries); M2-D expansion to 77 in progress | 85ff3b8 |
+| 4 | `recipe_generator.mjs` | **Done** (6 fixed recipes) | 85ff3b8 |
+| 5 | `dom_runner.mjs` | **Done** (click, setInputFiles, selectOption, fill) | 85ff3b8 |
+| 6 | M2-D registry expansion | **In progress** | See `docs/plans/2026-03-24-m2d-registry-expansion-design.md` |
 5. `dom_runner.mjs` — recipe executor using verifier_lib foundation
 
 This architecture is NOT yet implemented. The next implementation target after this canonization pass is items 1-3 above.

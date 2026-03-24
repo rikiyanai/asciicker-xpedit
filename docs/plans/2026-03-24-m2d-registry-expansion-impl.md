@@ -364,64 +364,64 @@ The 2 executable entries (W12, W13) use class selectors added in Task 1. The 16 
 "W2": {
   "id": "W2", "name": "Paint cell (Cell tool)", "family": "F7",
   "status": "PROVEN", "m2Scope": "M2-C", "generatorReadiness": "NEEDS_DESIGN",
-  "acceptanceEligible": true, "selectorKey": "wsToolCell", "gestureType": "canvasClick",
+  "acceptanceEligible": true, "selectorKey": null, "gestureType": "canvasClick",
   "preconditions": { "wholeSheetMounted": true },
   "postconditions": {},
-  "blockers": ["Tool activation is click on wsToolCell; painting requires canvasClick on WS canvas"],
+  "blockers": ["Multi-step action: (1) click wsToolCell to activate tool, (2) canvasClick on WS canvas to paint. No single DOM trigger — selectorKey is null per schema contract."],
   "paramBindings": []
 },
 "W3": {
   "id": "W3", "name": "Eyedropper", "family": "F7",
   "status": "PROVEN", "m2Scope": "M2-C", "generatorReadiness": "NEEDS_DESIGN",
-  "acceptanceEligible": true, "selectorKey": "wsToolEyedropper", "gestureType": "canvasClick",
+  "acceptanceEligible": true, "selectorKey": null, "gestureType": "canvasClick",
   "preconditions": { "wholeSheetMounted": true },
   "postconditions": {},
-  "blockers": ["Tool activation is click; sampling requires canvasClick on WS canvas"],
+  "blockers": ["Multi-step action: (1) click wsToolEyedropper to activate, (2) canvasClick to sample. No single DOM trigger."],
   "paramBindings": []
 },
 "W4": {
   "id": "W4", "name": "Erase cell", "family": "F7",
   "status": "PROVEN", "m2Scope": "M2-C", "generatorReadiness": "NEEDS_DESIGN",
-  "acceptanceEligible": true, "selectorKey": "wsToolErase", "gestureType": "canvasClick",
+  "acceptanceEligible": true, "selectorKey": null, "gestureType": "canvasClick",
   "preconditions": { "wholeSheetMounted": true },
   "postconditions": {},
-  "blockers": ["Tool activation is click; erasing requires canvasClick on WS canvas"],
+  "blockers": ["Multi-step action: (1) click wsToolErase to activate, (2) canvasClick to erase. No single DOM trigger."],
   "paramBindings": []
 },
 "W5": {
   "id": "W5", "name": "Erase drag", "family": "F7",
   "status": "PROVEN", "m2Scope": "M2-C", "generatorReadiness": "NEEDS_DESIGN",
-  "acceptanceEligible": true, "selectorKey": "wsToolErase", "gestureType": "canvasDrag",
+  "acceptanceEligible": true, "selectorKey": null, "gestureType": "canvasDrag",
   "preconditions": { "wholeSheetMounted": true },
   "postconditions": {},
-  "blockers": ["Tool activation is click; erase-drag requires canvasDrag on WS canvas"],
+  "blockers": ["Multi-step action: (1) click wsToolErase to activate, (2) canvasDrag to erase area. No single DOM trigger."],
   "paramBindings": []
 },
 "W6": {
   "id": "W6", "name": "Flood fill", "family": "F7",
   "status": "PROVEN", "m2Scope": "M2-C", "generatorReadiness": "NEEDS_DESIGN",
-  "acceptanceEligible": true, "selectorKey": "wsToolFill", "gestureType": "canvasClick",
+  "acceptanceEligible": true, "selectorKey": null, "gestureType": "canvasClick",
   "preconditions": { "wholeSheetMounted": true },
   "postconditions": {},
-  "blockers": ["Tool activation is click; filling requires canvasClick on WS canvas"],
+  "blockers": ["Multi-step action: (1) click wsToolFill to activate, (2) canvasClick to fill. No single DOM trigger."],
   "paramBindings": []
 },
 "W7": {
   "id": "W7", "name": "Rectangle tool", "family": "F7",
   "status": "PROVEN", "m2Scope": "M2-C", "generatorReadiness": "NEEDS_DESIGN",
-  "acceptanceEligible": true, "selectorKey": "wsToolRect", "gestureType": "canvasDrag",
+  "acceptanceEligible": true, "selectorKey": null, "gestureType": "canvasDrag",
   "preconditions": { "wholeSheetMounted": true },
   "postconditions": {},
-  "blockers": ["Tool activation is click; drawing requires canvasDrag on WS canvas"],
+  "blockers": ["Multi-step action: (1) click wsToolRect to activate, (2) canvasDrag to draw rect. No single DOM trigger."],
   "paramBindings": []
 },
 "W8": {
   "id": "W8", "name": "Line tool", "family": "F7",
   "status": "PROVEN", "m2Scope": "M2-C", "generatorReadiness": "NEEDS_DESIGN",
-  "acceptanceEligible": true, "selectorKey": "wsToolLine", "gestureType": "canvasDrag",
+  "acceptanceEligible": true, "selectorKey": null, "gestureType": "canvasDrag",
   "preconditions": { "wholeSheetMounted": true },
   "postconditions": {},
-  "blockers": ["Tool activation is click; drawing requires canvasDrag on WS canvas"],
+  "blockers": ["Multi-step action: (1) click wsToolLine to activate, (2) canvasDrag to draw line. No single DOM trigger."],
   "paramBindings": []
 },
 "W9": {
@@ -436,19 +436,19 @@ The 2 executable entries (W12, W13) use class selectors added in Task 1. The 16 
 "W10": {
   "id": "W10", "name": "Switch layer", "family": "F7",
   "status": "PROVEN", "m2Scope": "M2-C", "generatorReadiness": "NEEDS_DESIGN",
-  "acceptanceEligible": true, "selectorKey": "wsLayersPanel", "gestureType": "click",
+  "acceptanceEligible": true, "selectorKey": null, "gestureType": "click",
   "preconditions": { "wholeSheetMounted": true },
   "postconditions": {},
-  "blockers": ["Dynamic per-layer-row buttons — needs parameterized selector model for layer index"],
+  "blockers": ["No single DOM trigger — target is a dynamic per-layer-row button inside wsLayersPanel. Needs parameterized selector model for layer index."],
   "paramBindings": []
 },
 "W11": {
   "id": "W11", "name": "Toggle layer visibility", "family": "F7",
   "status": "PROVEN", "m2Scope": "M2-C", "generatorReadiness": "NEEDS_DESIGN",
-  "acceptanceEligible": true, "selectorKey": "wsLayersPanel", "gestureType": "check",
+  "acceptanceEligible": true, "selectorKey": null, "gestureType": "check",
   "preconditions": { "wholeSheetMounted": true },
   "postconditions": {},
-  "blockers": ["Dynamic per-layer-row checkboxes — needs parameterized selector model for layer index"],
+  "blockers": ["No single DOM trigger — target is a dynamic per-layer-row checkbox inside wsLayersPanel. Needs parameterized selector model for layer index."],
   "paramBindings": []
 },
 "W12": {
@@ -472,19 +472,19 @@ The 2 executable entries (W12, W13) use class selectors added in Task 1. The 16 
 "W14": {
   "id": "W14", "name": "Move layer", "family": "F7",
   "status": "PROVEN", "m2Scope": "M2-C", "generatorReadiness": "NEEDS_DESIGN",
-  "acceptanceEligible": true, "selectorKey": "wsLayersPanel", "gestureType": "click",
+  "acceptanceEligible": true, "selectorKey": null, "gestureType": "click",
   "preconditions": { "wholeSheetMounted": true },
   "postconditions": {},
-  "blockers": ["Dynamic per-layer-row up/down buttons — needs parameterized selector model"],
+  "blockers": ["No single DOM trigger — target is dynamic per-layer-row up/down buttons inside wsLayersPanel. Needs parameterized selector model."],
   "paramBindings": []
 },
 "W15": {
   "id": "W15", "name": "Select tool", "family": "F7",
   "status": "WIRED", "m2Scope": "M2-C", "generatorReadiness": "NEEDS_DESIGN",
-  "acceptanceEligible": true, "selectorKey": "wsToolSelect", "gestureType": "canvasClick",
+  "acceptanceEligible": true, "selectorKey": null, "gestureType": "canvasDrag",
   "preconditions": { "wholeSheetMounted": true },
   "postconditions": {},
-  "blockers": ["Button activates tool but canvas.setSelectionTool() never called — no visualization. Tool activation is click; selection use requires canvasDrag."],
+  "blockers": ["Multi-step action: (1) click wsToolSelect to activate, (2) canvasDrag to create selection. No single DOM trigger. Also: canvas.setSelectionTool() not called — visualization gap (Task 5 fix)."],
   "paramBindings": []
 },
 "W16": {
@@ -506,10 +506,10 @@ The 2 executable entries (W12, W13) use class selectors added in Task 1. The 16 
 "W18": {
   "id": "W18", "name": "Per-stroke undo/redo", "family": "F7",
   "status": "PROVEN", "m2Scope": "M2-C", "generatorReadiness": "DEFERRED",
-  "acceptanceEligible": true, "selectorKey": "wsUndoBtn", "gestureType": "click",
+  "acceptanceEligible": true, "selectorKey": null, "gestureType": "click",
   "preconditions": { "wholeSheetMounted": true },
   "postconditions": {},
-  "blockers": ["Dual-button (wsUndoBtn + wsRedoBtn) — same schema gap as G3/G4. Code fully wired, proof exists."],
+  "blockers": ["No single DOM trigger — dual-button action (wsUndoBtn + wsRedoBtn). Same schema gap as G3/G4: one canon ID maps to two physical buttons. Code fully wired, proof exists."],
   "paramBindings": []
 },
 ```
@@ -670,7 +670,9 @@ git commit -m "feat(generator): add source-panel mode-cycle and grid frame-manag
 
 ---
 
-### Task 7: Run dom_runner proof for new recipes
+### Task 7: Verification — regression check + precondition gate validation
+
+This task validates two things: (1) existing recipes still pass after the additive registry expansion, (2) the new recipes' precondition gates work correctly. It does NOT prove the new F3/F6 recipes execute end-to-end — that requires a composite sequence establishing prior state (image upload / session creation), which is future work.
 
 **Step 1: Run the original 3 passing recipes to confirm no regression**
 
@@ -679,28 +681,26 @@ node scripts/xp_fidelity_test/dom_runner.mjs --recipe bundle_template_apply --ou
 node scripts/xp_fidelity_test/dom_runner.mjs --recipe bug_report_dismiss --out-dir output/dom_runner_m2d_brd
 node scripts/xp_fidelity_test/dom_runner.mjs --recipe xp_import_roundtrip --out-dir output/dom_runner_m2d_xir
 ```
-Expected: all 3 PASS
+Expected: all 3 PASS (confirms additive registry changes don't break existing entries)
 
-**Step 2: Run new source_panel_mode_cycle**
-
-This requires a source image loaded first. The recipe has preconditions `sourceImageLoaded: true`, so it will BLOCK on a fresh workbench. Run after `classic_xp_lifecycle` loads a PNG:
+**Step 2: Validate precondition gate for source_panel_mode_cycle**
 
 ```bash
 node scripts/xp_fidelity_test/dom_runner.mjs --recipe source_panel_mode_cycle --out-dir output/dom_runner_m2d_spmc
 ```
-Expected: BLOCKED (precondition: sourceImageLoaded). This is correct — the recipe needs sequencing with a prior upload recipe. This confirms the precondition gate works.
+Expected: BLOCKED (precondition: `sourceImageLoaded` is false on fresh workbench). This validates the recipe's precondition is correctly enforced, not that the recipe steps execute.
 
-**Step 3: Run grid_frame_management**
+**Step 3: Validate precondition gate for grid_frame_management**
 
 ```bash
 node scripts/xp_fidelity_test/dom_runner.mjs --recipe grid_frame_management --out-dir output/dom_runner_m2d_gfm
 ```
-Expected: BLOCKED (precondition: sessionId truthy). Correct for fresh workbench.
+Expected: BLOCKED (precondition: `sessionId` is not truthy on fresh workbench).
 
-**Step 4: Verify final state**
+**Step 4: Verify task-scoped file state**
 
 ```bash
-git status --short
 git log --oneline -7
+git diff --stat HEAD~6..HEAD
 ```
-Expected: clean working tree, 6 new commits from Tasks 1-6.
+Expected: 6 commits from Tasks 1-6. Changed files limited to: selectors.mjs, action_registry.json, recipe_generator.mjs, whole-sheet-init.js. Working tree may have unrelated dirty files (doc edits, untracked artifacts) — that is pre-existing, not a task regression.

@@ -9,6 +9,7 @@ on:
         default: "master"
 
 env:
+  GCP_PROJECT_ID: yuzu-agent
   GCP_REGION: us-central1
   SERVICE_NAME: asciicker-xpedit
   AR_REPO: asciicker-xpedit
@@ -60,7 +61,7 @@ jobs:
         id: meta
         run: |
           SHA="$(git rev-parse --short HEAD)"
-          IMAGE="${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/xpedit"
+          IMAGE="${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/xpedit"
           echo "image_tag=${SHA}" >> "$GITHUB_OUTPUT"
           echo "image_url=${IMAGE}:${SHA}" >> "$GITHUB_OUTPUT"
 

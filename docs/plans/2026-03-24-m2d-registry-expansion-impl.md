@@ -183,7 +183,7 @@ Add after the last F2 entry (U3) and before the first F4 entry (C1):
   "gestureType": "click",
   "preconditions": {},
   "postconditions": {},
-  "blockers": [],
+  "blockers": ["Canon inventory assigns S6 to deleteBoxBtn (direct action). SAR blueprint (workbench-sar-table-blueprint.md:275) assigns S6 to a canvas draw-box gesture and maps deleteBoxBtn to S11. This entry follows the canon inventory (higher authority). If the SAR blueprint S6 definition is ever needed, it must use a different registry row or the canon must reconcile the discrepancy."],
   "paramBindings": []
 },
 "S12": {
@@ -571,8 +571,7 @@ This connects the existing marching-ants renderer (`canvas.js:573-600`) to the e
 
 **Step 2: Verify syntax**
 
-Run: `node --check web/whole-sheet-init.js`
-Expected: exit 0
+Skip `node --check web/whole-sheet-init.js` — the file uses ES module `import` syntax but the repo's package.json declares `"type": "commonjs"`, so `node --check` will always fail with a SyntaxError regardless of code correctness. Instead, verify visually that the added line is syntactically valid (one method call) and rely on the workbench server loading the file at runtime.
 
 **Step 3: Commit**
 

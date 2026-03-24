@@ -37,7 +37,7 @@ jobs:
 
       - name: Pre-deploy tests
         run: |
-          pip install -e ".[deploy]"
+          pip install -e ".[deploy]" pytest
           python3 -m py_compile src/pipeline_v2/app.py
           python3 -m py_compile src/pipeline_v2/service.py
           python3 -m py_compile src/pipeline_v2/config.py

@@ -40,7 +40,7 @@ Placeholder. No milestone beyond M2 is currently defined.
 |-------|-------|-----------|--------|
 | **M2-A** | Structural PNG baseline (dims, layers, metadata gates) | M1 closed | ESTABLISHED |
 | **M2-B** | Source panel + grid assembly (draw box, find sprites, drag-to-grid) | M2-A | ESTABLISHED — source-panel 10/10 PASS (5c67ef2); source-to-grid 13/13 PASS (380edee) at root + /xpedit. D1, D2/C2, G1 PROVEN. |
-| **M2-C** | Whole-sheet editor coverage (tools, layers, undo) | M2-A | NOT STARTED |
+| **M2-C** | Whole-sheet editor coverage (tools, layers, undo) | M2-A | IN PROGRESS — Slice 1: W2/W3/W5/W8/W9 PROVEN (fidelity rerun 46fe06f); Slice 2: W10-W14 PROVEN (layer runner 7bdab92). W1/W4/W6/W7 still WIRED. |
 | **M2-D** | Full SAR workflow coverage (all remaining WIRED actions get verifier proof) | M2-B, M2-C | NOT STARTED |
 | **M2-E** | Semantic editing (region-based dictionary-driven edits) | M2-D | NOT STARTED |
 | **M2-F** | Analyze/auto-slice (assistive, not authoritative) | M2-D | NOT STARTED |
@@ -54,7 +54,7 @@ Execute in dependency order. M2-B and M2-C may run in parallel after M2-A.
 **Last reviewed:** 2026-03-23
 
 1. **M2-B source panel + grid assembly** — committed proof: source-panel 10/10 PASS (`5c67ef2`), source-to-grid 13/13 PASS (`380edee`) at root + /xpedit. D1/D2/G1 PROVEN. Next: M2-C whole-sheet editor.
-2. **M2-C whole-sheet editor verification** — tools are wired but unproven; parallel with M2-B
+2. **M2-C whole-sheet editor verification** — 10/18 W-actions PROVEN (W2/W3/W5/W8/W9 painting tools + W10-W14 layer ops). Remaining: W1 (user gesture TBD), W4/W6/W7 (need runner/recipe), W15-W18 (blocked/deferred/partial).
 3. **PB-01/02/03 undo gaps** in source panel anchor ops — small fixes that affect M2-D completeness
 4. **PB-06 SelectTool wiring** — blocked M2-C.2 feature, needed for whole-sheet editor parity
 

@@ -169,7 +169,7 @@ Each capability row has five columns:
 - PB-05: OvalTool exists on disk, not wired — DEFERRED
 - PB-06: SelectTool exists on disk, not wired — BLOCKED (M2-C.2 priority)
 - PB-07: TextTool exists on disk, not wired — DEFERRED
-- ~~W12-W14~~: **CORRECTED** — code exists at whole-sheet-init.js:1168-1204 (add/delete/move layer). Prior audit missed these. Status: WIRED, no verifier proof yet.
+- ~~W12-W14~~: **CORRECTED + PROVEN** — code exists at whole-sheet-init.js:1168-1204. Prior audit missed these. Now PROVEN via layer runner (7bdab92).
 - W18: Undo stubs exist but per-stroke undo is not connected end-to-end
 
 ### Family 8: Jitter/Alignment (6 actions)
@@ -285,11 +285,11 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 |-------|---------|-------------|--------|
 | Slice 1 | PNG Structural Baseline | YES | Ad-hoc proof only (M2-A 9/9 structural gates PASS via `run_structural_baseline_test.mjs`); not a formal unified-architecture slice |
 | Slice 2 | Source-Panel Contract | diagnostic | **YES** — committed runner `run_source_panel_workflow_test.mjs` (5c67ef2), 10/10 PASS; not yet a unified-architecture recipe but committed proof exists |
-| Slice 3 | Source-to-Grid Contract | diagnostic | NO |
-| Slice 4 | Whole-Sheet Correction | diagnostic | NO |
+| Slice 3 | Source-to-Grid Contract | YES | **YES** — committed runner `run_source_to_grid_workflow_test.mjs` (380edee), 13/13 PASS root + /xpedit; D1/D2/G1 PROVEN |
+| Slice 4 | Whole-Sheet Tools + Layers | YES | **YES** — fidelity rerun (46fe06f) proves W2/W3/W5/W8/W9; layer runner `run_whole_sheet_layer_test.mjs` (7bdab92) proves W10-W14. 10/18 W-actions PROVEN. |
 | Slice 5 | Manual Assembly E2E | YES | NO |
 
-**2 of 5 slices have committed proof** (Slice 1 structural, Slice 2 source-panel), but neither is built as a unified-architecture recipe+runner yet. The remaining 3 slices have zero proof. The unified M2 verifier architecture (canonical spec §5) will replace ad-hoc runners with generated recipes.
+**4 of 5 slices have committed proof** (Slice 1 structural, Slice 2 source-panel, Slice 3 source-to-grid, Slice 4 whole-sheet). Only Slice 5 (manual assembly E2E) has zero proof. The unified M2 verifier architecture (canonical spec §5) will replace ad-hoc runners with generated recipes.
 
 ---
 

@@ -47,10 +47,10 @@
     },
     "F7": {
       "name": "Whole-Sheet Editor",
-      "generatorReadiness": "NEEDS_DESIGN",
+      "generatorReadiness": "PARTIALLY_PROVEN",
       "canonActionCount": 18,
       "registryActionCount": 0,
-      "blockingIssue": "All painting tools require canvas-coordinate gestures; keyboard shortcuts need key-event pattern; layer ops W12-W14 have no code; _state() fallback for actionStates"
+      "blockingIssue": "Painting tools (W2/W3/W5/W8/W9) PROVEN via fidelity rerun; layer ops (W10-W14) PROVEN via layer runner. Canvas-coordinate gestures for W4/W6/W7 still need recipe or runner. W1 user gesture TBD. Registry entries not yet populated."
     },
     "F8": {
       "name": "Jitter/Alignment",

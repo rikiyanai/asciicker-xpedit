@@ -2,7 +2,7 @@
 
 Production deployment configs for the asciicker XP editor workbench.
 
-See `docs/MVP_DEPLOYMENT.md` for the canonical deployment posture and constraints.
+See `docs/WORKBENCH_DOCS_ARCHIVE.md#mvp-deployment` for the canonical deployment posture and constraints.
 
 ## Quick start
 

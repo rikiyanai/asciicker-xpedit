@@ -99,5 +99,5 @@ PYTHONPATH=src python3 -m pytest
 
 ## Requirements Checklist
 
-- Canonical checklist: `docs/REQUIREMENTS_CHECKLIST.md`
+- Canonical checklist: `docs/WORKBENCH_DOCS_ARCHIVE.md#requirements-checklist`
 - Imported real-sheet fixtures: `data/imported/smalltestpngs/`

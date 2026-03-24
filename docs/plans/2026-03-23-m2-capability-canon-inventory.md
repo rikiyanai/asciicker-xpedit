@@ -405,7 +405,7 @@ The source panel has 7 of 19 actions PROVEN via committed M2-B runner (`run_sour
 | F4: Context Menu (C1-C9) | 9 | **READY** | All are right-click → menu-item click with known DOM IDs |
 | F5: Source-to-Grid (D1-D2) | 2 | **PROVEN** | D1 drag and D2/C2 context menu verified by source-to-grid runner (13/13 PASS root + /xpedit) |
 | F6: Grid Panel (G1-G14) | 14 | **MOSTLY READY** | G1 click, G2 shift-click, G14 drag-select need canvas-coordinate patterns; rest are button clicks |
-| F7: Whole-Sheet Editor (W1-W18) | 18 | **NEEDS DESIGN** | All painting tools require canvas-coordinate gestures; keyboard shortcuts (W9) need key-event pattern; layer ops (W12-W14) have no code yet |
+| F7: Whole-Sheet Editor (W1-W18) | 18 | **PARTIALLY PROVEN** | W2/W3/W5/W8/W9 PROVEN via fidelity rerun. Painting tools use canvas-coordinate gestures (proven pattern). W12-W14 layer ops WIRED (code at ws-init:1168-1204). W4/W6/W7 need recipe or standalone runner. W1 needs user-gesture definition. |
 | F8: Jitter/Alignment (J1-J6) | 6 | **READY** | All are button clicks with known DOM IDs |
 | F9: Lifecycle (L1-L3) | 3 | **READY** | All are button clicks or keyboard shortcuts |
 | F10: Runtime Dock (R1-R7) | 7 | **READY** | All are button clicks; iframe observation needs design |

@@ -8,7 +8,10 @@ from pathlib import Path
 
 from flask import Blueprint, Flask, Response, jsonify, redirect, request, send_from_directory, send_file
 
-from .config import ensure_dirs, ROOT, EXPORT_DIR, ENABLED_FAMILIES, BASE_PATH, BUG_REPORTS_DIR
+from .config import (
+    ensure_dirs, ROOT, EXPORT_DIR, ENABLED_FAMILIES, BASE_PATH, BUG_REPORTS_DIR,
+    BUG_REPORT_DELIVERY, BUG_REPORT_GITHUB_REPO, BUG_REPORT_GITHUB_TOKEN,
+)
 from .models import ApiError, RunConfig, parse_frames_csv
 
 
@@ -186,6 +189,81 @@ def _runtime_preflight_payload() -> dict:
     }
 
 
+KNOWN_BUGS: list[dict] = [
+    {"id": "PB-01", "title": "Anchor set not undoable (context menu)", "severity": "high", "category": "whole_sheet_editor"},
+    {"id": "PB-03", "title": "File upload clears anchor without undo", "severity": "medium", "category": "png_import_slicing"},
+    {"id": "PB-07", "title": "TextTool on disk but not wired", "severity": "medium", "category": "whole_sheet_editor"},
+    {"id": "PB-14", "title": "G7/G8/G9 gates exist but not called in export", "severity": "medium", "category": "bundle_workflow"},
+    {"id": "VB-03", "title": "Debug _state() leaks full mutable state", "severity": "medium", "category": "other"},
+]
+
+
+def _deliver_github_issue(payload: dict, report_id: str) -> dict | None:
+    """Create a GitHub issue from a bug report. Returns issue URL or None on failure."""
+    if not BUG_REPORT_GITHUB_REPO or not BUG_REPORT_GITHUB_TOKEN:
+        return None
+    import urllib.request
+    import urllib.error
+
+    category = payload.get("category", "other")
+    severity = payload.get("severity", "major")
+    description = payload.get("description", "")
+    known_bug_id = payload.get("known_bug_id", "")
+
+    title_prefix = f"[{known_bug_id}] " if known_bug_id else ""
+    title = f"{title_prefix}[{severity}] {category}: {description[:80]}"
+    if len(description) > 80:
+        title = title.rstrip() + "..."
+
+    metadata = payload.get("metadata", {})
+    meta_lines = []
+    if metadata.get("url"):
+        meta_lines.append(f"- **URL:** {metadata['url']}")
+    if metadata.get("sessionId"):
+        meta_lines.append(f"- **Session:** {metadata['sessionId']}")
+    if metadata.get("bundleId"):
+        meta_lines.append(f"- **Bundle:** {metadata['bundleId']}")
+    if metadata.get("userAgent"):
+        meta_lines.append(f"- **UA:** {metadata['userAgent']}")
+
+    body_parts = [
+        f"## Bug Report `{report_id}`",
+        f"**Category:** {category}  ",
+        f"**Severity:** {severity}  ",
+    ]
+    if known_bug_id:
+        body_parts.append(f"**Known Issue:** {known_bug_id}  ")
+    body_parts.append(f"\n### Description\n\n{description}")
+    if meta_lines:
+        body_parts.append("\n### Metadata\n\n" + "\n".join(meta_lines))
+    body_parts.append("\n---\n*Filed automatically by Pipeline V2 Workbench*")
+
+    labels = ["bug", f"severity:{severity}"]
+
+    issue_data = json.dumps({"title": title, "body": "\n".join(body_parts), "labels": labels}).encode()
+    url = f"https://api.github.com/repos/{BUG_REPORT_GITHUB_REPO}/issues"
+    req = urllib.request.Request(
+        url,
+        data=issue_data,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {BUG_REPORT_GITHUB_TOKEN}",
+            "Accept": "application/vnd.github+json",
+            "Content-Type": "application/json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            result = json.loads(resp.read().decode())
+            return {
+                "issue_url": result.get("html_url", ""),
+                "issue_number": result.get("number", 0),
+            }
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError, json.JSONDecodeError):
+        return None
+
+
 def _save_bug_report(payload: dict, req_id: str) -> dict:
     ts = datetime.now(UTC)
     report_id = f"bug-{ts.strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:8]}"
@@ -200,11 +278,24 @@ def _save_bug_report(payload: dict, req_id: str) -> dict:
         "payload": payload,
     }
     report_path.write_text(json.dumps(doc, indent=2, sort_keys=True), encoding="utf-8")
-    return {
+    result: dict = {
         "ok": True,
         "report_id": report_id,
         "report_path": str(report_path.resolve()),
+        "delivery": "local",
+        "github_issue": None,
     }
+
+    delivery = str(payload.get("delivery_method", "")).strip().lower() or BUG_REPORT_DELIVERY
+    if delivery in ("github", "both"):
+        gh = _deliver_github_issue(payload, report_id)
+        if gh:
+            result["github_issue"] = gh
+            result["delivery"] = "both" if delivery == "both" else "github"
+        else:
+            result["github_issue_error"] = "GitHub delivery failed or not configured"
+
+    return result
 
 
 def create_app() -> Flask:
@@ -256,6 +347,18 @@ def create_app() -> Flask:
     @bp.get("/api/workbench/runtime-preflight")
     def api_wb_runtime_preflight():
         return jsonify(_runtime_preflight_payload()), 200
+
+    @bp.get("/api/workbench/known-bugs")
+    def api_wb_known_bugs():
+        delivery_configured = BUG_REPORT_DELIVERY in ("github", "both") and bool(BUG_REPORT_GITHUB_REPO) and bool(BUG_REPORT_GITHUB_TOKEN)
+        return jsonify({
+            "bugs": KNOWN_BUGS,
+            "delivery_methods": {
+                "local": True,
+                "github": delivery_configured,
+            },
+            "default_delivery": BUG_REPORT_DELIVERY if delivery_configured else "local",
+        }), 200
 
     @bp.post("/api/workbench/report-bug")
     def api_wb_report_bug():

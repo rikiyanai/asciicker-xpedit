@@ -121,6 +121,8 @@ export const selectors = {
   bugCategory:          '#bugCategory',
   bugSeverity:          '#bugSeverity',
   bugDescription:       '#bugDescription',
+  bugKnownIssue:        '#bugKnownIssue',
+  bugDeliveryMethod:    '#bugDeliveryMethod',
   bugIncludeSession:    '#bugIncludeSession',
   bugIncludeRecorder:   '#bugIncludeRecorder',
 

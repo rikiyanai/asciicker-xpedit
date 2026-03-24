@@ -437,6 +437,7 @@
     if (!el) return;
     const includeSession = !!$("bugIncludeSession")?.checked;
     const includeRecorder = !!$("bugIncludeRecorder")?.checked;
+    const delivery = String($("bugDeliveryMethod")?.value || "local");
     const recCount = state.uiRecorder.events.length;
     const bits = [
       "URL",
@@ -445,12 +446,57 @@
       includeRecorder ? `UI recorder (${recCount} events)` : "no UI recorder",
       `${state.bugReport.recentErrors.length} recent JS error(s)`,
     ];
-    el.textContent = `Report will include ${bits.join(", ")}.`;
+    let deliveryNote = "Saved locally.";
+    if (delivery === "github") deliveryNote = "Delivered via GitHub Issue.";
+    else if (delivery === "both") deliveryNote = "Saved locally + GitHub Issue.";
+    el.textContent = `Report will include ${bits.join(", ")}. ${deliveryNote}`;
+  }
+
+  async function fetchKnownBugs() {
+    const sel = $("bugKnownIssue");
+    const deliverySel = $("bugDeliveryMethod");
+    const deliveryHint = $("bugDeliveryHint");
+    if (!sel) return;
+    try {
+      const r = await fetch(bp("/api/workbench/known-bugs"), { cache: "no-store" });
+      if (!r.ok) return;
+      const data = await r.json();
+      // Populate known-bug dropdown
+      while (sel.options.length > 1) sel.remove(1);
+      for (const bug of (data.bugs || [])) {
+        const opt = document.createElement("option");
+        opt.value = bug.id;
+        opt.textContent = `${bug.id} [${bug.severity}] ${bug.title}`;
+        sel.appendChild(opt);
+      }
+      // Update delivery method options based on server config
+      if (deliverySel && data.delivery_methods) {
+        const ghAvail = !!data.delivery_methods.github;
+        for (const opt of deliverySel.options) {
+          if (opt.value === "github") {
+            opt.disabled = !ghAvail;
+            opt.textContent = ghAvail ? "GitHub Issue" : "GitHub Issue (not configured)";
+          } else if (opt.value === "both") {
+            opt.disabled = !ghAvail;
+            opt.textContent = ghAvail ? "Local + GitHub Issue" : "Local + GitHub Issue (not configured)";
+          }
+        }
+        if (data.default_delivery && !deliverySel.value) {
+          deliverySel.value = data.default_delivery;
+        }
+        if (deliveryHint) {
+          deliveryHint.textContent = ghAvail
+            ? "GitHub delivery is configured and ready."
+            : "Set BUG_REPORT_GITHUB_REPO and BUG_REPORT_GITHUB_TOKEN on the server to enable GitHub delivery.";
+        }
+      }
+    } catch (_) { /* silent — dropdown stays with default option */ }
   }
 
   function openBugReportModal() {
     $("bugReportModal")?.classList.remove("hidden");
     $("bugReportStatus").textContent = "";
+    fetchKnownBugs();
     updateBugReportPreview();
     $("bugDescription")?.focus();
   }
@@ -468,10 +514,14 @@
     }
     const includeSession = !!$("bugIncludeSession")?.checked;
     const includeRecorder = !!$("bugIncludeRecorder")?.checked;
+    const knownBugId = String($("bugKnownIssue")?.value || "");
+    const deliveryMethod = String($("bugDeliveryMethod")?.value || "local");
     const payload = {
       category: String($("bugCategory")?.value || "other"),
       severity: String($("bugSeverity")?.value || "major"),
       description,
+      known_bug_id: knownBugId,
+      delivery_method: deliveryMethod,
       metadata: includeSession ? getBugReportMetadata() : {
         url: window.location.href,
         userAgent: navigator.userAgent,
@@ -485,7 +535,7 @@
     const btn = $("bugReportSubmitBtn");
     if (btn) btn.disabled = true;
     try {
-      const r = await fetch("/api/workbench/report-bug", {
+      const r = await fetch(bp("/api/workbench/report-bug"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -493,9 +543,15 @@
       const j = await r.json();
       if (!r.ok) throw new Error(String(j.error || "bug report failed"));
       statusEl.className = "small ok";
-      statusEl.textContent = `Saved bug report ${j.report_id}`;
+      let msg = `Saved bug report ${j.report_id}`;
+      if (j.github_issue && j.github_issue.issue_url) {
+        msg += ` — GitHub #${j.github_issue.issue_number}`;
+      } else if (j.github_issue_error) {
+        msg += ` (GitHub delivery failed — saved locally)`;
+      }
+      statusEl.textContent = msg;
       $("bugDescription").value = "";
-      setTimeout(closeBugReportModal, 600);
+      setTimeout(closeBugReportModal, 1200);
     } catch (err) {
       statusEl.className = "small err";
       statusEl.textContent = `Bug report failed: ${String(err.message || err)}`;
@@ -6637,6 +6693,7 @@
     $("bugReportSubmitBtn")?.addEventListener("click", submitBugReport);
     $("bugIncludeSession")?.addEventListener("change", updateBugReportPreview);
     $("bugIncludeRecorder")?.addEventListener("change", updateBugReportPreview);
+    $("bugDeliveryMethod")?.addEventListener("change", updateBugReportPreview);
     $("bugReportModal")?.addEventListener("click", (ev) => {
       if (ev.target === $("bugReportModal")) closeBugReportModal();
     });

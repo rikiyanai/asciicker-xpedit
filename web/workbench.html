@@ -170,8 +170,15 @@
         <h3 style="margin:0;">Report Bug</h3>
         <button id="bugReportCloseBtn">Close</button>
       </div>
-      <div class="small bug-report-copy">This saves a structured bug report locally with useful workbench metadata. GitHub/email wiring can be added later, but this already gives us something actionable.</div>
-      <div class="row">
+      <div class="small bug-report-copy">File a structured bug report with workbench metadata. Reports are always saved locally; if GitHub delivery is configured, an issue is created automatically.</div>
+      <div>
+        <label for="bugKnownIssue">Known Issue (optional)</label>
+        <select id="bugKnownIssue" style="width:100%;">
+          <option value="">— new issue / not listed —</option>
+        </select>
+        <div id="bugKnownIssueHint" class="small" style="margin-top:2px;">Select a known bug if this matches an existing issue, or leave blank for a new report.</div>
+      </div>
+      <div class="row" style="margin-top:8px;">
         <div><label for="bugCategory">Category</label><select id="bugCategory">
           <option value="bundle_workflow">Bundle workflow</option>
           <option value="whole_sheet_editor">Whole-sheet editor</option>
@@ -193,6 +200,15 @@
       <div class="row small" style="gap:16px; flex-wrap:wrap;">
         <label class="inline"><input id="bugIncludeSession" type="checkbox" checked> Include session / bundle / runtime state</label>
         <label class="inline"><input id="bugIncludeRecorder" type="checkbox" checked> Include UI recorder data if available</label>
+      </div>
+      <div style="margin-top:8px;">
+        <label for="bugDeliveryMethod">Delivery</label>
+        <select id="bugDeliveryMethod">
+          <option value="local">Save locally only</option>
+          <option value="github" disabled>GitHub Issue (not configured)</option>
+          <option value="both" disabled>Local + GitHub Issue (not configured)</option>
+        </select>
+        <div id="bugDeliveryHint" class="small" style="margin-top:2px;">Set BUG_REPORT_GITHUB_REPO and BUG_REPORT_GITHUB_TOKEN on the server to enable GitHub delivery.</div>
       </div>
       <div id="bugReportPreview" class="small bug-report-preview">Report will include URL, session state, bundle status, runtime status, browser info, and optional recorder data.</div>
       <div class="row" style="justify-content:flex-end;">

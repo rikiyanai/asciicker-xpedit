@@ -54,6 +54,18 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now asciicker-xpedit
 ```
 
+## Bug report delivery
+
+By default, bug reports are saved locally under `data/bug_reports/`. To enable GitHub Issue creation:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `BUG_REPORT_DELIVERY` | `local` (default), `github`, or `both` | `both` |
+| `BUG_REPORT_GITHUB_REPO` | GitHub repo in `owner/repo` format | `myorg/asciicker-pipeline-v2` |
+| `BUG_REPORT_GITHUB_TOKEN` | GitHub PAT with `repo` or `issues:write` scope | `ghp_...` |
+
+When `BUG_REPORT_DELIVERY` is `both`, every bug report is saved locally AND posted as a GitHub Issue. When `github`, local save still happens as a durable fallback. The token is never exposed to the browser.
+
 ## Runtime payload
 
 The `runtime/termpp-skin-lab-static/` directory must be present. It is committed in the repo and should not be excluded or downloaded separately.

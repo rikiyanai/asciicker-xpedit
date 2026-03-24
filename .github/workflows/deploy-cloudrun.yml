@@ -99,6 +99,10 @@ jobs:
           env_vars: |
             PIPELINE_BASE_PATH=/xpedit
             PIPELINE_HOST=0.0.0.0
+            BUG_REPORT_DELIVERY=github
+            BUG_REPORT_GITHUB_REPO=rikiyanai/asciicker-xpedit
+          secrets: |
+            BUG_REPORT_GITHUB_TOKEN=bug-report-github-token:latest
 
   # ── Job 3: Post-deploy smoke test ──
   smoke-test:

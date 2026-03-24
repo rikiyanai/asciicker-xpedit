@@ -518,19 +518,23 @@ function _onKeyDown(e) {
       e.preventDefault();
       break;
     case 's':
-      _switchTool('select');
-      e.preventDefault();
+      if (!e.ctrlKey && !e.metaKey) {
+        _switchTool('select');
+        e.preventDefault();
+      }
       break;
     case 'z':
       if (e.ctrlKey || e.metaKey) {
         if (editorState.onUndo) editorState.onUndo();
         e.preventDefault();
+        e.stopPropagation();
       }
       break;
     case 'y':
       if (e.ctrlKey || e.metaKey) {
         if (editorState.onRedo) editorState.onRedo();
         e.preventDefault();
+        e.stopPropagation();
       }
       break;
   }

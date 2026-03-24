@@ -342,6 +342,7 @@ async function mount({ container, gridCols, gridRows, layers, layerNames, active
   editorState.rectTool = new RectToolAdapter();
   editorState.fillTool = new FillToolAdapter();
   editorState.selectTool = new SelectToolAdapter();
+  canvas.setSelectionTool(editorState.selectTool);
   for (const t of [editorState.lineTool, editorState.rectTool, editorState.fillTool]) {
     t.setGlyph(editorState.drawGlyph);
     t.setColors(editorState.drawFg, editorState.drawBg);

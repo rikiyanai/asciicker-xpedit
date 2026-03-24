@@ -1,7 +1,7 @@
 # M2 Capability Canon Inventory
 
 **Created:** 2026-03-23
-**Branch:** master @ 85ff3b8
+**Branch:** master @ bf0a7cf
 **Purpose:** Canonical answer to "what user-reachable workbench behaviors should be possible right now?" — distinguishing intent, code wiring, and verified proof.
 **Supersedes:** No prior canonical capability inventory existed. This doc synthesizes claims from the full doc set and measures them against code and failure-log reality.
 
@@ -243,11 +243,11 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 | **XP import → edit → save → export → runtime** | T6 → edit → T3 → T4 → T7 | **PROVEN** | M1 full_recreation PASS, 7/7 edge workflows |
 | **Bundle: apply → per-action edit → save → test** | T1 → T2 → edit → T3 → T7 | **PROVEN** | M1 action_tab_hydration + partial_bundle_gating PASS |
 | **PNG upload → analyze → convert → session** | U1 → U2 → U3 → T3 | **PROVEN (structural-contract only, API-driven)** | M2-A 9/9 structural gates PASS via fetch() — does NOT prove UI button workflow |
-| **PNG → source panel → manual assembly → grid → WS → export** | U1 → S12 → S7 → D1 → W2 → T3 → T4 | **PARTIAL** | U1→S12→S7→D1 PROVEN (source-to-grid runner); W2→T3→T4 still WIRED (WS tools unverified) |
+| **PNG → source panel → manual assembly → grid → WS → export** | U1 → S12 → S7 → D1 → W2 → T3 → T4 | **PARTIAL** | U1→S12→S7→D1 PROVEN; W2 and WS entry/editing now PROVEN; T3→T4 proven separately. No single committed end-to-end run yet. |
 | **Source panel → manual box draw → drag to grid** | S2 → S7 → D1 | **PROVEN** | Source-to-grid runner: 13/13 PASS (root + /xpedit). D1 drag, D2/C2 context menu, G1 grid select all verified. |
-| **Whole-sheet correction → save → export** | W1 → W2-W8 → T3 → T4 | **NOT PROVEN** | WS tools WIRED, save/export PROVEN separately |
+| **Whole-sheet correction → save → export** | W1 → W2-W8 → T3 → T4 | **PARTIAL** | W1 and W2-W8 are now PROVEN across Slice 1 and Slice 3; T3/T4 are proven separately. No single committed integrated workflow run yet. |
 | **Semantic editing (region-based)** | Dict lookup → W2 → T3 → T4 | **NOT PROVEN** | M2-E scope, dictionaries exist, no verifier |
-| **Base-path parity** | Any workflow at /xpedit | **PROVEN (structural-contract + M2-B UI)** | M2-A structural-contract PASS at both root + /xpedit; M2-B source-panel UI-driven PASS at both; base-path verification: 0 regressions |
+| **Base-path parity** | Any workflow at /xpedit | **PROVEN (structural-contract + M2-B/C UI)** | M2-A structural-contract PASS at both root + /xpedit; M2-B source-panel + source-to-grid PASS at both; M2-C whole-sheet slices PASS at both; no `/xpedit`-specific regressions in committed proof lanes |
 
 ---
 
@@ -274,7 +274,7 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 | M1-closed | 15 | 8 | 7 | 0 |
 | M2-A (structural baseline) | 2 | 2 | 0 | 0 |
 | M2-B (source-panel assembly) | 13 | 10 | 3 | 0 |
-| M2-C (WS primary) | 20 | 0 | 13 | 7 (3 PLANNED, 1 BLOCKED, 2 DEFERRED, 1 PARTIAL) |
+| M2-C (WS primary) | 20 | 14 | 2 | 4 (1 BLOCKED, 2 DEFERRED, 1 PARTIAL) |
 | M2-D (full SAR coverage) | 45 | 0 | 43 | 2 (1 PARTIAL, 1 PLANNED) |
 | M2-E (semantic dicts) | 0 | 0 | 0 | 0 (workflow-level, not action-level) |
 | M2-F (analyze assistive) | 1 | 0 | 1 | 0 |
@@ -405,7 +405,7 @@ The source panel has 7 of 19 actions PROVEN via committed M2-B runner (`run_sour
 | F4: Context Menu (C1-C9) | 9 | **READY** | All are right-click → menu-item click with known DOM IDs |
 | F5: Source-to-Grid (D1-D2) | 2 | **PROVEN** | D1 drag and D2/C2 context menu verified by source-to-grid runner (13/13 PASS root + /xpedit) |
 | F6: Grid Panel (G1-G14) | 14 | **MOSTLY READY** | G1 click, G2 shift-click, G14 drag-select need canvas-coordinate patterns; rest are button clicks |
-| F7: Whole-Sheet Editor (W1-W18) | 18 | **PARTIALLY PROVEN** | W2/W3/W5/W8/W9 PROVEN via fidelity rerun. Painting tools use canvas-coordinate gestures (proven pattern). W12-W14 layer ops WIRED (code at ws-init:1168-1204). W4/W6/W7 need recipe or standalone runner. W1 needs user-gesture definition. |
+| F7: Whole-Sheet Editor (W1-W18) | 18 | **PARTIALLY PROVEN** | W1-W14 are now PROVEN across fidelity, layer, and WS tools runners. Remaining gaps are W15 BLOCKED, W16-W17 DEFERRED, and W18 PARTIAL. Registry entries are still not populated for the W-family. |
 | F8: Jitter/Alignment (J1-J6) | 6 | **READY** | All are button clicks with known DOM IDs |
 | F9: Lifecycle (L1-L3) | 3 | **READY** | All are button clicks or keyboard shortcuts |
 | F10: Runtime Dock (R1-R7) | 7 | **READY** | All are button clicks; iframe observation needs design |

@@ -2,8 +2,8 @@
 
 **Authority:** This is one of the 3 canonical authority docs for this repo. See Section 6 below.
 
-**Last updated:** 2026-03-23
-**Branch:** master @ 85ff3b8
+**Last updated:** 2026-03-24
+**Branch:** master @ bf0a7cf
 
 ---
 
@@ -51,12 +51,12 @@ Execute in dependency order. M2-B and M2-C may run in parallel after M2-A.
 
 ## 3. Current Priority Stack
 
-**Last reviewed:** 2026-03-23
+**Last reviewed:** 2026-03-24
 
-1. **M2-B source panel + grid assembly** — committed proof: source-panel 10/10 PASS (`5c67ef2`), source-to-grid 13/13 PASS (`380edee`) at root + /xpedit. D1/D2/G1 PROVEN. Next: M2-C whole-sheet editor.
-2. **M2-C whole-sheet editor verification** — 14/18 W-actions PROVEN. Only W15 (SelectTool, blocked PB-06), W16 (OvalTool, deferred), W17 (TextTool, deferred), W18 (undo/redo, partial) remain.
-3. **PB-01/02/03 undo gaps** in source panel anchor ops — small fixes that affect M2-D completeness
-4. **PB-06 SelectTool wiring** — blocked M2-C.2 feature, needed for whole-sheet editor parity
+1. **MVP deployment to `rikiworld.com/xpedit`** — base-path hosting is proven locally; the missing piece is real server deployment automation plus post-deploy smoke verification.
+2. **M2-D full SAR workflow coverage** — M2-B and M2-C are established. Remaining WIRED actions outside the whole-sheet blocked/deferred set need committed proof.
+3. **PB-01/02/03 undo gaps** in source panel anchor ops — small fixes that affect M2-D completeness.
+4. **PB-06 SelectTool wiring + W18 undo/redo** — the remaining whole-sheet product gaps if parity beyond the current 14/18 proven set is needed.
 
 This stack is execution priority, not timeless truth. Re-evaluate when any sub-phase status changes.
 

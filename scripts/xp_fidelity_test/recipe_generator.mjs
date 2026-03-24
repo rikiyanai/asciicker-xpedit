@@ -244,6 +244,56 @@ function recipeBugReportDismiss() {
   };
 }
 
+/**
+ * Recipe 7: Source Panel Mode Cycle
+ *
+ * (Assumes a source image is loaded from a prior recipe.)
+ * Cycle through all 5 source modes, then find sprites.
+ *
+ * Exercises: F3 (S2, S3, S4, S5, S1, S12)
+ */
+function recipeSourcePanelModeCycle() {
+  return {
+    id: 'source_panel_mode_cycle',
+    name: 'Source Panel Mode Cycle: draw_box → row → col → cut_v → select → find sprites',
+    family: 'F3',
+    preconditions: {
+      sourceImageLoaded: true,
+    },
+    steps: [
+      step('S2'),
+      step('S3'),
+      step('S4'),
+      step('S5'),
+      step('S1'),
+      step('S12'),
+    ],
+  };
+}
+
+/**
+ * Recipe 8: Grid Panel Frame Management
+ *
+ * (Assumes a session exists with at least one row selected.)
+ * Add frame → delete it.
+ *
+ * Exercises: F6 (G5, G6)
+ */
+function recipeGridFrameManagement() {
+  return {
+    id: 'grid_frame_management',
+    name: 'Grid Panel: add frame → delete selected',
+    family: 'F6',
+    preconditions: {
+      sessionId: { op: 'truthy', value: null },
+    },
+    steps: [
+      step('G5'),
+      step('G6'),
+    ],
+  };
+}
+
 // ---------------------------------------------------------------------------
 // D. Recipe catalog
 // ---------------------------------------------------------------------------
@@ -263,6 +313,8 @@ export function generateRecipes(opts = {}) {
     recipeRuntimeDockCycle(),
     recipeUndoRedoSmoke(),
     recipeBugReportDismiss(),
+    recipeSourcePanelModeCycle(),
+    recipeGridFrameManagement(),
   ];
 }
 

@@ -49,8 +49,8 @@
       "name": "Whole-Sheet Editor",
       "generatorReadiness": "NEEDS_DESIGN",
       "canonActionCount": 18,
-      "registryActionCount": 0,
-      "blockingIssue": "15/18 PROVEN: W2/W3/W5/W8/W9 (fidelity), W10-W14 (layer), W1/W4/W6/W7/W18 (tools). W15 WIRED (activation only, visualization not connected). W16/W17 DEFERRED. Registry entries not yet populated."
+      "registryActionCount": 18,
+      "blockingIssue": "W12/W13 READY (stable header buttons). 13/18 NEEDS_DESIGN (canvas/keyboard/dynamic-row gesture abstractions). W15 WIRED (visualization gap). W16/W17 DEFERRED. W18 PROVEN but deferred (dual-button schema gap)."
     },
     "F8": {
       "name": "Jitter/Alignment",
@@ -1265,6 +1265,359 @@
       "preconditions": {},
       "postconditions": {},
       "blockers": [],
+      "paramBindings": []
+    },
+    "W1": {
+      "id": "W1",
+      "name": "Focus whole-sheet",
+      "family": "F7",
+      "status": "PROVEN",
+      "m2Scope": "M2-C",
+      "generatorReadiness": "NEEDS_DESIGN",
+      "acceptanceEligible": true,
+      "selectorKey": null,
+      "gestureType": "canvasClick",
+      "preconditions": {
+        "selectedRow": {
+          "op": "gte",
+          "value": 0
+        }
+      },
+      "postconditions": {
+        "wholeSheetMounted": true
+      },
+      "blockers": [
+        "Requires dblclick on grid frame cell — canvas gesture not in runner"
+      ],
+      "paramBindings": []
+    },
+    "W2": {
+      "id": "W2",
+      "name": "Paint cell (Cell tool)",
+      "family": "F7",
+      "status": "PROVEN",
+      "m2Scope": "M2-C",
+      "generatorReadiness": "NEEDS_DESIGN",
+      "acceptanceEligible": true,
+      "selectorKey": null,
+      "gestureType": "canvasClick",
+      "preconditions": {
+        "wholeSheetMounted": true
+      },
+      "postconditions": {},
+      "blockers": [
+        "Multi-step action: (1) click wsToolCell to activate tool, (2) canvasClick on WS canvas to paint. No single DOM trigger."
+      ],
+      "paramBindings": []
+    },
+    "W3": {
+      "id": "W3",
+      "name": "Eyedropper",
+      "family": "F7",
+      "status": "PROVEN",
+      "m2Scope": "M2-C",
+      "generatorReadiness": "NEEDS_DESIGN",
+      "acceptanceEligible": true,
+      "selectorKey": null,
+      "gestureType": "canvasClick",
+      "preconditions": {
+        "wholeSheetMounted": true
+      },
+      "postconditions": {},
+      "blockers": [
+        "Multi-step action: (1) click wsToolEyedropper to activate, (2) canvasClick to sample. No single DOM trigger."
+      ],
+      "paramBindings": []
+    },
+    "W4": {
+      "id": "W4",
+      "name": "Erase cell",
+      "family": "F7",
+      "status": "PROVEN",
+      "m2Scope": "M2-C",
+      "generatorReadiness": "NEEDS_DESIGN",
+      "acceptanceEligible": true,
+      "selectorKey": null,
+      "gestureType": "canvasClick",
+      "preconditions": {
+        "wholeSheetMounted": true
+      },
+      "postconditions": {},
+      "blockers": [
+        "Multi-step action: (1) click wsToolErase to activate, (2) canvasClick to erase. No single DOM trigger."
+      ],
+      "paramBindings": []
+    },
+    "W5": {
+      "id": "W5",
+      "name": "Erase drag",
+      "family": "F7",
+      "status": "PROVEN",
+      "m2Scope": "M2-C",
+      "generatorReadiness": "NEEDS_DESIGN",
+      "acceptanceEligible": true,
+      "selectorKey": null,
+      "gestureType": "canvasDrag",
+      "preconditions": {
+        "wholeSheetMounted": true
+      },
+      "postconditions": {},
+      "blockers": [
+        "Multi-step action: (1) click wsToolErase to activate, (2) canvasDrag to erase area. No single DOM trigger."
+      ],
+      "paramBindings": []
+    },
+    "W6": {
+      "id": "W6",
+      "name": "Flood fill",
+      "family": "F7",
+      "status": "PROVEN",
+      "m2Scope": "M2-C",
+      "generatorReadiness": "NEEDS_DESIGN",
+      "acceptanceEligible": true,
+      "selectorKey": null,
+      "gestureType": "canvasClick",
+      "preconditions": {
+        "wholeSheetMounted": true
+      },
+      "postconditions": {},
+      "blockers": [
+        "Multi-step action: (1) click wsToolFill to activate, (2) canvasClick to fill. No single DOM trigger."
+      ],
+      "paramBindings": []
+    },
+    "W7": {
+      "id": "W7",
+      "name": "Rectangle tool",
+      "family": "F7",
+      "status": "PROVEN",
+      "m2Scope": "M2-C",
+      "generatorReadiness": "NEEDS_DESIGN",
+      "acceptanceEligible": true,
+      "selectorKey": null,
+      "gestureType": "canvasDrag",
+      "preconditions": {
+        "wholeSheetMounted": true
+      },
+      "postconditions": {},
+      "blockers": [
+        "Multi-step action: (1) click wsToolRect to activate, (2) canvasDrag to draw rect. No single DOM trigger."
+      ],
+      "paramBindings": []
+    },
+    "W8": {
+      "id": "W8",
+      "name": "Line tool",
+      "family": "F7",
+      "status": "PROVEN",
+      "m2Scope": "M2-C",
+      "generatorReadiness": "NEEDS_DESIGN",
+      "acceptanceEligible": true,
+      "selectorKey": null,
+      "gestureType": "canvasDrag",
+      "preconditions": {
+        "wholeSheetMounted": true
+      },
+      "postconditions": {},
+      "blockers": [
+        "Multi-step action: (1) click wsToolLine to activate, (2) canvasDrag to draw line. No single DOM trigger."
+      ],
+      "paramBindings": []
+    },
+    "W9": {
+      "id": "W9",
+      "name": "Switch tool (keyboard)",
+      "family": "F7",
+      "status": "PROVEN",
+      "m2Scope": "M2-C",
+      "generatorReadiness": "NEEDS_DESIGN",
+      "acceptanceEligible": true,
+      "selectorKey": null,
+      "gestureType": "keypress",
+      "preconditions": {
+        "wholeSheetMounted": true
+      },
+      "postconditions": {},
+      "blockers": [
+        "Keyboard shortcuts C/E/D/L/R/I/S — keypress gesture not in runner"
+      ],
+      "paramBindings": []
+    },
+    "W10": {
+      "id": "W10",
+      "name": "Switch layer",
+      "family": "F7",
+      "status": "PROVEN",
+      "m2Scope": "M2-C",
+      "generatorReadiness": "NEEDS_DESIGN",
+      "acceptanceEligible": true,
+      "selectorKey": null,
+      "gestureType": "click",
+      "preconditions": {
+        "wholeSheetMounted": true
+      },
+      "postconditions": {},
+      "blockers": [
+        "No single DOM trigger — target is a dynamic per-layer-row button inside wsLayersPanel. Needs parameterized selector model for layer index."
+      ],
+      "paramBindings": []
+    },
+    "W11": {
+      "id": "W11",
+      "name": "Toggle layer visibility",
+      "family": "F7",
+      "status": "PROVEN",
+      "m2Scope": "M2-C",
+      "generatorReadiness": "NEEDS_DESIGN",
+      "acceptanceEligible": true,
+      "selectorKey": null,
+      "gestureType": "check",
+      "preconditions": {
+        "wholeSheetMounted": true
+      },
+      "postconditions": {},
+      "blockers": [
+        "No single DOM trigger — target is a dynamic per-layer-row checkbox inside wsLayersPanel. Needs parameterized selector model for layer index."
+      ],
+      "paramBindings": []
+    },
+    "W12": {
+      "id": "W12",
+      "name": "Add layer",
+      "family": "F7",
+      "status": "PROVEN",
+      "m2Scope": "M2-C",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "wsLayerAddBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "wholeSheetMounted": true
+      },
+      "postconditions": {
+        "layerCount": {
+          "op": "changed",
+          "value": null
+        }
+      },
+      "blockers": [],
+      "paramBindings": []
+    },
+    "W13": {
+      "id": "W13",
+      "name": "Delete layer",
+      "family": "F7",
+      "status": "PROVEN",
+      "m2Scope": "M2-C",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "wsLayerDelBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "wholeSheetMounted": true,
+        "layerCount": {
+          "op": "gt",
+          "value": 1
+        }
+      },
+      "postconditions": {
+        "layerCount": {
+          "op": "changed",
+          "value": null
+        }
+      },
+      "blockers": [],
+      "paramBindings": []
+    },
+    "W14": {
+      "id": "W14",
+      "name": "Move layer",
+      "family": "F7",
+      "status": "PROVEN",
+      "m2Scope": "M2-C",
+      "generatorReadiness": "NEEDS_DESIGN",
+      "acceptanceEligible": true,
+      "selectorKey": null,
+      "gestureType": "click",
+      "preconditions": {
+        "wholeSheetMounted": true
+      },
+      "postconditions": {},
+      "blockers": [
+        "No single DOM trigger — target is dynamic per-layer-row up/down buttons inside wsLayersPanel. Needs parameterized selector model."
+      ],
+      "paramBindings": []
+    },
+    "W15": {
+      "id": "W15",
+      "name": "Select tool",
+      "family": "F7",
+      "status": "WIRED",
+      "m2Scope": "M2-C",
+      "generatorReadiness": "NEEDS_DESIGN",
+      "acceptanceEligible": true,
+      "selectorKey": null,
+      "gestureType": "canvasDrag",
+      "preconditions": {
+        "wholeSheetMounted": true
+      },
+      "postconditions": {},
+      "blockers": [
+        "Multi-step action: (1) click wsToolSelect to activate, (2) canvasDrag to create selection. No single DOM trigger. Also: canvas.setSelectionTool() not called — visualization gap (Task 5 fix)."
+      ],
+      "paramBindings": []
+    },
+    "W16": {
+      "id": "W16",
+      "name": "Oval tool",
+      "family": "F7",
+      "status": "DEFERRED",
+      "m2Scope": "M2-C",
+      "generatorReadiness": "DEFERRED",
+      "acceptanceEligible": false,
+      "selectorKey": null,
+      "gestureType": "canvasDrag",
+      "preconditions": {},
+      "postconditions": {},
+      "blockers": [
+        "OvalTool code exists on disk but not wired (PB-05)"
+      ],
+      "paramBindings": []
+    },
+    "W17": {
+      "id": "W17",
+      "name": "Text tool",
+      "family": "F7",
+      "status": "DEFERRED",
+      "m2Scope": "M2-C",
+      "generatorReadiness": "DEFERRED",
+      "acceptanceEligible": false,
+      "selectorKey": null,
+      "gestureType": "keypress",
+      "preconditions": {},
+      "postconditions": {},
+      "blockers": [
+        "TextTool code exists on disk but not wired (PB-07)"
+      ],
+      "paramBindings": []
+    },
+    "W18": {
+      "id": "W18",
+      "name": "Per-stroke undo/redo",
+      "family": "F7",
+      "status": "PROVEN",
+      "m2Scope": "M2-C",
+      "generatorReadiness": "DEFERRED",
+      "acceptanceEligible": true,
+      "selectorKey": null,
+      "gestureType": "click",
+      "preconditions": {
+        "wholeSheetMounted": true
+      },
+      "postconditions": {},
+      "blockers": [
+        "No single DOM trigger — dual-button action (wsUndoBtn + wsRedoBtn). Same schema gap as G3/G4. Code fully wired, proof exists."
+      ],
       "paramBindings": []
     }
   }

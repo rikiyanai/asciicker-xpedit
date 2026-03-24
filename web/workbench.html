@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Pipeline V2 Workbench</title>
+  <title>ASCIICKER XPEdit</title>
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/rexpaint-editor/styles.css">
 </head>
@@ -13,14 +13,26 @@
     <div class="row" style="justify-content:space-between; align-items:flex-start; gap:12px;">
       <div>
         <div class="alpha-banner-title">PRE-ALPHA, PLEASE REPORT ANY BUGS</div>
-        <div class="small alpha-banner-copy">Workbench and the embedded Whole-Sheet XP Editor are still under active development. Expect rough edges. If something feels confusing, slow, or broken, treat that as a bug.</div>
+        <div class="small alpha-banner-copy">Workbench and the embedded XPEdit are still under active development. Expect rough edges. If something feels confusing, slow, or broken, treat that as a bug.</div>
       </div>
       <button id="reportBugBtn" class="danger">Report Bug</button>
     </div>
   </div>
-  <h1>Workbench <span id="sessionDirtyBadge" class="small" style="margin-left:8px; font-weight:normal;">Session: idle</span></h1>
+  <h1>Asciicker XPEdit <span id="sessionDirtyBadge" class="small" style="margin-left:8px; font-weight:normal;">Session: idle</span></h1>
+
+  <div id="firstStepsGuide" class="panel" style="border-left: 3px solid var(--accent);">
+    <h3 style="margin-bottom:8px; color:var(--accent);">Getting Started</h3>
+    <ol style="margin:0; padding-left:2ch; line-height:1.8; color:var(--fg);">
+      <li><strong>Choose a template</strong> &mdash; select <em>Player Skin (Idle Only)</em> or <em>Player Skin (Full Bundle)</em>, then click <strong>Apply Template</strong>.</li>
+      <li><strong>Add your art</strong> &mdash; click <strong>Upload PNG</strong> to import a sprite sheet, or <strong>Import XP</strong> to load a REXPaint file.</li>
+      <li><strong>Edit</strong> &mdash; click <strong>Focus Whole-Sheet</strong> or double-click any frame tile to open the XPEdit cell editor.</li>
+      <li><strong>Test</strong> &mdash; click <strong>Test This Skin</strong> to preview your skin running in the game engine below.</li>
+      <li><strong>Export</strong> &mdash; click <strong>Save</strong> to store your session, or <strong>Export XP</strong> to download the finished .xp file.</li>
+    </ol>
+  </div>
+
   <div id="runtimePreflightBanner" class="panel runtime-preflight-banner hidden">
-    <div class="runtime-preflight-title">Runtime preflight failed for Skin Test Dock</div>
+    <div class="runtime-preflight-title">Runtime preflight failed for Skin Test dock(Term++ Skin Equiv on asciid)</div>
     <div id="runtimePreflightBannerText" class="small warn">Checking runtime bundle...</div>
   </div>
 
@@ -155,7 +167,7 @@
   </div>
 
   <div class="panel hidden" id="wholeSheetPanel">
-    <h3>Whole-Sheet XP Editor <span id="wholeSheetStatus" class="small" style="font-weight:normal;">not loaded</span></h3>
+    <h3>XPEdit <span id="wholeSheetStatus" class="small" style="font-weight:normal;">not loaded</span></h3>
     <div class="row" style="justify-content:space-between; align-items:center; gap:12px;">
       <div class="alpha-inline-banner">PRE-ALPHA, PLEASE REPORT ANY BUGS</div>
       <button id="reportBugWholeSheetBtn">Report Bug</button>
@@ -296,7 +308,7 @@
   </div>
 
   <div class="panel" id="webbuildDockPanel">
-    <h3>Skin Test Dock (Flat Arena)</h3>
+    <h3>Skin Test dock(Term++ Skin Equiv on asciid)</h3>
     <div class="row">
       <button id="webbuildQuickTestBtn" class="success" disabled>Test This Skin</button>
       <button id="webbuildApplyInPlaceBtn" class="hidden" disabled title="Requires an active session and a ready webbuild runtime">Apply In Place</button>

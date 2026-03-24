@@ -722,8 +722,8 @@
     banner.classList.remove("hidden");
     const issues = runtimePreflightIssueLines(preflight);
     text.textContent = issues.length
-      ? `Skin Test Dock is disabled until runtime bundle issues are fixed: ${issues.join("; ")}`
-      : "Skin Test Dock is disabled because runtime preflight failed.";
+      ? `Skin Test dock is disabled until runtime bundle issues are fixed: ${issues.join("; ")}`
+      : "Skin Test dock is disabled because runtime preflight failed.";
   }
 
   async function fetchRuntimePreflight() {

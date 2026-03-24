@@ -60,6 +60,12 @@ Execute in dependency order. M2-B and M2-C may run in parallel after M2-A.
 
 This stack is execution priority, not timeless truth. Re-evaluate when any sub-phase status changes.
 
+### Active Bugs
+
+| ID | Summary | Status | Notes |
+|----|---------|--------|-------|
+| BUG-01 | Grid toggle overlay is incorrect — uses simple lines instead of cross marks at intersections; grid size is not user-customizable | OPEN | Original REXPaint grid toggle renders cross marks (`+`) at cell intersections and allows the user to change grid cell size. Current implementation is a simplified approximation that does not match the original behavior. |
+
 ---
 
 ## 4. Acceptance vs Diagnostic Boundary

@@ -18,17 +18,17 @@
 }
 
 .modal-content {
-  background: #1e1e1e;
-  border: 2px solid #444;
-  border-radius: 8px;
+  background: var(--panel, #161616);
+  border: 2px solid var(--border, #393939);
+  border-radius: 0;
   width: 90%;
   height: 90%;
   max-width: 1400px;
   max-height: 900px;
   display: flex;
   flex-direction: column;
-  color: #e0e0e0;
-  font-family: 'Courier New', monospace;
+  color: var(--fg, #ffffff);
+  font-family: 'DepartureMono-Regular', Consolas, monaco, monospace;
 }
 
 .modal-header {
@@ -36,20 +36,20 @@
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  border-bottom: 1px solid #444;
-  background: #2d2d2d;
+  border-bottom: 1px solid var(--border, #393939);
+  background: var(--border, #393939);
 }
 
 .modal-header h2 {
   margin: 0;
   font-size: 18px;
-  color: #ffb86c;
+  color: var(--accent, #f1c21b);
 }
 
 .close-btn {
   background: none;
   border: none;
-  color: #e0e0e0;
+  color: var(--fg, #ffffff);
   font-size: 24px;
   cursor: pointer;
   padding: 0;
@@ -80,7 +80,7 @@
 .editor-sidebar {
   width: 200px;
   background: #252525;
-  border-right: 1px solid #444;
+  border-right: 1px solid var(--border, #393939);
   overflow-y: auto;
   padding: 8px;
 }
@@ -92,10 +92,10 @@
 .sidebar-section h3 {
   margin: 0 0 8px 0;
   font-size: 12px;
-  color: #ffb86c;
+  color: var(--accent, #f1c21b);
   text-transform: uppercase;
   padding: 4px 0;
-  border-bottom: 1px solid #444;
+  border-bottom: 1px solid var(--border, #393939);
 }
 
 .editor-canvas-area {
@@ -107,7 +107,7 @@
 }
 
 #rexpaintCanvas {
-  border: 1px solid #444;
+  border: 1px solid var(--border, #393939);
   background: #000;
   flex: 1;
   image-rendering: pixelated;
@@ -131,7 +131,7 @@
   gap: 2px;
   background: #222;
   padding: 4px;
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 .glyph-button {
@@ -144,11 +144,11 @@
   border: 1px solid #555;
   cursor: pointer;
   font-size: 9px;
-  font-family: monospace;
+  font-family: 'DepartureMono-Regular', Consolas, monaco, monospace;
 }
 
 .glyph-button:hover {
-  background: #444;
+  background: var(--border, #393939);
   border-color: #777;
 }
 
@@ -168,19 +168,19 @@
 .toggle-btn {
   width: 32px;
   height: 32px;
-  border: 1px solid #444;
-  background: #1e1e1e;
-  color: #ffb86c;
+  border: 1px solid var(--border, #393939);
+  background: var(--panel, #161616);
+  color: var(--accent, #f1c21b);
   cursor: pointer;
   font-weight: bold;
   font-size: 14px;
-  border-radius: 4px;
+  border-radius: 0;
   transition: all 0.2s ease;
 }
 
 .toggle-btn.active {
   background: #2e2e2e;
-  border-color: #ffb86c;
+  border-color: var(--accent, #f1c21b);
 }
 
 .toggle-btn:hover {
@@ -191,10 +191,10 @@
   display: flex;
   gap: 20px;
   padding: 8px 12px;
-  border-top: 1px solid #444;
-  background: #1e1e1e;
+  border-top: 1px solid var(--border, #393939);
+  background: var(--panel, #161616);
   font-size: 11px;
-  font-family: 'Courier New', monospace;
+  font-family: 'DepartureMono-Regular', Consolas, monaco, monospace;
   color: #888;
 }
 
@@ -206,9 +206,9 @@
 .layer-panel {
   display: flex;
   flex-direction: column;
-  background: #1e1e1e;
+  background: var(--panel, #161616);
   border: 1px solid #333;
-  border-radius: 4px;
+  border-radius: 0;
   height: auto;
   max-height: 300px;
   overflow: hidden;
@@ -227,9 +227,9 @@
   display: flex;
   align-items: center;
   padding: 6px 8px;
-  background: #2d2d2d;
+  background: var(--border, #393939);
   border: 1px solid #333;
-  border-radius: 3px;
+  border-radius: 0;
   gap: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -237,7 +237,7 @@
 
 .layer-item:hover {
   background: #3a3a3a;
-  border-color: #444;
+  border-color: var(--border, #393939);
 }
 
 .layer-item.active {
@@ -248,13 +248,13 @@
 .layer-item-name {
   flex: 1;
   font-size: 12px;
-  color: #e0e0e0;
+  color: var(--fg, #ffffff);
   word-break: break-all;
   user-select: none;
 }
 
 .layer-item.active .layer-item-name {
-  color: #90ee90;
+  color: var(--ok, #198038);
   font-weight: 500;
 }
 
@@ -279,7 +279,7 @@
 }
 
 .layer-visibility-toggle.visible {
-  color: #90ee90;
+  color: var(--ok, #198038);
 }
 
 .layer-opacity-slider {
@@ -287,7 +287,7 @@
   height: 18px;
   padding: 2px;
   flex-shrink: 0;
-  accent-color: #ffb86c;
+  accent-color: var(--accent, #f1c21b);
 }
 
 .layer-controls {
@@ -302,10 +302,10 @@
   flex: 1;
   height: 28px;
   padding: 0;
-  background: #2d2d2d;
-  color: #ffb86c;
-  border: 1px solid #444;
-  border-radius: 3px;
+  background: var(--border, #393939);
+  color: var(--accent, #f1c21b);
+  border: 1px solid var(--border, #393939);
+  border-radius: 0;
   cursor: pointer;
   font-weight: bold;
   font-size: 14px;

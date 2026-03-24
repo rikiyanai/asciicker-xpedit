@@ -549,7 +549,7 @@ Expected: all checks PASS (including stateful upload)
 
 ### Task 6: Create Cloudflare Worker for path-based routing
 
-**Context:** `rikiworld.com` currently points to GitHub Pages (serves the asciicker-Y9-2 game). We need `/xpedit/*` to go to Cloud Run while everything else stays on GitHub Pages. A Cloudflare Worker does this — the user already has Cloudflare Workers in use for the asciicker-Y9-2 multiplayer server (separate repo).
+**Context:** `rikiworld.com` currently points to GitHub Pages (serves the asciicker-Y9-2 game). We need `/xpedit/*` to go to Cloud Run while everything else stays on GitHub Pages. A Cloudflare Worker does this cleanly.
 
 **Files:**
 - Create: `deploy/cloudflare-worker/xpedit-router.js`
@@ -717,11 +717,11 @@ git commit -m "docs: update INDEX, canonical spec, and CLAUDE.md for Cloud Run M
 | `GCP_PROJECT_ID` | GCP Console | Identifies the GCP project |
 | `GCP_SA_KEY` | `gcloud iam service-accounts keys create` | Service account JSON key |
 
-### Cloudflare (already configured from multiplayer deploy)
+### Cloudflare
 
 | Secret | Source | Purpose |
 |--------|--------|---------|
-| `CLOUDFLARE_API_TOKEN` | Cloudflare Dashboard | Deploy Worker (already in repo secrets) |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare Dashboard → API Tokens | Deploy the xpedit-router Worker. Add to GitHub Secrets if using CI, or use `wrangler login` for manual deploy. |
 
 ### GCP Secret Manager (optional, for bug report delivery)
 

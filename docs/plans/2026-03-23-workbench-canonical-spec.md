@@ -40,8 +40,8 @@ Placeholder. No milestone beyond M2 is currently defined.
 |-------|-------|-----------|--------|
 | **M2-A** | Structural PNG baseline (dims, layers, metadata gates) | M1 closed | ESTABLISHED |
 | **M2-B** | Source panel + grid assembly (draw box, find sprites, drag-to-grid) | M2-A | ESTABLISHED — source-panel 10/10 PASS (5c67ef2); source-to-grid 13/13 PASS (380edee) at root + /xpedit. D1, D2/C2, G1 PROVEN. |
-| **M2-C** | Whole-sheet editor coverage (tools, layers, undo) | M2-A | ESTABLISHED — 15/18 W-actions PROVEN. W15 (SelectTool) WIRED only (activation works, visualization not connected). W16/W17 DEFERRED. |
-| **M2-D** | Full SAR workflow coverage (all remaining WIRED actions get verifier proof) | M2-B, M2-C | NOT STARTED |
+| **M2-C** | Whole-sheet editor coverage (tools, layers, undo) | M2-A | ESTABLISHED — 15/18 W-actions PROVEN. W15 visualization connected (960974f), needs verifier proof of drag→bounds. W16/W17 DEFERRED. |
+| **M2-D** | Full SAR workflow coverage (all remaining WIRED actions get verifier proof) | M2-B, M2-C | IN PROGRESS — registry expanded from 47 → 77 entries (ac60fd3–69115e9). 14 executable + 16 stubs. 31 WS selectors added. 2 new recipes. |
 | **M2-E** | Semantic editing (region-based dictionary-driven edits) | M2-D | NOT STARTED |
 | **M2-F** | Analyze/auto-slice (assistive, not authoritative) | M2-D | NOT STARTED |
 
@@ -56,7 +56,7 @@ Execute in dependency order. M2-B and M2-C may run in parallel after M2-A.
 1. **MVP deployment to `rikiworld.com/xpedit`** — LIVE. GitHub Actions runs `23479759126` and `23479759126` passed all 3 jobs. Bug report → GitHub Issue delivery wired via Secret Manager (verified: Issues #6, #7). Bare `/xpedit` route fixed (`8ede2c6`). Remaining follow-up: refresh Node-20-based GitHub Actions before GitHub's Node 24 cutoff. Pipeline runs on Cloud Run free tier are too slow (>5 min) for verifier tests — UI-only flows work fine.
 2. **M2-D full SAR workflow coverage** — M2-B and M2-C are established. Remaining WIRED actions outside the whole-sheet blocked/deferred set need committed proof.
 3. **PB-01/02/03 undo gaps** in source panel anchor ops — small fixes that affect M2-D completeness.
-4. **PB-06 SelectTool visualization** — tool activates but canvas.setSelectionTool() never called, marching-ants not rendered, drag→bounds unverified. W18 (undo) is PROVEN. W16/W17 remain deferred.
+4. **PB-06 SelectTool visualization** — FIXED (960974f): `canvas.setSelectionTool()` now called during mount. Marching-ants renderer connected. Needs verifier proof of drag→bounds→visual. W18 (undo) is PROVEN. W16/W17 remain deferred.
 
 This stack is execution priority, not timeless truth. Re-evaluate when any sub-phase status changes.
 
@@ -185,13 +185,10 @@ The M2 verifier is a pipeline with five stages:
 |---|-----------|--------|--------|
 | 1 | `selectors.mjs` | **Done** | 85ff3b8 |
 | 2 | `action_registry_schema.json` | **Done** | 85ff3b8 |
-| 3 | `action_registry.json` | **Done** (47 entries); M2-D expansion to 77 in progress | 85ff3b8 |
-| 4 | `recipe_generator.mjs` | **Done** (6 fixed recipes) | 85ff3b8 |
+| 3 | `action_registry.json` | **Done** — 77 entries (47 foundation + 30 M2-D expansion) | 85ff3b8, 4363c40 |
+| 4 | `recipe_generator.mjs` | **Done** (8 fixed recipes) | 85ff3b8, 9056275 |
 | 5 | `dom_runner.mjs` | **Done** (click, setInputFiles, selectOption, fill) | 85ff3b8 |
-| 6 | M2-D registry expansion | **In progress** | See `docs/plans/2026-03-24-m2d-registry-expansion-design.md` |
-5. `dom_runner.mjs` — recipe executor using verifier_lib foundation
-
-This architecture is NOT yet implemented. The next implementation target after this canonization pass is items 1-3 above.
+| 6 | M2-D registry expansion | **Done** — 31 selectors, 14 executable + 16 stub entries, W15 fix, 2 recipes | ac60fd3–9056275 |
 
 ---
 

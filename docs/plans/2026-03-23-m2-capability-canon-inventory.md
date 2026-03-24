@@ -431,7 +431,7 @@ This inventory absorbs and supersedes the control-level selector truth from thes
 | Source Doc | Role | What This Inventory Absorbs | Remaining Role |
 |-----------|------|---------------------------|----------------|
 | `docs/COMPLETE_UI_CONTROL_REFERENCE.md` | 189-element control inventory (2026-03-08) | DOM IDs, handler names, bundle-mode notes per element | **Reference** — control-level detail beyond what the action families need; does not claim active workflow state |
-| `docs/WORKBENCH_SOURCE_PANEL_UX_CHECKLIST.md` | Source panel feature tracking (2026-02-23) | IMPLEMENTED status per feature; proof-status caveat (2026-03-23 update) | **Reference** — UX design intent and acceptance criteria per feature |
+| `docs/WORKBENCH_DOCS_ARCHIVE.md#workbench-source-panel-ux-checklist` | Source panel feature tracking (2026-02-23) | IMPLEMENTED status per feature; proof-status caveat (2026-03-23 update) | **Reference** — UX design intent and acceptance criteria per feature |
 | `docs/WORKBENCH_DOCS_ARCHIVE.md#claude-workbench-ui-inventory` | 189-element inventory (historical) | Superseded by COMPLETE_UI_CONTROL_REFERENCE.md; no additional truth | **Archived** (2026-03-23) |
 | `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-22-workbench-verifier-sar-model` | SAR architecture explanation | Architecture absorbed into canonical spec §5; enumeration absorbed here | **Archived** (2026-03-23) |
 | `docs/plans/2026-03-22-workbench-sar-table-blueprint.md` | Exhaustive SAR field mapping | State field inventory (getState/\_state coverage) informs action_registry.json design | **Reference** — state-field detail needed during action_registry implementation; retain until action_registry.json is built |
@@ -460,10 +460,10 @@ The following `getState()` gaps block full generator autonomy:
 | docs/INDEX.md | Navigation hub, milestone definitions | Updated 2026-03-23: M1 closure note, M2-B committed, doc classification table, restructured Active High-Signal Docs | None |
 | PLAYWRIGHT_FAILURE_LOG.md | Reality/proof ground truth | Current (2026-03-23) | None |
 | docs/COMPLETE_UI_CONTROL_REFERENCE.md | Control-level inventory | Updated 2026-03-23: scope clarification appended by stitch script | None |
-| docs/WORKBENCH_SOURCE_PANEL_UX_CHECKLIST.md | Source panel feature tracking | Updated 2026-03-23: proof-status note added, provisional/uncommitted language removed | None |
+| docs/WORKBENCH_DOCS_ARCHIVE.md#workbench-source-panel-ux-checklist | Source panel feature tracking | Updated 2026-03-23: proof-status note added, provisional/uncommitted language removed | None |
 | docs/WORKBENCH_DOCS_ARCHIVE.md#claude-workbench-ui-inventory | Historical UI inventory | Archived 2026-03-23 | N/A |
 | docs/plans/2026-03-22-workbench-sar-table-blueprint.md | SAR action enumeration | Current (2026-03-22) | None |
-| docs/plans/2026-03-23-milestone-2-bug-gap-index.md | Bug/gap tracking | Current (2026-03-23) | None |
+| docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-23-milestone-2-bug-gap-index | Bug/gap tracking | Current (2026-03-23) | None |
 | **This doc** | Canonical capability inventory | Created 2026-03-23 | — |
 
 ---
@@ -494,15 +494,15 @@ The following `getState()` gaps block full generator autonomy:
 | Path | Classification | Why Not Archived | Archive When |
 |------|---------------|-----------------|-------------|
 | `docs/COMPLETE_UI_CONTROL_REFERENCE.md` | Reference | 189-element control inventory with DOM IDs and handlers; needed as implementation reference for `action_registry.json` and `selectors.mjs` | After action_registry.json fully absorbs selector truth |
-| `docs/WORKBENCH_SOURCE_PANEL_UX_CHECKLIST.md` | Reference | UX design intent and acceptance criteria per source-panel feature; still the spec for unverified features | After all source-panel features are PROVEN in capability canon |
-| `docs/REXPAINT_UI_COMPLETE_INDEX.md` | Reference | REXPaint v1.70 UI reference implementation; stable, external product reference | Retain indefinitely — external reference, not repo-specific |
+| `docs/WORKBENCH_DOCS_ARCHIVE.md#workbench-source-panel-ux-checklist` | Reference | UX design intent and acceptance criteria per source-panel feature; still the spec for unverified features | After all source-panel features are PROVEN in capability canon |
+| `docs/WORKBENCH_DOCS_ARCHIVE.md#rexpaint-ui-complete-index` | Reference | REXPaint v1.70 UI reference implementation; stable, external product reference | Retain indefinitely — external reference, not repo-specific |
 | `docs/WORKBENCH_DOCS_ARCHIVE.md#feature-button-index-with-rexpaint-manual` | Reference | Feature button reference + REXPaint manual text | Retain — reference material |
 | `docs/research/ascii/2026-03-15-xp-data-contract.md` | Reference | Code-backed XP binary format contract | Retain — format reference not duplicated elsewhere |
 | `docs/research/ascii/2026-03-20-bundle-animation-types.md` | Reference | Bundle/animation type map | Retain — animation reference not duplicated elsewhere |
 | `docs/research/ascii/2026-03-21-player-sprite-semantic-dictionary-seed.md` | Reference | Semantic dictionary seed | Retain — M2-E prerequisite |
 | `docs/plans/2026-03-22-workbench-sar-table-blueprint.md` | Reference | Exhaustive SAR state-field mapping from code; needed during action_registry.json implementation | After action_registry.json is built and state-capture contract absorbs remaining fields |
 | `docs/plans/2026-03-23-state-capture-contract.md` | Reference | getState/\_state API contract; normative for all verifier code | Retain — live verifier contract |
-| `docs/plans/2026-03-23-milestone-2-bug-gap-index.md` | Reference | Active bug/gap tracking | Archive when all tracked bugs are resolved |
+| `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-23-milestone-2-bug-gap-index` | Reference | Active bug/gap tracking | Archive when all tracked bugs are resolved |
 | `docs/WORKBENCH_DOCS_ARCHIVE.md#mvp-deployment` | Reference | Deployment architecture truth | Retain — deployment reference |
 | `docs/WORKBENCH_DOCS_ARCHIVE.md#reskin-prep` | Reference | Safe reskin surface definition | Retain — UI constraint reference |
 
@@ -512,7 +512,7 @@ The following `getState()` gaps block full generator autonomy:
 |------|-----------------|-------------|
 | `docs/plans/2026-03-21-milestone-2-practical-png-ingest-plan.md` | Strategic M2 plan — still the active roadmap for M2 phases | After M2 closes or plan is superseded |
 | `docs/plans/2026-03-21-milestone-2-png-verifier-design.md` | M2 verifier design — architecture input for canonical spec §5 | After unified M2 verifier architecture is fully built (action_registry + dom_runner) |
-| `docs/plans/2026-03-21-milestone-2-implementation-checklist.md` | Implementation checklist with EXISTS/PARTIAL/MISSING status | After all M2-B/C/D items are PROVEN |
+| `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-21-milestone-2-implementation-checklist` | Implementation checklist with EXISTS/PARTIAL/MISSING status | After all M2-B/C/D items are PROVEN |
 | `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-22-base-path-support-plan` | Base-path implementation plan — partially implemented | After base-path work is complete |
 | `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-22-milestone-1-edge-case-verifier-plan` | M1 edge-case verifier design — M1 is closed but plan informed M2 architecture | Safe to archive now (M1 closed, architecture absorbed into spec §5) |
 | `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-23-milestone-2-base-path-unified-verifier-plan` | Unified verifier plan | After verifier_lib.mjs fully supports all M2 slices |

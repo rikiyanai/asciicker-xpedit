@@ -151,6 +151,6 @@ until explicit base-path/static-hosting work is completed.
 ## Related Documents
 
 - `docs/plans/2026-03-21-milestone-2-practical-png-ingest-plan.md` — M2-A workstream
-- `docs/plans/2026-03-21-milestone-2-implementation-checklist.md` — implementation tasks
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-21-milestone-2-implementation-checklist` — implementation tasks
 - `docs/XP_EDITOR_ACCEPTANCE_CONTRACT.md` — broader acceptance contract
 - `docs/research/ascii/2026-03-15-xp-data-contract.md` — XP binary data contract

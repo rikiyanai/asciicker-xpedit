@@ -40,8 +40,8 @@ This repo uses a 3-doc canonical authority model. Agents must treat ONLY these 3
 - Audit date: 2026-03-24
 - Audited worktree: `/Users/r/Downloads/asciicker-pipeline-v2`
 - Audited branch: `master`
-- Audited HEAD: `f967a21`
-- Current branch role: active M2 acceptance and verifier architecture line; MVP deployment live at `rikiworld.com/xpedit`
+- Audited HEAD: `cce5ccf`
+- Current branch role: active M2 acceptance and verifier architecture line; MVP deployment live at `rikiworld.com/xpedit`; M2-D registry expansion landed (77 entries)
 - **Self-containment**: This repo must be 100% self-contained. No runtime, test, or build-time dependency on external folders (e.g. `/Users/r/Downloads/asciicker-Y9-2`, `/Users/r/Downloads/n`). Run `python3 scripts/self_containment_audit.py` at startup.
 
 Do not assume `master` is the canonical restore/bundle line. For bundle/runtime issues, read the branch-history handoff below before making fix claims.
@@ -221,7 +221,7 @@ Summary:
   - strategic M2 plan: structural baseline, source-panel/manual assembly, whole-sheet correction, semantic dictionaries
 - `docs/plans/2026-03-21-milestone-2-png-verifier-design.md`
   - M2 verifier design — architecture input for canonical spec §5
-- `docs/plans/2026-03-21-milestone-2-implementation-checklist.md`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-21-milestone-2-implementation-checklist`
   - implementation checklist with EXISTS/PARTIAL/MISSING per item
 - `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-22-base-path-support-plan`
   - base-path implementation plan — partially implemented
@@ -235,10 +235,10 @@ Summary:
 ### Key Reference Docs
 
 - `docs/COMPLETE_UI_CONTROL_REFERENCE.md` — 189 workbench UI elements (DOM IDs, handlers); implementation reference for `action_registry.json`
-- `docs/WORKBENCH_SOURCE_PANEL_UX_CHECKLIST.md` — source panel feature tracking and UX acceptance criteria
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#workbench-source-panel-ux-checklist` — source panel feature tracking and UX acceptance criteria
 - `docs/plans/2026-03-22-workbench-sar-table-blueprint.md` — exhaustive SAR state-field mapping from code; needed for action_registry implementation
 - `docs/plans/2026-03-23-state-capture-contract.md` — getState/\_state API contract for all verifier code
-- `docs/plans/2026-03-23-milestone-2-bug-gap-index.md` — active bug/gap tracking
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-23-milestone-2-bug-gap-index` — active bug/gap tracking
 - `docs/research/ascii/2026-03-15-xp-data-contract.md` — code-backed XP binary format contract
 - `docs/research/ascii/2026-03-20-bundle-animation-types.md` — bundle/animation type map
 - `docs/research/ascii/2026-03-21-player-sprite-semantic-dictionary-seed.md` — semantic dictionary seed
@@ -273,7 +273,7 @@ metadata, layer, visual, export, and Skin Dock/runtime mismatches.
 
 ## REXPaint Reference & UI Docs
 
-- `docs/REXPAINT_UI_COMPLETE_INDEX.md`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#rexpaint-ui-complete-index`
   - REXPaint v1.70 complete UI index extracted from live screenshots; reference implementation, not asciicker-specific
 - `docs/WORKBENCH_DOCS_ARCHIVE.md#feature-button-index-with-rexpaint-manual`
   - feature button reference + REXPaint v1.70 manual text; references `EditorApp` methods but these describe the standalone module, not proof of live workbench integration
@@ -307,7 +307,7 @@ metadata, layer, visual, export, and Skin Dock/runtime mismatches.
 
 - `docs/plans/2026-03-21-milestone-2-practical-png-ingest-plan.md`
   - strategic plan for Milestone 2: defines the milestone explicitly, preserves the structural baseline, centers on manual assembly, and promotes whole-sheet editing
-- `docs/plans/2026-03-21-milestone-2-implementation-checklist.md`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-21-milestone-2-implementation-checklist`
   - implementation-ready checklist with explicit Milestone 1/Milestone 2 boundary, EXISTS/PARTIAL/MISSING status per item, file:line references, and wave ordering
 - `docs/plans/2026-03-21-milestone-2-png-verifier-design.md`
   - historical input to the unified M2 verifier architecture (now in canonical spec §5); retains verifier slice definitions and PNG recipe patterns as implementation reference
@@ -368,15 +368,15 @@ No distinct palette asset files (`.pal`, `palette.json`, etc.) exist in the repo
 
 > A canonical M2 capability inventory exists at `docs/plans/2026-03-23-m2-capability-canon-inventory.md`. It cross-references every doc in this index against current code wiring and failure-log proof to classify each user-reachable behavior as PROVEN, WIRED, PARTIAL, PLANNED, BLOCKED, or DEFERRED.
 >
-> Key findings (updated 2026-03-24):
+> Key findings (updated 2026-03-24, HEAD cce5ccf):
 > - M1 is closed (see status correction above)
-> - 96 SAR-enumerated actions: **23 PROVEN** on committed code (was 20 — B1/B2/B3 bug report actions now PROVEN via live Cloud Run browser test), 64 WIRED, 2 PARTIAL, 4 PLANNED, 1 BLOCKED, 2 DEFERRED
-> - M2-B source-panel proof is **committed** (5c67ef2, d12740c): 10/10 PASS at root + /xpedit; PB-02 fixed, Delete Box UX fixed
-> - 0 of 5 M2 verifier slices are automated; structural baseline and source-panel proof are ad-hoc failure-log evidence
-> - The manual-assembly end-to-end workflow (PNG → source → grid → WS → export) is fully wired but has zero proof
-> - **Unified M2 verifier architecture** is now documented in `docs/plans/2026-03-23-workbench-canonical-spec.md` §5: capability canon → action_registry.json → recipe generator → DOM runner → observation → proof
+> - 96 SAR-enumerated actions: **23 PROVEN** on committed code (B1/B2/B3 promoted via live Cloud Run browser test), 64 WIRED, 2 PARTIAL, 4 PLANNED, 1 BLOCKED, 2 DEFERRED
+> - M2-B source-panel proof is **committed** (5c67ef2, d12740c): 10/10 PASS at root + /xpedit
+> - M2-C whole-sheet: 15/18 PROVEN. W15 visualization connected (960974f), needs verifier proof. W16/W17 DEFERRED.
+> - **M2-D registry expansion landed**: 77 entries (47 foundation + 30 expansion). 31 WS selectors, 14 executable + 16 stub entries, W15 product fix, 8 fixed recipes. Generator stack: selectors.mjs → schema → registry → recipe_generator.mjs → dom_runner.mjs (all committed).
+> - **Unified M2 verifier architecture** documented in `docs/plans/2026-03-23-workbench-canonical-spec.md` §5
 > - MVP deployment live at `rikiworld.com/xpedit` with GitHub Issue delivery for bug reports (Secret Manager, verified Issues #6/#7)
-> - Next implementation target: M2-D full SAR workflow coverage
+> - Remaining M2-D work: verifier proof for new WIRED actions, canvas/keyboard gesture abstractions, dual-button schema evolution
 >
 > For reality/proof status on any capability claim in this repo, always check:
 > 1. `PLAYWRIGHT_FAILURE_LOG.md` (ground truth)

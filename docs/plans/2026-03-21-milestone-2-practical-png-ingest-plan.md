@@ -311,5 +311,5 @@ Then read:
 - `docs/INDEX.md`
 - `docs/XP_EDITOR_ACCEPTANCE_CONTRACT.md`
 - this file
-- `docs/WORKBENCH_SOURCE_PANEL_UX_CHECKLIST.md`
+- `docs/WORKBENCH_DOCS_ARCHIVE.md#workbench-source-panel-ux-checklist`
 - `docs/research/ascii/2026-03-21-player-sprite-semantic-dictionary-seed.md`

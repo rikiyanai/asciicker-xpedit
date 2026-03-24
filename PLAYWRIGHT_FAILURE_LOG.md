@@ -3492,3 +3492,75 @@ Root: 8/8 PASS at `output/ws_tools_test_w15w18/report.json`
 - Cloudflare Worker routes `rikiworld.com/xpedit` (bare) and `rikiworld.com/xpedit/*` (wildcard) are both active. Config in `deploy/cloudflare-worker/wrangler.toml`.
 - Bug report GitHub Issue delivery is configured via Secret Manager. Fine-grained PAT named "XPedit Issues" with Issues R/W on `rikiyanai/asciicker-xpedit`.
 - GitHub Actions still emits Node 20 deprecation warnings for several actions; this is non-blocking today but needs follow-up before GitHub's Node 24 cutoff.
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-24
+**Worksheet:** `docs/artifacts/bundle-baseline-2026-03-12/README.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#readme`
+**Reason:** Superseded/completed — doc reconciliation pass 2026-03-24
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-24
+**Worksheet:** `docs/plans/2026-03-21-milestone-2-implementation-checklist.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-21-milestone-2-implementation-checklist`
+**Reason:** Superseded/completed — doc reconciliation pass 2026-03-24
+**References rewritten:** 3 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-24
+**Worksheet:** `docs/plans/2026-03-23-milestone-2-bug-gap-index.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-23-milestone-2-bug-gap-index`
+**Reason:** Superseded/completed — doc reconciliation pass 2026-03-24
+**References rewritten:** 2 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-24
+**Worksheet:** `docs/plans/2026-03-24-m2d-registry-expansion-design.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-24-m2d-registry-expansion-design`
+**Reason:** Superseded/completed — doc reconciliation pass 2026-03-24
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-24
+**Worksheet:** `docs/REXPAINT_UI_COMPLETE_INDEX.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#rexpaint-ui-complete-index`
+**Reason:** Superseded/completed — doc reconciliation pass 2026-03-24
+**References rewritten:** 2 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-24
+**Worksheet:** `docs/WORKBENCH_SOURCE_PANEL_UX_CHECKLIST.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#workbench-source-panel-ux-checklist`
+**Reason:** Superseded/completed — doc reconciliation pass 2026-03-24
+**References rewritten:** 3 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+

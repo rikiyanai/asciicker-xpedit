@@ -1,6 +1,6 @@
-# asciicker-pipeline-v2
+# Asciicker XPEdit — PRE-ALPHA, PLEASE REPORT ANY BUGS
 
-Greenfield rebuild of the sprite-sheet pipeline. This repo is intentionally independent of the legacy `asciicker` codebase.
+Greenfield rebuild of main sprite-sheet pipeline features currently still broken in the main Asciicker-Y9-2 Fork. This repo is intentionally independent of the main Asciicker and Asciicker-Y9-2 Fork codebase. This is a browser-based XP sprite editor and functional alternative to the Windows-only REXPaint Editor, adapted specifically for the Asciicker Game Engine. Features include: convert PNG sprite sheets to `.xp` files, edit cells in a whole-sheet editor with true REXPaint parity, and test skins live in the game engine. More features to come, please report any bugs or complaints.
 
 ## Canonical Bundle Baseline
 
@@ -14,7 +14,7 @@ Greenfield rebuild of the sprite-sheet pipeline. This repo is intentionally inde
 
 Reference artifacts:
 
-- [Bundle baseline summary](docs/artifacts/bundle-baseline-2026-03-12/README.md)
+- [Bundle baseline summary](docs/WORKBENCH_DOCS_ARCHIVE.md#readme)
 - [Saved manual recording](docs/artifacts/bundle-baseline-2026-03-12/workbench-ui-recording-2026-03-11T13-27-24-653Z.json)
 - [Promoted watchdog result](docs/artifacts/bundle-baseline-2026-03-12/integrate-watchdog-result.json)
 - [Promoted watchdog UI capture](docs/artifacts/bundle-baseline-2026-03-12/integrate-watchdog-ui-recorder.json)
@@ -82,9 +82,9 @@ PYTHONPATH=src python3 -m pipeline_v2.app
 
 Open:
 
-- Workbench (default): `http://127.0.0.1:5071/` (redirects to `/workbench`)
-- Workbench (direct): `http://127.0.0.1:5071/workbench`
-- Wizard (legacy, deprecated): `http://127.0.0.1:5071/wizard`
+- Live: `https://rikiworld.com/xpedit`
+- Local (default): `http://127.0.0.1:5071/` (redirects to `/workbench`)
+- Local (direct): `http://127.0.0.1:5071/workbench`
 
 ## Tests
 
@@ -97,7 +97,7 @@ PYTHONPATH=src python3 -m pytest
 - The XP codec implemented here writes/reads classic REXPaint-style layers.
 - This MVP uses deterministic grayscale glyph mapping; it is not final art-quality conversion.
 
-## Requirements Checklist
+## Docs
 
-- Canonical checklist: `docs/WORKBENCH_DOCS_ARCHIVE.md#requirements-checklist`
-- Imported real-sheet fixtures: `data/imported/smalltestpngs/`
+- Canonical spec: `docs/plans/2026-03-23-workbench-canonical-spec.md`
+- Failure log: `PLAYWRIGHT_FAILURE_LOG.md`

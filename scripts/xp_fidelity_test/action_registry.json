@@ -21,8 +21,8 @@
       "name": "Source Panel",
       "generatorReadiness": "MOSTLY_READY",
       "canonActionCount": 19,
-      "registryActionCount": 0,
-      "blockingIssue": "S7 draw-box, S9 move, S10 resize, S13-S14 row/col drag require canvas-coordinate gesture abstraction; button-click actions individually ready but deferred to MOSTLY_READY pass"
+      "registryActionCount": 7,
+      "blockingIssue": "S7-S10/S13-S14/S17 need canvas gestures; S11 duplicate of S6; S15/S16 deferred alias rows (=C3/C4); S18 needs inputRange; S19 PARTIAL"
     },
     "F4": {
       "name": "Context Menu",
@@ -1023,6 +1023,140 @@
       "gestureType": "fill",
       "preconditions": {},
       "postconditions": {},
+      "blockers": [],
+      "paramBindings": []
+    },
+    "S1": {
+      "id": "S1",
+      "name": "Set mode: Select",
+      "family": "F3",
+      "status": "PROVEN",
+      "m2Scope": "M2-B",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "sourceSelectBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "sourceImageLoaded": true
+      },
+      "postconditions": {
+        "sourceMode": "select"
+      },
+      "blockers": [],
+      "paramBindings": []
+    },
+    "S2": {
+      "id": "S2",
+      "name": "Set mode: Draw Box",
+      "family": "F3",
+      "status": "PROVEN",
+      "m2Scope": "M2-B",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "drawBoxBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "sourceImageLoaded": true
+      },
+      "postconditions": {
+        "sourceMode": "draw_box"
+      },
+      "blockers": [],
+      "paramBindings": []
+    },
+    "S3": {
+      "id": "S3",
+      "name": "Set mode: Drag Row",
+      "family": "F3",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "rowSelectBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "sourceImageLoaded": true
+      },
+      "postconditions": {
+        "sourceMode": "row_select"
+      },
+      "blockers": [],
+      "paramBindings": []
+    },
+    "S4": {
+      "id": "S4",
+      "name": "Set mode: Drag Column",
+      "family": "F3",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "colSelectBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "sourceImageLoaded": true
+      },
+      "postconditions": {
+        "sourceMode": "col_select"
+      },
+      "blockers": [],
+      "paramBindings": []
+    },
+    "S5": {
+      "id": "S5",
+      "name": "Set mode: Vertical Cut",
+      "family": "F3",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "cutVBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "sourceImageLoaded": true
+      },
+      "postconditions": {
+        "sourceMode": "cut_v"
+      },
+      "blockers": [],
+      "paramBindings": []
+    },
+    "S6": {
+      "id": "S6",
+      "name": "Delete box / clear overlays",
+      "family": "F3",
+      "status": "WIRED",
+      "m2Scope": "M2-D",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "deleteBoxBtn",
+      "gestureType": "click",
+      "preconditions": {},
+      "postconditions": {},
+      "blockers": [
+        "Canon inventory assigns S6 to deleteBoxBtn (direct action). SAR blueprint assigns S6 to a canvas draw-box gesture and maps deleteBoxBtn to S11. This entry follows the canon inventory (higher authority)."
+      ],
+      "paramBindings": []
+    },
+    "S12": {
+      "id": "S12",
+      "name": "Find Sprites",
+      "family": "F3",
+      "status": "PROVEN",
+      "m2Scope": "M2-B",
+      "generatorReadiness": "READY",
+      "acceptanceEligible": true,
+      "selectorKey": "extractBtn",
+      "gestureType": "click",
+      "preconditions": {
+        "sourceImageLoaded": true
+      },
+      "postconditions": {
+        "extractedBoxes": {
+          "op": "gt",
+          "value": 0
+        }
+      },
       "blockers": [],
       "paramBindings": []
     }

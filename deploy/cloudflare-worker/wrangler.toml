@@ -1,0 +1,10 @@
+name = "xpedit-router"
+main = "xpedit-router.js"
+compatibility_date = "2024-01-01"
+
+[vars]
+# Replace with your actual Cloud Run service URL after first deploy
+CLOUD_RUN_URL = "https://asciicker-xpedit-CHANGEME.a.run.app"
+
+# Route configuration — set in Cloudflare Dashboard → Workers Routes:
+#   rikiworld.com/xpedit/*  →  xpedit-router
